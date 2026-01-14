@@ -68,9 +68,7 @@ function mixGeneric(a, b, t, {clamp = false} = {})
   throw new TypeError('Unsupported types for mixGeneric');
 }
 
-
-const corsUrl = 'https://corsproxy.io/?'; // need proxy to allow for cross origin request
-// const corsUrl = 'https://crossorigin.me/';
+const corsUrl = 'https://proxy.corsfix.com/?'; // need proxy to allow for cross origin request
 
 async function getSoundingGraphImgUrl(url)
 {
