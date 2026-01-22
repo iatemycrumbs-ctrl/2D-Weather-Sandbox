@@ -28,6 +28,7 @@ uniform float waterEvaporation;
 uniform float landEvaporation;
 uniform float waterWeight;
 uniform vec4 initial_Tv[126];
+uniform bool allowCaves;
 
 float getInitialT(int y) { return initial_Tv[y / 4][y % 4]; }
 
@@ -155,7 +156,6 @@ void main()
     if (wallX0Ym[DISTANCE] == 0) { // below is wall
       nextToWall = true;
       wall[DISTANCE] = 1;          // dist to nearest wall = 1
-      // wall[TYPE] = wallX0Ym[TYPE];                       // copy wall type from wall below
 
       vec4 waterX0Ym = texture(waterTex, texCoordX0Ym);
       snowCover = waterX0Ym[SNOW];
@@ -163,35 +163,33 @@ void main()
       wall[VERT_DISTANCE] = 1; // directly above ground
     }
 
-    if (wallXmY0[DISTANCE] == 0) { // left is wall
+    if (wallXmY0[DISTANCE] == 0) {            // left is wall
       nextToWall = true;
-      wall[DISTANCE] = 1;          // dist to nearest wall = 1
-      // wall[TYPE] = wallXmY0[TYPE];
+      wall[DISTANCE] = 1;                     // dist to nearest wall = 1
 
       if (wallXmY0[TYPE] == WALLTYPE_WATER) { // if left is water, build a dyke
         wall[TYPE] = WALLTYPE_LAND;
         wall[DISTANCE] = 0;
       }
 
-      if (wallXpY0[DISTANCE] == 0)        // left and right is wall, make this wall to fill narrow gaps
+      if (wallXpY0[DISTANCE] == 0)            // left and right is wall, make this wall to fill narrow gaps
         wall[DISTANCE] = 0;
-    } else if (wallXpY0[DISTANCE] == 0) { // right is wall
+    } else if (wallXpY0[DISTANCE] == 0) {     // right is wall
       nextToWall = true;
-      wall[DISTANCE] = 1;                 // dist to nearest wall = 1
-      // wall[TYPE] = wallXpY0[TYPE];
+      wall[DISTANCE] = 1;                     // dist to nearest wall = 1
 
       if (wallXpY0[TYPE] == WALLTYPE_WATER) { // if right is water, build a dyke
         wall[TYPE] = WALLTYPE_LAND;
         wall[DISTANCE] = 0;
       }
     }
-    if (wallX0Yp[DISTANCE] == 0) {                                                                                                               // above is wall
+    if (wallX0Yp[DISTANCE] == 0) {                                                  // above is wall
       nextToWall = true;
-      wall[DISTANCE] = 1;                                                                                                                        // dist to nearest wall = 1
-                                                                                                                                                 // wall[TYPE] = wallX0Yp[TYPE];
-
-      if (texCoord.y < 0.99 /* && (wallX0Yp[TYPE] == WALLTYPE_LAND || wallX0Yp[TYPE] == WALLTYPE_URBAN || wallX0Yp[TYPE] == WALLTYPE_WATER)*/) { // Fill in land and sea below
-        wall[DISTANCE] = 0;                                                                                                                      //  set this to wall
+      if (texCoord.y < 0.99 && (!allowCaves || wallX0Yp[TYPE] == WALLTYPE_WATER)) { // Fill in land below
+        wall[TYPE] = WALLTYPE_LAND;
+        wall[DISTANCE] = 0;                                                         //  set this to wall
+      } else {
+        wall[DISTANCE] = 1;
       }
     }
 

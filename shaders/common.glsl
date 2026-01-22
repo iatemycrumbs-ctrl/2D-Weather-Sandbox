@@ -235,19 +235,19 @@ vec4 bilerpWall(sampler2D tex, isampler2D wallTex,
   float mixCD = fpos.x;
   float mixAB_CD = fpos.y;
 
-  if (wa[1] == 0)
+  if (wa[DISTANCE] == 0)
     mixAB = 1.;
-  else if (wb[1] == 0)
+  else if (wb[DISTANCE] == 0)
     mixAB = 0.;
 
-  if (wc[1] == 0)
+  if (wc[DISTANCE] == 0)
     mixCD = 1.;
-  else if (wd[1] == 0)
+  else if (wd[DISTANCE] == 0)
     mixCD = 0.;
 
-  if (wa[1] == 0 && wb[1] == 0)
+  if (wa[DISTANCE] == 0 && wb[1] == 0)
     mixAB_CD = 1.;
-  else if (wc[1] == 0 && wd[1] == 0)
+  else if (wc[DISTANCE] == 0 && wd[DISTANCE] == 0)
     mixAB_CD = 0.;
 
   return mix(mix(a, b, mixAB), mix(c, d, mixCD), mixAB_CD);

@@ -388,7 +388,8 @@ const guiControls_default = {
   tool : 'TOOL_NONE',
   brushSize : 20,
   wholeWidth : false,
-  intensity : 0.01,
+  brushIntensity : 0.01,
+  allowCaves : true,
   showGraph : false,
   realDewPoint : false, // show real dew point in graph, instead of dew point with cloud water included
   enablePrecipitation : true,
@@ -3570,7 +3571,13 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .listen();
     UI_folder.add(guiControls, 'brushSize', 1, 200, 1).name('Brush Diameter').listen();
     UI_folder.add(guiControls, 'wholeWidth').name('Whole Width Brush').listen();
-    UI_folder.add(guiControls, 'intensity', 0.005, 0.05, 0.001).name('Brush Intensity');
+    UI_folder.add(guiControls, 'brushIntensity', 0.005, 0.05, 0.001).name('Brush Intensity');
+    UI_folder.add(guiControls, 'allowCaves')
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'allowCaves'), guiControls.allowCaves ? 1 : 0);
+      })
+      .name('Allow Caves');
 
     var radiation_folder = datGui.addFolder('Radiation');
 
@@ -4039,37 +4046,41 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       // Draw Dew point line
       c.beginPath();
       for (var y = surfaceLevel; y < sim_res_y; y++) {
-        var dewPoint = KtoC(dewpoint(waterTextureValues[4 * y]));
 
-        var temp = baseTextureValues[4 * y + 3] - ((y / sim_res_y) * guiControls.simHeight * guiControls.dryLapseRate) / 1000.0 - 273.15;
-        if (guiControls.realDewPoint) {
-          dewPoint = Math.min(temp, dewPoint);
+        if (wallTextureValues[4 * y + 1] != 0) { // fluid cell
+
+          var dewPoint = KtoC(dewpoint(waterTextureValues[4 * y]));
+
+          var temp = baseTextureValues[4 * y + 3] - ((y / sim_res_y) * guiControls.simHeight * guiControls.dryLapseRate) / 1000.0 - 273.15;
+          if (guiControls.realDewPoint) {
+            dewPoint = Math.min(temp, dewPoint);
+          }
+
+          var scrYpos = map_range(y, sim_res_y, 0, 0, graphBottem);
+
+          var velocity = rawVelocityTo_ms(Math.sqrt(Math.pow(baseTextureValues[4 * y], 2) + Math.pow(baseTextureValues[4 * y + 1], 2)));
+
+          c.font = '15px Arial';
+          c.fillStyle = 'white';
+
+          // c.fillText('Surface: ' + y, 10, scrYpos);
+          if (y == simYpos) {
+            c.fillText('' + printAltitude(map_range(y - 1, 0, sim_res_y, 0, guiControls.simHeight)), 5, scrYpos + 5);
+
+            c.fillText('' + printVelocity(velocity), this.graphCanvas.width - 113, scrYpos + 20);
+
+
+            c.strokeStyle = '#FFF';
+            c.lineWidth = 1.0;
+
+
+            c.strokeRect(T_to_Xpos(dewPoint, scrYpos) - 10, scrYpos, 10,
+                         1); // vertical position indicator
+            c.fillText('' + printTemp(dewPoint), T_to_Xpos(dewPoint, scrYpos) - 70, scrYpos + 5);
+          }
+
+          c.lineTo(T_to_Xpos(dewPoint, scrYpos), scrYpos); // draw line segment
         }
-
-        var scrYpos = map_range(y, sim_res_y, 0, 0, graphBottem);
-
-        var velocity = rawVelocityTo_ms(Math.sqrt(Math.pow(baseTextureValues[4 * y], 2) + Math.pow(baseTextureValues[4 * y + 1], 2)));
-
-        c.font = '15px Arial';
-        c.fillStyle = 'white';
-
-        // c.fillText('Surface: ' + y, 10, scrYpos);
-        if (y == simYpos) {
-          c.fillText('' + printAltitude(map_range(y - 1, 0, sim_res_y, 0, guiControls.simHeight)), 5, scrYpos + 5);
-
-          c.fillText('' + printVelocity(velocity), this.graphCanvas.width - 113, scrYpos + 20);
-
-
-          c.strokeStyle = '#FFF';
-          c.lineWidth = 1.0;
-
-
-          c.strokeRect(T_to_Xpos(dewPoint, scrYpos) - 10, scrYpos, 10,
-                       1); // vertical position indicator
-          c.fillText('' + printTemp(dewPoint), T_to_Xpos(dewPoint, scrYpos) - 70, scrYpos + 5);
-        }
-
-        c.lineTo(T_to_Xpos(dewPoint, scrYpos), scrYpos); // draw line segment
       }
 
       c.lineWidth = 2.0; // 3
@@ -5537,6 +5548,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dryLapse'), dryLapse);
   // gl.uniform1fv(gl.getUniformLocation(boundaryProgram, 'initial_T'), initial_T);
   gl.uniform4fv(gl.getUniformLocation(boundaryProgram, 'initial_Tv'), initial_T);
+  gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'allowCaves'), guiControls.allowCaves ? 1 : 0);
 
   gl.useProgram(curlProgram);
   gl.uniform2f(gl.getUniformLocation(curlProgram, 'texelSize'), texelSizeX, texelSizeY);
@@ -5784,7 +5796,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         else if (guiControls.tool == 'TOOL_VEGETATION')
           inputType = 22;
 
-        var intensity = guiControls.intensity;
+        var intensity = guiControls.brushIntensity;
 
         if (ctrlPressed) {
           intensity *= -1;

@@ -78,7 +78,8 @@ void main()
         reflectedLight.rgb = sunlightColor * lightReflected / standardSunBrightness; // sunlight reflected by clouds and precipitation
 
 
-        // float avgSunlight = (texture(lightTex, texCoordX0Ym)[SUNLIGHT] + texture(lightTex, texCoordX0Yp)[SUNLIGHT] + texture(lightTex, texCoordXmY0)[SUNLIGHT] + texture(lightTex, texCoordXpY0)[SUNLIGHT]) / 4.0;
+        // float avgSunlight = (texture(lightTex, texCoordX0Ym)[SUNLIGHT] + texture(lightTex, texCoordX0Yp)[SUNLIGHT] + texture(lightTex, texCoordXmY0)[SUNLIGHT] + texture(lightTex,
+        // texCoordXpY0)[SUNLIGHT]) / 4.0;
 
         // sunlight -= (sunlight - avgSunlight) * 0.8; // smooth
 
@@ -93,9 +94,6 @@ void main()
 
         switch (wall[TYPE]) {
         case WALLTYPE_RUNWAY:
-          // if (abs(sunAngle) > 85. * deg2rad)
-          //   reflectedLight.rgb += vec3(1.00, 0.97, 0.57) * 0.03; // Urban area emits light
-          // NOBREAK
         case WALLTYPE_URBAN:
         case WALLTYPE_INDUSTRIAL:
           if (abs(sunAngle) > 85. * deg2rad)
@@ -118,28 +116,35 @@ void main()
 
         IR_up = texture(lightTex, texCoordX0Ym)[IR_UP];
 
-        float emissivity;                                   // how opage it is too ir, the rest is let trough, no
-                                                            // reflection
-        emissivity = greenhouseGases;                       // greenhouse gasses
-        emissivity += water[TOTAL] * waterGreenHouseEffect; // water vapor
-        emissivity += water[CLOUD] * 5.0;                   // cloud water blocks all IR
-                                                            // emissivity += water[SMOKE] * 0.0001;                // 0.0001 smoke Should be prettymuch transparent to IR
+        if (texture(wallTex, texCoordX0Yp)[DISTANCE] == 0) // wall above
+        {
+          IR_down = IR_emitted(realTemp);                  // Ir emmited downwars from surface above
+          net_heating += (IR_up - IR_down) * lightHeatingConst;
+        } else {
 
-        emissivity *= cellHeightCompensation;               // compensate for the height of the cell
+          float emissivity;                                   // how opage it is too ir, the rest is let trough, no
+                                                              // reflection
+          emissivity = greenhouseGases;                       // greenhouse gasses
+          emissivity += water[TOTAL] * waterGreenHouseEffect; // water vapor
+          emissivity += water[CLOUD] * 5.0;                   // cloud water blocks all IR
+                                                              // emissivity += water[SMOKE] * 0.0001;                // 0.0001 smoke Should be prettymuch transparent to IR
 
-        emissivity = min(emissivity, 1.0);                  // limit to 1.0
+          emissivity *= cellHeightCompensation;               // compensate for the height of the cell
 
-        float absorbedDown = IR_down * emissivity;
-        float absorbedUp = IR_up * emissivity;
-        float emitted = IR_emitted(realTemp) * emissivity; // this amount is emitted both up and down
+          emissivity = min(emissivity, 1.0);                  // limit to 1.0
 
-        net_heating += (absorbedDown + absorbedUp - emitted * 2.0) * lightHeatingConst;
+          float absorbedDown = IR_down * emissivity;
+          float absorbedUp = IR_up * emissivity;
+          float emitted = IR_emitted(realTemp) * emissivity; // this amount is emitted both up and down
 
-        IR_down -= absorbedDown;
-        IR_down += emitted;
+          net_heating += (absorbedDown + absorbedUp - emitted * 2.0) * lightHeatingConst;
 
-        IR_up -= absorbedUp;
-        IR_up += emitted;
+          IR_down -= absorbedDown;
+          IR_down += emitted;
+
+          IR_up -= absorbedUp;
+          IR_up += emitted;
+        }
       }
 
       float smokeOpacity = clamp(1. - (1. / (water[SMOKE] + 1.)), 0.0, 1.0);
