@@ -20,7 +20,7 @@ uniform isampler2D wallTex;
 
 uniform vec4 userInputValues; // xpos    Ypos     intensity     Brush Size
 
-#define BRUSH_INTENSITY 2
+#define BRUSH_INTENSITY 3
 #define BRUSH_SIZE 3
 
 uniform vec2 userInputMove;  // moveX  moveY
