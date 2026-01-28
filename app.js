@@ -3699,7 +3699,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Precipitation Threshold -°C');
 
-    precipitation_folder.add(guiControls, 'spawnChance', 0.00001, 0.0001, 0.00001)
+    precipitation_folder.add(guiControls, 'spawnChance', 0.00001, 0.0005, 0.00001)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'spawnChanceMult'), guiControls.spawnChance);
