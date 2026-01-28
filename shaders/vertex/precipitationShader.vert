@@ -97,7 +97,7 @@ void main()
       //  treshHold = max(map_range(realTemp, CtoK(0.0), CtoK(-30.0), subZeroThreshold, initalMass), initalMass);
       threshold = subZeroThreshold;
 
-    if (water[CLOUD] > threshold && base[TEMPERATURE] < 750.) {                                                                     // if cloudwater above threshold and not wall
+    if (water[CLOUD] > threshold && base[TEMPERATURE] < 2500.) {                                                                     // if cloudwater above threshold and not wall
                                                                                                                                     // float spawnChance = (water[1] - threshold) * 1000.0 / inactiveDroplets;
                                                                                                                                     // if (spawnChance > rand2d(mass.xy)) {
                                                                                                                                     //  float spawnChance = (water[CLOUD] - threshold) / inactiveDroplets * resolution.x * resolution.y * spawnChanceMult;
@@ -120,12 +120,12 @@ void main()
 
           vec4 lightningData = texture(lightningDataTex, vec2(0.5)); // data from last lightning bolt
 
-          const float lightningCloudDensityThreshold = 2.5;          // 3.0
-          const float lightningChanceMultiplier = 0.0033;            // 0.0011
+          const float lightningCloudDensityThreshold = 0.1;          // 3.0
+          const float lightningChanceMultiplier = 1.275;            // 0.0011
 
           float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION];
 
-          float lightningSpawnChance = max((cloudPlusPrecipDensity - lightningCloudDensityThreshold) * lightningChanceMultiplier, 0.);
+          float lightningSpawnChance = max((cloudPlusPrecipDensity - lightningCloudDensityThreshold) * lightningChanceMultiplier, spawnRateMult * 0.989);
 
           const float minIterationsSinceLastLightningBolt = 1.;                                                                                                                       // 50.
 
