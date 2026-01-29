@@ -3431,6 +3431,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'aboveZeroThreshold'), guiControls.aboveZeroThreshold);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'subZeroThreshold'), guiControls.subZeroThreshold);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'spawnChanceMult'), guiControls.spawnChance);
+gl.uniform1f(gl.getUniformLocation(precipitationProgram,'lightningChance'), guiControls.lightningChance);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
@@ -3707,7 +3708,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Spawn Rate')
       .listen();
 
-    precipitation_folder.add(guiControls, 'snowDensity', 0.1, 0.9, 0.01)
+precipitation_folder.add(guiControls, 'lightningChance', 0.002, 0.01, 0.001)
+    .onChange(function() {
+      
+gl.useProgram(precipitationProgram);
+      precipitation_folder.add(guiControls, 'snowDensity', 0.1, 0.9, 0.01)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
