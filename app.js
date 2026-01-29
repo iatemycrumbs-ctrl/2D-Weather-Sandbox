@@ -68,14 +68,12 @@ function mixGeneric(a, b, t, {clamp = false} = {})
   throw new TypeError('Unsupported types for mixGeneric');
 }
 
-
-const corsUrl = 'https://corsproxy.io/?'; // need proxy to allow for cross origin request
-// const corsUrl = 'https://crossorigin.me/';
+const corsUrl = 'https://my-cors-proxy.nielsdaemen747.workers.dev/?url='; // my own proxy worker on cloudfare
 
 async function getSoundingGraphImgUrl(url)
 {
   try {
-    const response = await fetch(corsUrl + url);
+    const response = await fetch(corsUrl + encodeURIComponent(url));
     const html = await response.text();
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
@@ -90,7 +88,7 @@ async function getSoundingGraphImgUrl(url)
 async function scrapeTableData(url)
 {
   try {
-    const response = await fetch(corsUrl + url);
+    const response = await fetch(corsUrl + encodeURIComponent(url));
     const html = await response.text();
 
     const parser = new DOMParser();
@@ -365,8 +363,7 @@ const guiControls_default = {
   inactiveDroplets : 0,
   aboveZeroThreshold : 1.0, // PRECIPITATION
   subZeroThreshold : 0.005, // 0.01
-  spawnChance : 0.00005,
-  lightningChance : 0.002,
+  spawnChance : 0.00005,    // 30. 10 to 50
   snowDensity : 0.2,        // 0.3
   fallSpeed : 0.0003,
   growthRate0C : 0.0001,    // 0.0005
@@ -375,8 +372,8 @@ const guiControls_default = {
   meltingRate : 0.01,
   evapRate : 0.0008, // 0.0005
   displayMode : 'DISP_REAL',
-  wrapHorizontally : false,
-  SmoothCam : false,
+  wrapHorizontally : true,
+  SmoothCam : true,
   camSpeed : 0.01,
   exposure : 1.0,
   timeOfDay : 9.9,
@@ -384,17 +381,19 @@ const guiControls_default = {
   month : 6.65, // Northern hemisphere summer solstice
   sunAngle : 9.9,
   dayNightCycle : true,
+  accelerateNight : true,
   greenhouseGases : 0.001,
   waterGreenHouseEffect : 0.0015,
   IR_rate : 1.0,
   tool : 'TOOL_NONE',
   brushSize : 20,
   wholeWidth : false,
-  intensity : 0.01,
+  brushIntensity : 0.01,
+  allowCaves : true,
   showGraph : false,
   realDewPoint : false, // show real dew point in graph, instead of dew point with cloud water included
   enablePrecipitation : true,
-  showDrops : true,
+  showDrops : false,
   paused : false,
   IterPerFrame : 10,
   auto_IterPerFrame : true,
@@ -450,7 +449,7 @@ var dryLapse;
 const timePerIteration = 0.00008; // in hours (0.00008 = 0.288 sec, at 40m cell size that means the speed of light & sound = 138.88 m/s = 500 km/h)
 
 var NUM_DROPLETS;
-const NUM_DROPLETS_DEVIDER = 2; // 25
+const NUM_DROPLETS_DEVIDER = 1; // 25
 
 let hdrFBO;
 
@@ -553,7 +552,7 @@ function IR_temp(IR)
 
 ////////////// Water Functions ///////////////
 const wf_devider = 250.0;
-const wf_pow = 37.0;
+const wf_pow = 17.0;
 
 function maxWater(Td)
 {
@@ -3370,8 +3369,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   // console.log(gl.getContextAttributes());
 
   if (!gl) {
-    alert('Your device does not support WebGL2, Try a different device.');
-    throw ' Your device does not support WebGL2';
+    alert('Your browser does not support WebGL2, Download a new browser.');
+    throw ' Error: Your browser does not support WebGL2';
   }
 
   // SETUP GUI
@@ -3432,8 +3431,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'aboveZeroThreshold'), guiControls.aboveZeroThreshold);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'subZeroThreshold'), guiControls.subZeroThreshold);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'spawnChanceMult'), guiControls.spawnChance);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram,'lightningChance'),
-      guiControls.lightningChance);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
@@ -3572,15 +3569,23 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Tool')
       .listen();
-    UI_folder.add(guiControls, 'brushSize', 1, 2000, 1).name('Brush Diameter').listen();
+    UI_folder.add(guiControls, 'brushSize', 1, 200, 1).name('Brush Diameter').listen();
     UI_folder.add(guiControls, 'wholeWidth').name('Whole Width Brush').listen();
-    UI_folder.add(guiControls, 'intensity', 0.005, 1, 0.001).name('Brush Intensity');
+    UI_folder.add(guiControls, 'brushIntensity', 0.005, 0.05, 0.001).name('Brush Intensity');
+    UI_folder.add(guiControls, 'allowCaves')
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'allowCaves'), guiControls.allowCaves ? 1 : 0);
+      })
+      .name('Allow Caves');
 
     var radiation_folder = datGui.addFolder('Radiation');
 
     radiation_folder.add(guiControls, 'timeOfDay', 0.0, 23.96, 0.01).onChange(onUpdateTimeOfDaySlider).name('Time of day').listen();
 
     radiation_folder.add(guiControls, 'dayNightCycle').name('Day/Night Cycle').listen();
+
+    radiation_folder.add(guiControls, 'accelerateNight').name('Accelerate Night').listen();
 
     radiation_folder.add(guiControls, 'latitude', -90.0, 90.0, 0.1).onChange(function() { updateSunlight(); }).name('Latitude').listen();
 
@@ -3594,32 +3599,33 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Sun Angle')
       .listen();
 
-    radiation_folder.add(guiControls, 'sunIntensity', 0.0, 2.5, 0.01).onChange(function() { updateSunlight('MANUAL_ANGLE'); }).name('Sun Intensity');
+    radiation_folder.add(guiControls, 'sunIntensity', 0.0, 2.0, 0.01).onChange(function() { updateSunlight('MANUAL_ANGLE'); }).name('Sun Intensity');
 
-    radiation_folder.add(guiControls, 'greenhouseGases', 0.0, 0.15, 0.0001)
+    radiation_folder.add(guiControls, 'greenhouseGases', 0.0, 0.01, 0.0001)
       .onChange(function() {
         gl.useProgram(lightingProgram);
         gl.uniform1f(gl.getUniformLocation(lightingProgram, 'greenhouseGases'), guiControls.greenhouseGases);
       })
       .name('Greenhouse Gases');
 
-    radiation_folder.add(guiControls, 'waterGreenHouseEffect', 0.0, 0.15, 0.0001)
+    radiation_folder.add(guiControls, 'waterGreenHouseEffect', 0.0, 0.01, 0.0001)
       .onChange(function() {
         gl.useProgram(lightingProgram);
         gl.uniform1f(gl.getUniformLocation(lightingProgram, 'waterGreenHouseEffect'), guiControls.waterGreenHouseEffect);
       })
       .name('Water Vapor Greenhouse Effect');
 
-    radiation_folder.add(guiControls, 'IR_rate', 0.0, 10.0, 0.1)
-      .onChange(function() {
+    radiation_folder
+      .add(guiControls, 'IR_rate', 0.0, 10.0, 0.1)
+      /*.onChange(function() {
         gl.useProgram(lightingProgram);
         gl.uniform1f(gl.getUniformLocation(lightingProgram, 'IR_rate'), guiControls.IR_rate);
-      })
+      })*/
       .name('IR Multiplier');
 
     var water_folder = datGui.addFolder('Water');
 
-    water_folder.add(guiControls, 'waterTemperature', 0.0, 90.0, 0.1)
+    water_folder.add(guiControls, 'waterTemperature', 0.0, 40.0, 0.1)
       .onChange(function() {
         gl.useProgram(advectionProgram);
         gl.uniform1f(gl.getUniformLocation(advectionProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
@@ -3633,19 +3639,19 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dynamicWaterTemperature'), guiControls.dynamicWaterTemperature ? 1.0 : 0.0);
     });
 
-    water_folder.add(guiControls, 'landEvaporation', 0.0, 0.005, 0.00001)
+    water_folder.add(guiControls, 'landEvaporation', 0.0, 0.0002, 0.00001)
       .onChange(function() {
         gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'landEvaporation'), guiControls.landEvaporation);
       })
       .name('Land Evaporation');
-    water_folder.add(guiControls, 'waterEvaporation', 0.0, 0.005, 0.00001)
+    water_folder.add(guiControls, 'waterEvaporation', 0.0, 0.0004, 0.00001)
       .onChange(function() {
         gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterEvaporation'), guiControls.waterEvaporation);
       })
       .name('Lake / Sea Evaporation');
-    water_folder.add(guiControls, 'evapHeat', 0.0, 10.0, 0.1)
+    water_folder.add(guiControls, 'evapHeat', 0.0, 5.0, 0.1)
       .onChange(function() {
         gl.useProgram(advectionProgram);
         gl.uniform1f(gl.getUniformLocation(advectionProgram, 'evapHeat'), guiControls.evapHeat);
@@ -3655,7 +3661,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'evapHeat'), guiControls.evapHeat);
       })
       .name('Evaporation Heat');
-    water_folder.add(guiControls, 'meltingHeat', 0.0, 10.0, 0.1)
+    water_folder.add(guiControls, 'meltingHeat', 0.0, 5.0, 0.1)
       .onChange(function() {
         gl.useProgram(advectionProgram);
         gl.uniform1f(gl.getUniformLocation(advectionProgram, 'meltingHeat'), guiControls.meltingHeat);
@@ -3663,7 +3669,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'meltingHeat'), guiControls.meltingHeat);
       })
       .name('Melting Heat');
-    water_folder.add(guiControls, 'condensationRate', 0.001, 0.05, 0.001)
+    water_folder.add(guiControls, 'condensationRate', 0.001, 0.020, 0.001)
       .onChange(function() {
         gl.useProgram(advectionProgram);
         gl.uniform1f(gl.getUniformLocation(advectionProgram, 'condensationRate'), guiControls.condensationRate);
@@ -3679,7 +3685,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     var precipitation_folder = datGui.addFolder('Precipitation');
 
-    precipitation_folder.add(guiControls, 'aboveZeroThreshold', 0.0, 2.0, 0.001)
+    precipitation_folder.add(guiControls, 'aboveZeroThreshold', 0.1, 2.0, 0.001)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'aboveZeroThreshold'), guiControls.aboveZeroThreshold);
@@ -3693,7 +3699,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Precipitation Threshold -°C');
 
-    precipitation_folder.add(guiControls, 'spawnChance', 0.00001, 0.001, 0.00001)
+    precipitation_folder.add(guiControls, 'spawnChance', 0.00001, 0.0001, 0.00001)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'spawnChanceMult'), guiControls.spawnChance);
@@ -3708,21 +3714,21 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Snow Density');
 
-    precipitation_folder.add(guiControls, 'fallSpeed', 0.0001, 0.01, 0.0001)
+    precipitation_folder.add(guiControls, 'fallSpeed', 0.0001, 0.001, 0.0001)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
       })
       .name('Fall Speed');
 
-    precipitation_folder.add(guiControls, 'growthRate0C', 0.0001, 0.1, 0.0001)
+    precipitation_folder.add(guiControls, 'growthRate0C', 0.0001, 0.005, 0.0001)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
       })
       .name('Growth Rate 0°C');
 
-    precipitation_folder.add(guiControls, 'growthRate_30C', 0.0001, 0.1, 0.0001)
+    precipitation_folder.add(guiControls, 'growthRate_30C', 0.0001, 0.005, 0.0001)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate_30C'), guiControls.growthRate_30C);
@@ -3745,7 +3751,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Melting Rate');
 
-    precipitation_folder.add(guiControls, 'evapRate', 0.0005, 0.01, 0.0001)
+    precipitation_folder.add(guiControls, 'evapRate', 0.0001, 0.005, 0.0001)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapRate'), guiControls.evapRate);
@@ -3759,15 +3765,15 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     display_folder
       .add(guiControls, 'displayMode', {
-        'Temperature -26°C to 30°C' : 'DISP_TEMPERATURE',
-        'Water Vapor' : 'DISP_WATER',
-        'Realistic' : 'DISP_REAL',
-        'Horizontal Velocity' : 'DISP_HORIVEL',
-        'Vertical Velocity' : 'DISP_VERTVEL',
-        'IR Heating / Cooling' : 'DISP_IRHEATING',
-        'IR Down -60°C to 26°C' : 'DISP_IRDOWNTEMP',
-        'IR Up -26°C to 30°C' : 'DISP_IRUPTEMP',
-        'Precipitation Mass' : 'DISP_PRECIPFEEDBACK_MASS',
+        '1 Temperature -26°C to 30°C' : 'DISP_TEMPERATURE',
+        '2 Water Vapor' : 'DISP_WATER',
+        '3 Realistic' : 'DISP_REAL',
+        '4 Horizontal Velocity' : 'DISP_HORIVEL',
+        '5 Vertical Velocity' : 'DISP_VERTVEL',
+        '6 IR Heating / Cooling' : 'DISP_IRHEATING',
+        '7 IR Down -60°C to 26°C' : 'DISP_IRDOWNTEMP',
+        '8 IR Up -26°C to 30°C' : 'DISP_IRUPTEMP',
+        '9 Precipitation Mass' : 'DISP_PRECIPFEEDBACK_MASS',
         'Precipitation Heating/Cooling' : 'DISP_PRECIPFEEDBACK_HEAT',
         'Precipitation Condensation/Evaporation' : 'DISP_PRECIPFEEDBACK_VAPOR',
         'Rain Deposition' : 'DISP_PRECIPFEEDBACK_RAIN',
@@ -3858,7 +3864,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Enable Precipitation');
 
-    advanced_folder.add(guiControls, 'IterPerFrame', 1, 250, 1).onChange(function() { guiControls.auto_IterPerFrame = false; }).name('Iterations / Frame').listen();
+    advanced_folder.add(guiControls, 'IterPerFrame', 1, 50, 1).onChange(function() { guiControls.auto_IterPerFrame = false; }).name('Iterations / Frame').listen();
 
     advanced_folder.add(guiControls, 'auto_IterPerFrame').name('Auto Adjust').listen();
 
@@ -4040,37 +4046,41 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       // Draw Dew point line
       c.beginPath();
       for (var y = surfaceLevel; y < sim_res_y; y++) {
-        var dewPoint = KtoC(dewpoint(waterTextureValues[4 * y]));
 
-        var temp = baseTextureValues[4 * y + 3] - ((y / sim_res_y) * guiControls.simHeight * guiControls.dryLapseRate) / 1000.0 - 273.15;
-        if (guiControls.realDewPoint) {
-          dewPoint = Math.min(temp, dewPoint);
+        if (wallTextureValues[4 * y + 1] != 0) { // fluid cell
+
+          var dewPoint = KtoC(dewpoint(waterTextureValues[4 * y]));
+
+          var temp = baseTextureValues[4 * y + 3] - ((y / sim_res_y) * guiControls.simHeight * guiControls.dryLapseRate) / 1000.0 - 273.15;
+          if (guiControls.realDewPoint) {
+            dewPoint = Math.min(temp, dewPoint);
+          }
+
+          var scrYpos = map_range(y, sim_res_y, 0, 0, graphBottem);
+
+          var velocity = rawVelocityTo_ms(Math.sqrt(Math.pow(baseTextureValues[4 * y], 2) + Math.pow(baseTextureValues[4 * y + 1], 2)));
+
+          c.font = '15px Arial';
+          c.fillStyle = 'white';
+
+          // c.fillText('Surface: ' + y, 10, scrYpos);
+          if (y == simYpos) {
+            c.fillText('' + printAltitude(map_range(y - 1, 0, sim_res_y, 0, guiControls.simHeight)), 5, scrYpos + 5);
+
+            c.fillText('' + printVelocity(velocity), this.graphCanvas.width - 113, scrYpos + 20);
+
+
+            c.strokeStyle = '#FFF';
+            c.lineWidth = 1.0;
+
+
+            c.strokeRect(T_to_Xpos(dewPoint, scrYpos) - 10, scrYpos, 10,
+                         1); // vertical position indicator
+            c.fillText('' + printTemp(dewPoint), T_to_Xpos(dewPoint, scrYpos) - 70, scrYpos + 5);
+          }
+
+          c.lineTo(T_to_Xpos(dewPoint, scrYpos), scrYpos); // draw line segment
         }
-
-        var scrYpos = map_range(y, sim_res_y, 0, 0, graphBottem);
-
-        var velocity = rawVelocityTo_ms(Math.sqrt(Math.pow(baseTextureValues[4 * y], 2) + Math.pow(baseTextureValues[4 * y + 1], 2)));
-
-        c.font = '15px Arial';
-        c.fillStyle = 'white';
-
-        // c.fillText('Surface: ' + y, 10, scrYpos);
-        if (y == simYpos) {
-          c.fillText('' + printAltitude(map_range(y - 1, 0, sim_res_y, 0, guiControls.simHeight)), 5, scrYpos + 5);
-
-          c.fillText('' + printVelocity(velocity), this.graphCanvas.width - 113, scrYpos + 20);
-
-
-          c.strokeStyle = '#FFF';
-          c.lineWidth = 1.0;
-
-
-          c.strokeRect(T_to_Xpos(dewPoint, scrYpos) - 10, scrYpos, 10,
-                       1); // vertical position indicator
-          c.fillText('' + printTemp(dewPoint), T_to_Xpos(dewPoint, scrYpos) - 70, scrYpos + 5);
-        }
-
-        c.lineTo(T_to_Xpos(dewPoint, scrYpos), scrYpos); // draw line segment
       }
 
       c.lineWidth = 2.0; // 3
@@ -4441,8 +4451,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
       if (event.touches.length == 2 && previousTouches && previousTouches.length == 2) // 2 finger zoom
       {
-        mouseX = (event.touches[0].clientX + event.touches[1].clientX) / 4.5;          // position inbetween two fingers
-        mouseY = (event.touches[0].clientY + event.touches[1].clientY) / 4.5;
+        mouseX = (event.touches[0].clientX + event.touches[1].clientX) / 2.0;          // position inbetween two fingers
+        mouseY = (event.touches[0].clientY + event.touches[1].clientY) / 2.0;
 
         let prevXsep = previousTouches[0].clientX - previousTouches[1].clientX;
         let prevYsep = previousTouches[0].clientY - previousTouches[1].clientY;
@@ -4769,7 +4779,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   // Don't ask me why, but the * 1.0000001 is nesesary to get exactly round half
   // ( x.5 ) fragcoordinates in the fragmentshaders I figured this out
   // experimentally. It took me days! Without it the linear interpolation would
-  // get fcked up because of the tiny offsets
+  // get fucked up because of the tiny offsets
   const fluidQuadVertices = [
     // X, Y,  U, V
     1.0,
@@ -5174,7 +5184,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   const colorScalesTexture = gl.createTexture();
 
   const lightningTextures = [];
-  const numLightningTextures = 20;
+  const numLightningTextures = 10;
 
 
   frameBuff_0 = gl.createFramebuffer(); // global for weather stations
@@ -5312,7 +5322,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, precipitationDepositionTexture, 0);
 
   gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 7, 2, 2, gl.RGBA, gl.FLOAT, null);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 1, 0, gl.RGBA, gl.FLOAT, null);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
@@ -5538,6 +5548,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dryLapse'), dryLapse);
   // gl.uniform1fv(gl.getUniformLocation(boundaryProgram, 'initial_T'), initial_T);
   gl.uniform4fv(gl.getUniformLocation(boundaryProgram, 'initial_Tv'), initial_T);
+  gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'allowCaves'), guiControls.allowCaves ? 1 : 0);
 
   gl.useProgram(curlProgram);
   gl.uniform2f(gl.getUniformLocation(curlProgram, 'texelSize'), texelSizeX, texelSizeY);
@@ -5785,7 +5796,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         else if (guiControls.tool == 'TOOL_VEGETATION')
           inputType = 22;
 
-        var intensity = guiControls.intensity;
+        var intensity = guiControls.brushIntensity;
 
         if (ctrlPressed) {
           intensity *= -1;
@@ -5815,13 +5826,19 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
 
       if (!guiControls.paused) { // Simulation part
+
+        let nightAccelerationActive = !airplaneMode && guiControls.dayNightCycle && guiControls.accelerateNight && guiControls.sunAngle < 0.;
+
         if (guiControls.dayNightCycle) {
           if (airplaneMode) {
-            updateSunlight(1.0 / 3600.0 / 60);                           // increase solar time at real speed: 1/60 seconds per frame
+            updateSunlight(1.0 / 3600.0 / 60);                                                                    // increase solar time at real speed: 1/60 seconds per frame
           } else {
-            updateSunlight(timePerIteration * guiControls.IterPerFrame); // increase solar time
+            updateSunlight(timePerIteration * guiControls.IterPerFrame * (nightAccelerationActive ? 10.0 : 1.0)); // increase solar time
           }
         }
+
+        gl.useProgram(lightingProgram);
+        gl.uniform1f(gl.getUniformLocation(lightingProgram, 'IR_rate'), guiControls.IR_rate * (nightAccelerationActive ? 10.0 : 1.0));
 
         gl.viewport(0, 0, sim_res_x, sim_res_y);
         gl.clearColor(0.0, 0.0, 0.0, 0.0);
@@ -6210,7 +6227,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       }
 
 
-      let lightningTexNum = Math.floor(iterNum / 500) % numLightningTextures;
+      let lightningTexNum = Math.floor(iterNum / 400) % numLightningTextures;
       // console.log(lightningTexNum)
 
       gl.activeTexture(gl.TEXTURE7);
@@ -6765,4 +6782,4 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             */
     }
   }
-}
+} // end of mainscript
