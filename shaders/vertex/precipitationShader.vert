@@ -121,11 +121,13 @@ void main()
           vec4 lightningData = texture(lightningDataTex, vec2(0.5)); // data from last lightning bolt
 
           const float lightningCloudDensityThreshold = 0.1;          // 3.0
+          const float lightningChanceMult = 0.002;
+          
           const float lightningChanceMultiplier = 1.275;            // 0.0011
 
           float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION];
 
-          float lightningSpawnChance = max((cloudPlusPrecipDensity - lightningCloudDensityThreshold) * lightningChanceMultiplier, spawnChanceMult * 1.275);
+          float lightningSpawnChance = max((cloudPlusPrecipDensity - lightningCloudDensityThreshold) * lightningChanceMultiplier, lightningChanceMult * 1.275);
 
           const float minIterationsSinceLastLightningBolt = 1.;                                                                                                                       // 50.
 
