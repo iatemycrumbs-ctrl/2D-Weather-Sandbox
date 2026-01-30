@@ -363,7 +363,8 @@ const guiControls_default = {
   inactiveDroplets : 0,
   aboveZeroThreshold : 1.0, // PRECIPITATION
   subZeroThreshold : 0.005, // 0.01
-  spawnChance : 0.00005,    // 30. 10 to 50
+  spawnChance : 0.00005,
+  lightningChanceMult : 0.002,// 30. 10 to 50
   snowDensity : 0.2,        // 0.3
   fallSpeed : 0.0003,
   growthRate0C : 0.0001,    // 0.0005
@@ -449,7 +450,7 @@ var dryLapse;
 const timePerIteration = 0.00008; // in hours (0.00008 = 0.288 sec, at 40m cell size that means the speed of light & sound = 138.88 m/s = 500 km/h)
 
 var NUM_DROPLETS;
-const NUM_DROPLETS_DEVIDER = 1; // 25
+const NUM_DROPLETS_DEVIDER = 1;
 
 let hdrFBO;
 
@@ -3431,6 +3432,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'aboveZeroThreshold'), guiControls.aboveZeroThreshold);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'subZeroThreshold'), guiControls.subZeroThreshold);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'spawnChanceMult'), guiControls.spawnChance);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.lightningChanceMult);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
@@ -3706,7 +3708,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Spawn Rate')
       .listen();
-
+      
+    precipitation_folder.add(guiControls, 'lightningChanceMult', 0.001, 0.01, 0.005)
+    .onChange(function() {
+      gl.useProgram(precipitationProgram);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.LightningChanceMult);
+     })
+     .name('Lightning Chance Multiplier')
+      
     precipitation_folder.add(guiControls, 'snowDensity', 0.1, 0.9, 0.01)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
