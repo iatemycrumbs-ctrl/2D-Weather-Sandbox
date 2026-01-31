@@ -3719,7 +3719,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Lightning Chance Multiplier');
     
     precipitation_folder.add(guiControls, 'lightningAngle', 0, 60, 1)
-      .onchange(function() {
+      .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningAngle'), guiControls.lightningAngle);
       })
