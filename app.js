@@ -3717,14 +3717,13 @@ gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningAngle'), guiC
       gl.useProgram(precipitationProgram);
       gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.LightningChanceMult);
      })
-     .name('Lightning Chance Multiplier')
-precipitation_folder.add(guiControls, 'lightningAngle', 0, 60, 1)
-      .onchange(function() {
-gl.useProgram(precipitationProgram);
-
-gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningAngle'), guiControls.lightningAngle);
-      })
-      .name('Lightning Angle');
+     .name('Lightning Chance Multiplier');
+    precipitation_folder.add(guiControls, 'lightningAngle', 0, 60, 1)
+    .onchange(function() {
+      gl.useProgram(precipitationProgram);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningAngle'), guiControls.lightningAngle);
+     })
+     .name('Lightning Angle');
       
     precipitation_folder.add(guiControls, 'snowDensity', 0.1, 0.9, 0.01)
       .onChange(function() {
