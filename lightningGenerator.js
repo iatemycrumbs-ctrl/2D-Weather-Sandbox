@@ -30,7 +30,7 @@ function generateLightningBolt(width, height)
   let startY = 0;
   let angle = Math.PI / 6.;
   let lineWidth = 9.0;
-  const targetAngle = 0.0;
+  const targetAngle = lightningAngle;
 
   ctx.moveTo(startX, startY);
 
