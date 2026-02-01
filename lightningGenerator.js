@@ -4,8 +4,8 @@ onmessage = (event) => {
   let imgElement = generateLightningBolt(msg.width, msg.height);
   postMessage(imgElement);
 };
-// declare the lightning angle variable
-const lightningAngle = 1;
+
+// const lightningAngle = 1;
 
 
 function generateLightningBolt(width, height)
@@ -32,7 +32,7 @@ function generateLightningBolt(width, height)
   let startY = 0;
   let angle = Math.PI / 6.;
   let lineWidth = 9.0;
-  const targetAngle = lightningAngle;
+  const targetAngle = 0.0;
 
   ctx.moveTo(startX, startY);
 
