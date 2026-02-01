@@ -365,7 +365,7 @@ const guiControls_default = {
   subZeroThreshold : 0.005, // 0.01
   spawnChance : 0.00005,
   lightningChanceMult : 0.002,
-  lightningAngle : 1,// 30. 10 to 50
+  lightningMinInterval : 1,// 30. 10 to 50
   snowDensity : 0.2,        // 0.3
   fallSpeed : 0.0003,
   growthRate0C : 0.0001,    // 0.0005
@@ -3434,7 +3434,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'subZeroThreshold'), guiControls.subZeroThreshold);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'spawnChanceMult'), guiControls.spawnChance);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.lightningChanceMult);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningAngle'), guiControls.lightningAngle);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningMinInterval'), guiControls.lightningMinInterval);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
@@ -3573,9 +3573,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Tool')
       .listen();
-    UI_folder.add(guiControls, 'brushSize', 1, 200, 1).name('Brush Diameter').listen();
+    UI_folder.add(guiControls, 'brushSize', 1, 2000, 1).name('Brush Diameter').listen();
     UI_folder.add(guiControls, 'wholeWidth').name('Whole Width Brush').listen();
-    UI_folder.add(guiControls, 'brushIntensity', 0.005, 0.05, 0.001).name('Brush Intensity');
+    UI_folder.add(guiControls, 'brushIntensity', 0.005, 0.075, 0.001).name('Brush Intensity');
     UI_folder.add(guiControls, 'allowCaves')
       .onChange(function() {
         gl.useProgram(boundaryProgram);
@@ -3718,12 +3718,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Lightning Chance Multiplier');
     
-    precipitation_folder.add(guiControls, 'lightningAngle', 0, 60, 1)
+    precipitation_folder.add(guiControls, 'lightningMinInterval', 0, 60, 1)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
-        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningAngle'), guiControls.lightningAngle);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningMinInterval'), guiControls.lightningMinInterval);
       })
-      .name('Lightning Angle');
+      .name('Min iteration of lightning');
       
     precipitation_folder.add(guiControls, 'snowDensity', 0.1, 0.9, 0.01)
       .onChange(function() {
