@@ -4,6 +4,8 @@ onmessage = (event) => {
   let imgElement = generateLightningBolt(msg.width, msg.height);
   postMessage(imgElement);
 };
+// declare the lightning angle variable
+const lightningAngle = 1;
 
 
 function generateLightningBolt(width, height)
