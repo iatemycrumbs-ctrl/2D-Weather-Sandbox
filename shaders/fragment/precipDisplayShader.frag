@@ -27,19 +27,21 @@ void main()
   fragmentColor = vec4(0.0, 1.0, 1.0, 1.0); // rain
   */
 
-  float opacity = (mass_out[WATER] + mass_out[ICE]) * 0.10;
+  float totalMass = mass_out[WATER] + mass_out[ICE];
+  float centerFade = max(1.0 - length(gl_PointCoord - vec2(0.5)) * 2.0, 0.0);
+  float opacity = min(totalMass * 0.12, 1.0) * centerFade;
 
   if (mass_out[ICE] > 0.) {                           // has ice
     if (mass_out[WATER] == 0.) {                      // has no liquid water, pure ice
       if (density_out < 1.0)                          // snow
-        fragmentColor = vec4(1.0, 1.0, 1.0, opacity); // white
+        fragmentColor = vec4(0.95, 0.97, 1.0, opacity); // snow
       else
-        fragmentColor = vec4(1.0, 1.0, 0.0, opacity); // hail
+        fragmentColor = vec4(0.82, 0.90, 1.0, opacity); // hail
     } else {                                          // mix of ice and water
-      fragmentColor = vec4(0.5, 1.0, 1.0, opacity);   // light blue
+      fragmentColor = vec4(0.65, 0.88, 1.0, opacity); // wet snow / sleet
     }
   } else {                                            // rain
-    fragmentColor = vec4(0.0, 0.5, 1.0, opacity);     // dark blue
+    fragmentColor = vec4(0.30, 0.65, 1.0, opacity);   // rain
   }
 
   // fragmentColor = vec4(1.0, 1.0, 0.0, 1.0); // all highly visible for DEBUG
