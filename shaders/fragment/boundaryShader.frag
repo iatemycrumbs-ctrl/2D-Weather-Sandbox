@@ -18,6 +18,7 @@ uniform isampler2D wallTex;
 uniform sampler2D lightTex;
 uniform sampler2D precipFeedbackTex;
 uniform sampler2D precipDepositionTex;
+uniform sampler2D lightningDataTex;
 
 uniform float dryLapse;
 uniform float evapHeat;
@@ -87,6 +88,7 @@ void main()
   ivec4 wallX0Yp = texture(wallTex, texCoordX0Yp);
 
   vec4 light = texture(lightTex, texCoord);
+  vec4 lightningData = texture(lightningDataTex, vec2(0.5));
 
   bool nextToWall = false;
 
@@ -467,6 +469,25 @@ void main()
           if (subInterval % (int(water[SOIL_MOISTURE] * 0.1 + water[SNOW] * 0.5) + 10) == 0 && wall[VEGETATION] >= minimalFireVegetation &&
               (wallXmY0[TYPE] == WALLTYPE_FIRE || wallXpY0[TYPE] == WALLTYPE_FIRE || texture(waterTex, texCoordX0Yp)[SMOKE] > 4.5)) { // if left or right is on fire or fire is blowing over
             wall[TYPE] = WALLTYPE_FIRE;                                                                                               // spread fire
+          }
+
+          // Lightning ignition at the surface.
+          float lightningAge = iterNum - lightningData[START_ITERNUM];
+          if (wall[VERT_DISTANCE] == 0 && wall[TYPE] == WALLTYPE_LAND && wall[VEGETATION] >= minimalFireVegetation &&
+              lightningAge >= 0.0 && lightningAge <= 3.0) {
+            float dxCells = abs(texCoord.x - lightningData.x) * resolution.x;
+            dxCells = min(dxCells, resolution.x - dxCells); // map wraps horizontally
+
+            float strikeToGroundY = max(lightningData.y - texCoord.y, 0.0) * resolution.y;
+            float strikeDistanceCells = sqrt(dxCells * dxCells + strikeToGroundY * strikeToGroundY * 0.05);
+
+            float strikeRadiusCells = map_rangeC(lightningData[INTENSITY], 0.05, 4.0, 0.8, 6.0);
+            float wetnessPenalty = clamp((water[SOIL_MOISTURE] - 6.0) * 0.03 + water[SNOW] * 0.15 + waterAboveSurface[PRECIPITATION] * 0.12, 0.0, 0.95);
+            float ignitionChance = clamp(map_rangeC(lightningData[INTENSITY], 0.05, 4.0, 0.10, 0.95) * (1.0 - wetnessPenalty), 0.0, 1.0);
+
+            if (strikeDistanceCells <= strikeRadiusCells && random2d(vec2(iterNum * 0.97, fragCoord.x + fragCoord.y * 7.0)) < ignitionChance) {
+              wall[TYPE] = WALLTYPE_FIRE;
+            }
           }
           //}
         }

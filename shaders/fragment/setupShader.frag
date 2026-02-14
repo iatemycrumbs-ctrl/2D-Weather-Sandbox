@@ -24,13 +24,55 @@ layout(location = 0) out vec4 base;
 layout(location = 1) out vec4 water;
 layout(location = 2) out ivec4 wall;
 
-float rand(float n) { return fract(sin(n) * 43758.5453123); }
+float hash11(float p) { return fract(sin(p * 127.1) * 43758.5453123); }
+float hash21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
 
-float noise(float p)
+float noise2(vec2 p)
 {
-  float fl = floor(p);
-  float fc = fract(p);
-  return mix(rand(fl), rand(fl + 1.), fc) - 0.5;
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+
+  float a = hash21(i + vec2(0.0, 0.0));
+  float b = hash21(i + vec2(1.0, 0.0));
+  float c = hash21(i + vec2(0.0, 1.0));
+  float d = hash21(i + vec2(1.0, 1.0));
+
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+float fbm(vec2 p, float lacunarity, float gain, int octaves)
+{
+  float sum = 0.0;
+  float amp = 0.5;
+  float freq = 1.0;
+
+  for (int i = 0; i < 8; i++) {
+    if (i >= octaves)
+      break;
+    sum += (noise2(p * freq) * 2.0 - 1.0) * amp;
+    freq *= lacunarity;
+    amp *= gain;
+  }
+  return sum;
+}
+
+float ridgedFbm(vec2 p)
+{
+  float sum = 0.0;
+  float amp = 0.5;
+  float freq = 1.0;
+
+  for (int i = 0; i < 6; i++) {
+    float n = noise2(p * freq) * 2.0 - 1.0;
+    n = 1.0 - abs(n);
+    n *= n;
+    sum += n * amp;
+    freq *= 2.0;
+    amp *= 0.5;
+  }
+
+  return sum;
 }
 
 void main()
@@ -38,55 +80,81 @@ void main()
   base = vec4(0.0);
   water = vec4(0.0);
 
-  // WALL SETUP
+  // Reworked terrain generation:
+  // - low frequency "continent" mask
+  // - domain-warped FBM for hills/valleys
+  // - ridged FBM for mountain chains
 
-  float height = 0.0;
-  float height_m = 0.0;
+  float seedA = seed * 37.0 + 11.0;
+  float seedB = seed * 91.0 + 7.0;
 
-  if (heightMult < 0.05) { // all sea
+  vec2 p = vec2(texCoord.x * 4.0, texCoord.y * 4.0);
+  vec2 warp;
+  warp.x = fbm(p + vec2(seedA, seedB), 2.1, 0.55, 4);
+  warp.y = fbm(p.yx + vec2(seedB, seedA), 2.1, 0.55, 4);
 
-    height = 0.0;
+  vec2 pw = p + warp * 0.65;
 
-  } else if (heightMult < 0.10) { // all land
+  float continent = fbm(pw * 0.35 + vec2(seedA * 0.13, seedB * 0.19), 2.0, 0.55, 5);
+  continent = smoothstep(-0.45, 0.35, continent);
 
-    height = 0.005;
+  float hills = fbm(pw * 1.3 + vec2(seedA * 0.21, seedB * 0.27), 2.0, 0.52, 6);
+  float ridges = ridgedFbm(pw * 1.8 + vec2(seedA * 0.31, seedB * 0.17));
 
-  } else { // generate hills / mountains
-    float var = fragCoord.x * 0.001;
+  float mountainMix = smoothstep(0.35, 0.95, continent);
+  float elevation = mix(hills * 0.55 + 0.10, ridges * 0.95, mountainMix);
 
-    for (float i = 2.0; i < 1000.0; i *= 1.5) { // add multiple frequencies of noise together
-      height += noise(var * i + rand(seed + i) * 10.) * 0.5 / i;
-    }
+  // heightMult now controls water coverage + overall relief.
+  float waterCoverage = map_rangeC(heightMult, 0.0, 2.0, 0.78, 0.25);
+  float relief = map_rangeC(heightMult, 0.0, 2.0, 0.02, 0.55);
 
-    height *= heightMult;
-    height_m = height * simHeight; // sim height
-  }
+  float height = continent * elevation * relief - waterCoverage * 0.12;
+  float terrainHeightNorm = clamp(height + 0.04, 0.0, 0.95); // 0..1 of simulation height
 
-  if (texCoord.y < texelSize.y || texCoord.y < height) {                                                      // set to wall
-    wall[DISTANCE] = 0;                                                                                       // set to wall
-    if (height < texelSize.y) {
-      wall[TYPE] = WALLTYPE_WATER;                                                                            // set walltype to water
-      base[TEMPERATURE] = CtoK(25.0);                                                                         // set water temperature to 25 C
+  float terrainHeightM = terrainHeightNorm * simHeight;
+
+  if (texCoord.y < texelSize.y || texCoord.y < terrainHeightNorm) {
+    wall[DISTANCE] = 0;
+
+    if (terrainHeightNorm <= texelSize.y) {
+      wall[TYPE] = WALLTYPE_WATER;
+      base[TEMPERATURE] = CtoK(23.0);
+      water[SOIL_MOISTURE] = 0.0;
+      wall[VEGETATION] = 0;
+      water[SNOW] = 0.0;
     } else {
-      wall[TYPE] = WALLTYPE_LAND;                                                                             // set walltype to land
-      water[SOIL_MOISTURE] = 25.0;                                                                            // soil moisture in mm
+      wall[TYPE] = WALLTYPE_LAND;
 
-      wall[VEGETATION] = int(110.0 - fragCoord.y * 2. + noise(fragCoord.x * 0.01 + rand(seed) * 10.) * 150.); // set vegitation
+      float slopeProbe = abs(dFdx(terrainHeightNorm)) * resolution.x * 1.5;
+      float fertileBand = smoothstep(150.0, 2500.0, terrainHeightM) * (1.0 - smoothstep(2800.0, 4200.0, terrainHeightM));
+      float aridNoise = noise2(vec2(texCoord.x * 8.0 + seedA, texCoord.y * 5.0 + seedB));
 
-      water[SNOW] = max(map_rangeC(height_m, 2000.0, 5000.0, 0.0, 100.0), 0.);                                // set snow
+      float soilMoisture = mix(32.0, 8.0, smoothstep(0.0, 0.20, slopeProbe));
+      soilMoisture *= mix(0.70, 1.20, fertileBand);
+      soilMoisture *= mix(0.75, 1.15, aridNoise);
+      water[SOIL_MOISTURE] = clamp(soilMoisture, 2.0, 45.0);
+
+      float vegetation = 18.0 + fertileBand * 110.0 - slopeProbe * 55.0;
+      vegetation += (noise2(vec2(texCoord.x * 14.0 + seedB, texCoord.y * 3.0 + seedA)) - 0.5) * 30.0;
+      wall[VEGETATION] = int(clamp(vegetation, 0.0, 127.0));
+
+      float snowBase = map_rangeC(terrainHeightM, 1800.0, 5200.0, 0.0, 180.0);
+      float snowNoise = noise2(vec2(texCoord.x * 9.0 + seedA * 0.2, texCoord.y * 9.0 + seedB * 0.2));
+      water[SNOW] = max(snowBase * mix(0.75, 1.25, snowNoise), 0.0);
     }
-  } else {                                                                                                    // air, not wall
-    wall[DISTANCE] = 255;                                                                                     // reset distance to wall
-    base[TEMPERATURE] = getInitialT(int(texCoord.y * (1.0 / texelSize.y)));                                   // set temperature
+  } else {
+    wall[DISTANCE] = 255;
+    base[TEMPERATURE] = getInitialT(int(texCoord.y * (1.0 / texelSize.y)));
 
     float realTemp = potentialToRealT(base[TEMPERATURE]);
 
-    if (texCoord.y < 0.20) // set dew point
+    if (texCoord.y < 0.20)
       water[TOTAL] = maxWater(realTemp - 2.0);
     else
       water[TOTAL] = maxWater(realTemp - 20.0);
 
-    water[CLOUD] = max(water[TOTAL] - maxWater(realTemp), 0.0); // calculate cloud water
+    water[CLOUD] = max(water[TOTAL] - maxWater(realTemp), 0.0);
   }
-  wall[VERT_DISTANCE] = 100;                                    // preset height above ground to prevent water being deleted in boundaryshader ln 250*`
+
+  wall[VERT_DISTANCE] = 100;
 }
