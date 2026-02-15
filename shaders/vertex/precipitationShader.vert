@@ -145,7 +145,7 @@ const float nominalSpawnMass = 0.14;
 
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * 0.67;
           lightningSpawnChance *= (0.35 + chargeSeparation * 1.4);
-          lightningSpawnChance *= map_rangeC(lightningSpawnChancel, 0.0, 80.0, 1.0, 0.55);
+          lightningSpawnChance *= map_rangeC(lightningSpawnChance, 0.0, 80.0, 1.0, 0.55);
           lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.22);
 
           if (lightningData[START_ITERNUM] < iterNum - 0.5 &&
