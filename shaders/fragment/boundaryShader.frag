@@ -519,23 +519,35 @@ void main()
           }
 
           float airTemperature = potentialToRealT(texture(baseTex, texCoordX0Yp)[TEMPERATURE], texCoordX0Yp.y);
+          vec4 waterAboveSurfaceNow = texture(waterTex, texCoordX0Yp);
+          vec4 precipFeedbackAbove = texture(precipFeedbackTex, texCoordX0Yp);
+
+          float windMixing = clamp(length(texture(baseTex, texCoordX0Yp).xy) * 45.0, 0.2, 2.2);
+          float mixedLayerDepth = map_rangeC(windMixing, 0.2, 2.2, 0.7, 2.2); // deeper mixed layer => more thermal inertia
 
           float netWaterHeating = 0.0;
-          netWaterHeating += (airTemperature - base[TEMPERATURE]) * waterHeatExchangeRate; // water heated or cooled by the air above
+          netWaterHeating += (airTemperature - base[TEMPERATURE]) * waterHeatExchangeRate * (0.9 + windMixing * 0.15); // turbulent exchange
 
-          netWaterHeating -=
-            max((maxWater(base[TEMPERATURE]) - waterX0Yp[TOTAL]) * waterEvaporation, 0.) * evapHeat * 0.5; // evaporative cooling (half the real value, to prevent boring non convective conditions)
+          float evaporativeCooling = max((maxWater(base[TEMPERATURE]) - waterAboveSurfaceNow[TOTAL]) * waterEvaporation, 0.) * evapHeat * 0.5;
+          netWaterHeating -= evaporativeCooling;
 
-          float lightPower = max(lightAboveSurface[SUNLIGHT] * cos(sunAngle), 0.0);                        // Light power per horizontal surface area;
+          float rainCooling = max(precipFeedbackAbove[VAPOR], 0.0) * evapHeat * 0.12;
+          netWaterHeating -= rainCooling;
 
+          float lightPower = max(lightAboveSurface[SUNLIGHT] * cos(sunAngle), 0.0); // Light power per horizontal surface area;
           lightPower *= (1. - ALBEDO_WATER);
           lightPower *= lightHeatingConst;
-          netWaterHeating += lightPower; // sun heating water
-
+          netWaterHeating += lightPower;
 
           netWaterHeating += lightAboveSurface[NET_HEATING]; // IR heating/cooling effect
 
-          base[TEMPERATURE] += netWaterHeating / waterHeatCapacity * waterTempUpdateInterval;
+          // slow radiative cooling during calm clear night
+          if (lightAboveSurface[SUNLIGHT] < 0.04) {
+            float dryAirFactor = map_rangeC(waterAboveSurfaceNow[TOTAL], 2.0, 18.0, 1.0, 0.4);
+            netWaterHeating -= 0.000010 * dryAirFactor;
+          }
+
+          base[TEMPERATURE] += netWaterHeating / (waterHeatCapacity * mixedLayerDepth) * waterTempUpdateInterval;
         }
 
         base[TEMPERATURE] = clamp(base[TEMPERATURE], CtoK(0.0), CtoK(maxWaterTemp)); // limit water temperature range

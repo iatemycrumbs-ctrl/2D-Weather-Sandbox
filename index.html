@@ -436,6 +436,31 @@
             border-bottom-color: rgba(255, 255, 255, 0.9);
         }
 
+        
+        .sounding-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 8px 0 12px 0;
+        }
+
+        .chip {
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: rgba(74, 144, 226, 0.25);
+            border: 1px solid rgba(122, 177, 255, 0.45);
+            color: #e9f2ff;
+            font-size: 0.82rem;
+        }
+
         @media (max-width: 1050px) {
             .intro-hero,
             .intro-top,
@@ -491,22 +516,35 @@
 
         <div class="intro-top">
             <div class="intro-sounding-controls">
-                <div>
-                    Preset:<select id="presetSelect" style="margin: 10px;"></select>
+                <div class="sounding-row">
+                    <label for="presetSelect"><b>Preset:</b></label>
+                    <select id="presetSelect"></select>
                 </div>
-                <div>
-                    <select id="stationSelect"></select>
-                    <input type="date" id="datePicker" value="2025-06-15" min="2010-01-01"
-                        onchange="prepareSounding();" />
 
+                <div class="chip-row">
+                    <span class="chip">Real sounding forcing</span>
+                    <span class="chip">Terrain preview before launch</span>
+                    <span class="chip">GPU-heavy at high resolutions</span>
+                </div>
+
+                <div class="sounding-row">
+                    <label for="stationSelect"><b>Station:</b></label>
+                    <select id="stationSelect"></select>
+                </div>
+
+                <div class="sounding-row">
+                    <label for="datePicker"><b>Date:</b></label>
+                    <input type="date" id="datePicker" value="2025-06-15" min="2010-01-01" onchange="prepareSounding();" />
+
+                    <label for="hourSelector"><b>Hour:</b></label>
                     <select id="hourSelector" onchange="prepareSounding();">
                         <option value="0">00H</option>
                         <option value="6">06H</option>
                         <option value="12" selected>12H</option>
                         <option value="18">18H</option>
                     </select>
-                    <p>Select a real world sounding to use as forcing in the simulation</p>
                 </div>
+                <p>Select a real world sounding to use as forcing in the simulation.</p>
             </div>
             <img id="soundingPreview"
                 alt="Sounding not available, Please select a different time.">

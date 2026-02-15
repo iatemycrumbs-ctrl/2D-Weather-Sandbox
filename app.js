@@ -460,7 +460,7 @@ var dryLapse;
 const timePerIteration = 0.00008; // in hours (0.00008 = 0.288 sec, at 40m cell size that means the speed of light & sound = 138.88 m/s = 500 km/h)
 
 var NUM_DROPLETS;
-const NUM_DROPLETS_DEVIDER = 1;
+const NUM_DROPLET_MULTIPLIER = 2.0;
 
 let hdrFBO;
 
@@ -1290,7 +1290,7 @@ async function loadData()
       sim_res_x = resArray[0];
       sim_res_y = resArray[1];
 
-      NUM_DROPLETS = (sim_res_x * sim_res_y) / NUM_DROPLETS_DEVIDER;
+      NUM_DROPLETS = Math.floor(sim_res_x * sim_res_y * NUM_DROPLET_MULTIPLIER);
 
       saveFileName = file.name;
 
@@ -1369,7 +1369,7 @@ async function loadData()
     sim_res_y = parseInt(document.getElementById('simResSelY').value);
     sim_height = parseInt(document.getElementById('simHeightSel').value);
 
-    NUM_DROPLETS = (sim_res_x * sim_res_y) / NUM_DROPLETS_DEVIDER;
+    NUM_DROPLETS = Math.floor(sim_res_x * sim_res_y * NUM_DROPLET_MULTIPLIER);
     SETUP_MODE = true;
 
     mainScript(null); // run without initial textures

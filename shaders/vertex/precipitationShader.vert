@@ -130,13 +130,23 @@ const float nominalSpawnMass = 0.14;
           const float lightningCloudDensityThreshold = 0.12; // minimum combined condensate before lightning can form
 
           float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION] * 1.2;
-          float mixedPhaseFactor = map_rangeC(realTemp, CtoK(-38.0), CtoK(-2.0), 0.0, 1.0);
-          float updraftFactor = map_rangeC(base[VY], 0.0, 0.020, 0.1, 1.6);
+
+          // Complex charge separation proxy:
+          // strongest in mixed-phase region with strong updraft and collision between ice/graupel/rain.
+          float mixedPhaseFactor = map_rangeC(realTemp, CtoK(-35.0), CtoK(-5.0), 0.0, 1.0);
+          float updraftFactor = map_rangeC(base[VY], 0.0, 0.020, 0.05, 1.8);
+          float downdraftFactor = map_rangeC(-base[VY], 0.0, 0.015, 0.0, 1.0);
+          float graupelFactor = map_rangeC(newDensity, snowDensity, 1.0, 0.2, 1.2);
+          float collisionFactor = map_rangeC(water[PRECIPITATION] + newMass[WATER], 0.0, 1.4, 0.3, 1.7);
+
+          float positiveCharge = mixedPhaseFactor * updraftFactor * graupelFactor;
+          float negativeCharge = mixedPhaseFactor * (0.35 + downdraftFactor) * collisionFactor;
+          float chargeSeparation = max(positiveCharge - negativeCharge * 0.65, 0.0);
 
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
-          lightningSpawnChance *= mixedPhaseFactor * updraftFactor;
+          lightningSpawnChance *= (0.35 + chargeSeparation * 1.4);
           lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.55);
-          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.18);
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.22);
 
           if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval &&
               random2d(vec2(base[TEMPERATURE] * 0.5 + texCoord.x * 2.0, water[TOTAL] * 7.75 + texCoord.y * 2.0)) < lightningSpawnChance) { // Spawn lightning
@@ -145,7 +155,7 @@ const float nominalSpawnMass = 0.14;
             gl_PointSize = 1.0;
             feedback.xy = texCoord;
             feedback[START_ITERNUM] = iterNum;
-            float flashIntensity = cloudPlusPrecipDensity * 0.28 + updraftFactor * 0.65 + random2d(texCoord) * 0.45;
+            float flashIntensity = cloudPlusPrecipDensity * 0.22 + chargeSeparation * 1.1 + updraftFactor * 0.45 + random2d(texCoord) * 0.35;
             feedback[INTENSITY] = clamp(flashIntensity, 0.05, 4.0);
             gl_Position = vec4(vec2(-1. + texelSize.x * 3., -1. + texelSize.y), 0.0, 1.0); // render to bottem left corner (1, 0)
           }
