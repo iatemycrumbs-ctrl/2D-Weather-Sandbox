@@ -49,7 +49,7 @@ void main()
   } else {
 
     float airTemp = base[TEMPERATURE];
-    float densityDrag = map_rangeX(airTemp, CtoK(-45.0), CtoK(35.0), 1.25, 0.70) * map_rangeC(texCoord.y, 0.0, 1.0, 1.0, 0.70);
+    float densityDrag = map_rangeC(airTemp, CtoK(-45.0), CtoK(35.0), 1.25, 0.70) * map_rangeC(texCoord.y, 0.0, 1.0, 1.0, 0.70);
 
     if (wallXpY0[DISTANCE] == 0) {
       base[VX] = 0.0;                                  // Since X velocity is defined at the right of the cell, it has to be done in the cell to the left of the wall
