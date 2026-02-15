@@ -445,6 +445,7 @@ var lightningShakeOffsetX = 0.0;
 var lightningShakeOffsetY = 0.0;
 var lightningShakeVelocityX = 0.0;
 var lightningShakeVelocityY = 0.0;
+var pendingLightningShakeEvents = [];
 
 // global framebuffers for measurements
 var frameBuff_0;
@@ -1502,20 +1503,59 @@ async function prepareSounding()
 function triggerLightningEffects(lightningX, lightningY, intensity)
 {
   let camXnorm = 1.0 - (cam.curXpos + 1.0) / 2.0;
-  let camYnorm = 1.0 - (cam.curYpos * sim_aspect + 1.0) / 2.0;
+  let camDistFromSim = cellHeight * sim_res_x * 0.5 / cam.curlzoom;
 
-  let dx = lightningX - camXnorm;
-  let dy = lightningY - camYnorm;
-  let distance = Math.sqrt(dx * dx + dy * dy);
-  let distanceMult = map_range_C(distance, 0.0, 1.20, 1.0, 0.15);
+  let camHorDistFromStrike = (lightningX - camXnorm) * cellHeight * sim_res_x;
+  let vecStrikeToCam = new Vec2D(camDistFromSim, camHorDistFromStrike);
+  let distance = vecStrikeToFam.mag();
 
-  let impulse = clamp(Math.sqrt(Math.max(intensity, 0.01)) * 0.010 * distanceMult, 0.0005, 0.020);
-  let randomAngle = Math.random() * 2.0 * PI;
+  let delaySec = distance / 343.0;
+  let simTimeMult = timePerInteration * guiControls.IterPerFrame * FPS * 3600.0;
+  let delayFrames = Math.max(Math.floor((delaySec / simTimeMult) * FPS), 0);
 
-  lightningShakeVelocityX += Math.cos(randomAngle) * impulse;
-  lightningShakeVelocityY += Math.sin(randomAngle) * impulse;
+  pendingLightningShakeEvents.push({
+    delayFrames : delayFrames,
+    horizonalSign : camHorDistFromStrike < 0.0 ? -1.0 : 1.0,
+    distance : distance,
+    intensity : Math.max(intensity, 0.01),
+  });
+
+  if (pendingLightningShakeEvents.length > 64)
+    pendingLightningShakeEvents.shift();
 }
 
+function updateLightningShakePhysics()
+{
+  for (let i = pendingLightningStrikeEvents.length - 1; i >= 0; i--) {
+    let event = pendingLightningShakeEvents[i];
+    event.delayFrames--;
+
+    if (event.delayFrames <= 0) {
+      let distanceMult = map_range_C(event.distance, 500.0, 30000.0, 1.0, 0.0);
+      let impulse = clamp(Math.pow(event.intensity, 0.60) * 0.030 * distanceMult, 0.0, 0.020);
+
+      lightningShakeVelocityX += event.horizontalSign * impulse;
+      lightningShakeVelocityY += (Math.random() - 0.5) * impulse * 0.30;
+
+      pendingLightningShakeEvents.splice(i, 1);
+    }
+  }
+
+  const spring = 0.18;
+  const damping = 0.80;
+
+  lightningShakeVelocityX += - lightningShakeOffsetX * spring;
+  lightningShakeVelocityY += - lightningShakeOffsetY * spring;
+
+  lightningShakeVelocityX *= damping;
+  lightningShakeVelocityY *= damping;
+
+  lightningShakeOffsetX += lightningShakeVelocityX;
+  lightningShakeOffsetY += lightningShakeVelocityY;
+
+  lightningShakeOffsetX = clamp(lightningShakeOffsetX, -0.025, 0.025);
+  lightningShakeOffsetY = clamp(lightningShakeOffsetY, -0.020, 0.020);
+}
 
 async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initialRainDrops)
 {
@@ -3936,6 +3976,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   function startSimulation()
   {
     SETUP_MODE = false;
+
+    pendingLightningShakeEvents.length = 0;
+    lightningShakeOffsetX = 0.0;
+    lightningShakeVelocityX = lightningShakeVelocityY = 0.0;
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
     datGui.show(); // unhide
@@ -5580,6 +5624,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'lightTex'), 4);
   gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'precipFeedbackTex'), 5);
   gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'precipDepositionTex'), 6);
+  gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'lightningDataTex'), 7);
   gl.uniform2f(gl.getUniformLocation(boundaryProgram, 'resolution'), sim_res_x, sim_res_y);
   gl.uniform2f(gl.getUniformLocation(boundaryProgram, 'texelSize'), texelSizeX, texelSizeY);
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vorticity'),
@@ -5932,7 +5977,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
             gl.activeTexture(gl.TEXTURE6);
             gl.bindTexture(gl.TEXTURE_2D, precipitationDepositionTexture);
-
+            gl.activeTexture(gl.TEXTURE7);
+            gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
 
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_0);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
