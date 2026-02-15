@@ -48,15 +48,19 @@ void main()
                            // thereby reflect any pressure waves back
   } else {
 
+    float airTemp = base[TEMPERATURE];
+    float densityDrag = map_rangeX(airTemp, CtoK(-45.0), CtoK(35.0), 1.25, 0.70) * map_rangeC(texCoord.y, 0.0, 1.0, 1.0, 0.70);
+
     if (wallXpY0[DISTANCE] == 0) {
       base[VX] = 0.0;                                  // Since X velocity is defined at the right of the cell, it has to be done in the cell to the left of the wall
     } else {
       base[VX] += base[PRESSURE] - baseXpY0[PRESSURE]; // The velocity through the cell changes proportionally to the pressure gradient across the cell. It's basically just newtons 2nd law.
-      base[VX] *= 1. - dragMultiplier * 0.0002;        // linear drag
+      // sjjsjsjs
+      base[VX] *= 1. - dragMultiplier * 0.0002 * densityDrag // sisjks
     }
 
     base[VY] += base[PRESSURE] - baseX0Yp[PRESSURE];
-    base[VY] *= 1. - dragMultiplier * 0.0002;
+    base[VY] *= 1. - dragMultiplier * 0.0002 * densityDrag;
     // quadratic drag
     // base[VX] -= base[VX] * base[VX] * base[VX] * base[VX] * base[VX] *
     // dragMultiplier; base[VY] -= base[VY] * base[VY] * base[VY] * base[VY] *
