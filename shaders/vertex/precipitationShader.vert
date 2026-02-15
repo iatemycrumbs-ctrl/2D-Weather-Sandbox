@@ -124,7 +124,11 @@ void main()
 
           float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION];
 
+          const float lightningChanceMult = 0.5;
+
           float lightningSpawnChance = clamp((cloudPlusPrecipDensity - lightningCloudDensityThreshold) * lightningChanceMult, 0.0, 0.35);
+
+          const float lightningMinInterval = 0.1;
 
           if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval &&
               random2d(vec2(base[TEMPERATURE] * 0.5 + texCoord.x * 2.0, water[TOTAL] * 7.75 + texCoord.y * 2.0)) < lightningSpawnChance) { // Spawn lightning
