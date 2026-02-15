@@ -106,7 +106,7 @@ void main()
 
       //    float nrmRand = random2d(vec2(mass[WATER] * 0.2324, iterNum * 0.1783 + random(mass[ICE]))); // normalized random value
 
-      float nrmRand = fract(pow(water[CLOUD] * 10.0, 2.0));
+      float nrmRand = random2d(vec2(texCoord.x + iterNum * 0.031, texCoord.y + mass[ICE] * 0.73));
 
       if (spawnChance > nrmRand) {                                       // spawn precipitation particle
         spawned = true;
@@ -120,20 +120,14 @@ void main()
 
           vec4 lightningData = texture(lightningDataTex, vec2(0.5)); // data from last lightning bolt
 
-          const float lightningCloudDensityThreshold = 0.1;          // 3.0
-          const float lightningChanceMult = 0.002;
-          
-          const float lightningChanceMultiplier = 1.275;            // 0.0011
+          const float lightningCloudDensityThreshold = 0.1;          // minimum combined condensate before lightning can form
 
           float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION];
 
-          float lightningSpawnChance = max((cloudPlusPrecipDensity - lightningCloudDensityThreshold) * lightningChanceMultiplier, lightningChanceMult * 1.275);
+          float lightningSpawnChance = clamp((cloudPlusPrecipDensity - lightningCloudDensityThreshold) * lightningChanceMult, 0.0, 0.35);
 
-          const float lightningMinInterval = 0.0;
-
-          const float minIterationsSinceLastLightningBolt = lightningMinInterval;                                                                                                                       // 50.
-
-          if (lightningData[START_ITERNUM] < iterNum - minIterationsSinceLastLightningBolt && random2d(vec2(base[TEMPERATURE] * 0.5, water[TOTAL] * 7.75)) < lightningSpawnChance) { // Spawn lightning
+          if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval &&
+              random2d(vec2(base[TEMPERATURE] * 0.5 + texCoord.x * 2.0, water[TOTAL] * 7.75 + texCoord.y * 2.0)) < lightningSpawnChance) { // Spawn lightning
             lightningSpawned = true;
             isActive = false;
             gl_PointSize = 1.0;
