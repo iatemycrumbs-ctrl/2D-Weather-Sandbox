@@ -441,6 +441,15 @@ var lastFrameNum = 0;
 
 var iterNum = 0;
 
+var lightningShakeOffsetX = 0.0;
+var lightningShakeOffsetY = 0.0;
+var lightningShakeVelocityX = 0.0;
+var lightningShakeVelocityY = 0.0;
+var lightningShakeHFAmplitude = 0.0;
+var lightningShakeHFOffsetX = 0.0;
+var lightningShakeHFOffsetY = 0.0;
+var pendingLightningShakeEvents = [];
+
 // global framebuffers for measurements
 var frameBuff_0;
 var lightFrameBuff_0;
@@ -1493,6 +1502,81 @@ async function prepareSounding()
 
   soundingData = await loadSounding(stationSelector.options[stationSelector.selectedIndex].value, epochTime);
 }
+
+function triggerLightningEffects(lightningX, lightningY, intensity)
+{
+  let camXnorm = 1.0 - (cam.curXpos + 1.0) / 2.0;
+
+  let camDistFromSim = cellHeight * sim_res_x * 0.5 / cam.curZoom; // asuming 90° HFOV
+
+  let camHorDistFromStrike = (lightningX - camXnorm) * cellHeight * sim_res_x;
+
+  let vecStrikeToCam = new Vec2D(camDistFromSim, camHorDistFromStrike);
+  let distance = vecStrikeToCam.mag();
+
+  // shock wave travel time (same physical model as thunder)
+  let delaySec = distance / 343.0;
+  let simTimeMult = timePerIteration * guiControls.IterPerFrame * FPS * 3600.0;
+  let delayFrames = Math.max(Math.floor((delaySec / simTimeMult) * FPS), 0);
+
+  pendingLightningShakeEvents.push({
+    delayFrames : delayFrames,
+    horizontalSign : camHorDistFromStrike < 0.0 ? -1.0 : 1.0,
+    distance : distance,
+    intensity : Math.max(intensity, 0.01),
+  });
+
+  if (pendingLightningShakeEvents.length > 64)
+    pendingLightningShakeEvents.shift();
+}
+
+function updateLightningShakePhysics()
+{
+  for (let i = pendingLightningShakeEvents.length - 1; i >= 0; i--) {
+    let event = pendingLightningShakeEvents[i];
+    event.delayFrames--;
+
+    if (event.delayFrames <= 0) {
+      let distanceMult = map_range_C(event.distance, 500.0, 30000.0, 1.0, 0.0);
+      let impulse = clamp(Math.pow(event.intensity, 0.60) * 0.030 * distanceMult, 0.0, 0.020);
+
+      // apply shock mostly horizontal with slight random vertical jitter
+      lightningShakeVelocityX += event.horizontalSign * impulse;
+      lightningShakeVelocityY += (Math.random() - 0.5) * impulse * 0.35;
+
+      // high frequency shake burst for close/intense lightning
+      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 2.8, 0.0, 0.018);
+
+      pendingLightningShakeEvents.splice(i, 1);
+    }
+  }
+
+  // damped spring model
+  const spring = 0.18;
+  const damping = 0.80;
+
+  lightningShakeVelocityX += -lightningShakeOffsetX * spring;
+  lightningShakeVelocityY += -lightningShakeOffsetY * spring;
+
+  lightningShakeVelocityX *= damping;
+  lightningShakeVelocityY *= damping;
+
+  lightningShakeOffsetX += lightningShakeVelocityX;
+  lightningShakeOffsetY += lightningShakeVelocityY;
+
+  // high-frequency random camera jitter (decays quickly)
+  lightningShakeHFAmplitude *= 0.86;
+
+  let hfRandomX = (Math.random() * 2.0 - 1.0) * lightningShakeHFAmplitude;
+  let hfRandomY = (Math.random() * 2.0 - 1.0) * lightningShakeHFAmplitude;
+
+  lightningShakeHFOffsetX = mix(lightningShakeHFOffsetX, hfRandomX, 0.85);
+  lightningShakeHFOffsetY = mix(lightningShakeHFOffsetY, hfRandomY, 0.85);
+
+  lightningShakeOffsetX = clamp(lightningShakeOffsetX, -0.025, 0.025);
+  lightningShakeOffsetY = clamp(lightningShakeOffsetY, -0.020, 0.020);
+}
+
 
 async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initialRainDrops)
 {
@@ -3714,7 +3798,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     precipitation_folder.add(guiControls, 'lightningChanceMult', 0, 10, 0.1)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
-        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.LightningChanceMult);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.lightningChanceMult);
       })
       .name('Lightning Chance Multiplier');
     
@@ -3913,6 +3997,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   function startSimulation()
   {
     SETUP_MODE = false;
+
+    pendingLightningShakeEvents.length = 0;
+    lightningShakeOffsetX = lightningShakeOffsetY = 0.0;
+    lightningShakeVelocityX = lightningShakeVelocityY = 0.0;
+    lightningShakeHFOffsetX = lightningShakeHFOffsetY = 0.0;
+    lightningShakeHFAmplitude = 0.0;
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
     datGui.show(); // unhide
@@ -5557,6 +5647,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'lightTex'), 4);
   gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'precipFeedbackTex'), 5);
   gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'precipDepositionTex'), 6);
+  gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'lightningDataTex'), 7);
   gl.uniform2f(gl.getUniformLocation(boundaryProgram, 'resolution'), sim_res_x, sim_res_y);
   gl.uniform2f(gl.getUniformLocation(boundaryProgram, 'texelSize'), texelSizeX, texelSizeY);
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vorticity'),
@@ -5909,7 +6000,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
             gl.activeTexture(gl.TEXTURE6);
             gl.bindTexture(gl.TEXTURE_2D, precipitationDepositionTexture);
-
+            gl.activeTexture(gl.TEXTURE7);
+            gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
 
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_0);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
@@ -6020,15 +6112,18 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
               gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
               gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-              if (guiControls.sound) {
-                gl.readBuffer(gl.COLOR_ATTACHMENT0);
-                var lightningDataValues = new Float32Array(4);
-                gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, lightningDataValues);
-                // console.log('lightningDataValues: ', lightningDataValues[0], lightningDataValues[1], lightningDataValues[2], iterNum, lightningDataValues[3]);
+              gl.readBuffer(gl.COLOR_ATTACHMENT0);
+              var lightningDataValues = new Float32Array(4);
+              gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, lightningDataValues);
+              // console.log('lightningDataValues: ', lightningDataValues[0], lightningDataValues[1], lightningDataValues[2], iterNum, lightningDataValues[3]);
 
-                if (Math.round(lightningDataValues[2]) == iterNum) {
-                  soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], Math.pow(lightningDataValues[3], 2.0));
-                }
+              if (Math.round(lightningDataValues[2]) == iterNum) {
+                const lightningIntensity = Math.pow(lightningDataValues[3], 2.0);
+
+                triggerLightningEffects(lightningDataValues[0], lightningDataValues[1], lightningIntensity);
+
+                if (guiControls.sound)
+                  soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], lightningIntensity);
               }
             }
 
@@ -6207,6 +6302,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
 
 
+      updateLightningShakePhysics();
+
+      const shakenViewX = cam.curXpos + lightningShakeOffsetX + lightningShakeHFOffsetX;
+      const shakenViewY = cam.curYpos + lightningShakeOffsetY + lightningShakeHFOffsetY;
+
       // draw background
       gl.activeTexture(gl.TEXTURE8);
       gl.bindTexture(gl.TEXTURE_2D, airplane.directionIsLeft ? A380Texture : A380_R_Texture); // A380Texture
@@ -6217,7 +6317,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
       gl.useProgram(skyBackgroundDisplayProgram);
       gl.uniform2f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-      gl.uniform3f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+      gl.uniform3f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
       gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'Xmult'), horizontalDisplayMult);
       gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'iterNum'), iterNum);
 
@@ -6232,7 +6332,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       // draw clouds and terrain
       gl.useProgram(realisticDisplayProgram);
       gl.uniform2f(gl.getUniformLocation(realisticDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-      gl.uniform3f(gl.getUniformLocation(realisticDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+      gl.uniform3f(gl.getUniformLocation(realisticDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
       gl.uniform4f(gl.getUniformLocation(realisticDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'Xmult'), horizontalDisplayMult);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'iterNum'), iterNum);
@@ -6357,7 +6457,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         // draw precipitation
         gl.useProgram(precipDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(precipDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(precipDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(precipDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.bindVertexArray(destVAO);
         gl.drawArrays(gl.POINTS, 0, NUM_DROPLETS);
         gl.bindVertexArray(fluidVao); // set screenfilling rect again
@@ -6372,7 +6472,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       if (guiControls.displayMode == 'DISP_TEMPERATURE') {
         gl.useProgram(temperatureDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(temperatureDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(temperatureDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(temperatureDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.uniform4f(gl.getUniformLocation(temperatureDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
         gl.uniform1f(gl.getUniformLocation(temperatureDisplayProgram, 'Xmult'), horizontalDisplayMult);
 
@@ -6388,14 +6488,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       } else if (guiControls.displayMode == 'DISP_AIRQUALITY') {
         gl.useProgram(airQualityDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(airQualityDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(airQualityDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(airQualityDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.uniform4f(gl.getUniformLocation(airQualityDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
         gl.uniform1f(gl.getUniformLocation(airQualityDisplayProgram, 'Xmult'), horizontalDisplayMult);
 
       } else if (guiControls.displayMode == 'DISP_IRDOWNTEMP') {
         gl.useProgram(IRtempDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(IRtempDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(IRtempDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.uniform4f(gl.getUniformLocation(IRtempDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
         gl.uniform1i(gl.getUniformLocation(IRtempDisplayProgram, 'upOrDown'), 0);
         gl.uniform1f(gl.getUniformLocation(IRtempDisplayProgram, 'Xmult'), horizontalDisplayMult);
@@ -6405,7 +6505,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       } else if (guiControls.displayMode == 'DISP_IRUPTEMP') {
         gl.useProgram(IRtempDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(IRtempDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(IRtempDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.uniform4f(gl.getUniformLocation(IRtempDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
         gl.uniform1i(gl.getUniformLocation(IRtempDisplayProgram, 'upOrDown'), 1);
         gl.uniform1f(gl.getUniformLocation(IRtempDisplayProgram, 'Xmult'), horizontalDisplayMult);
@@ -6415,7 +6515,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       } else {
         gl.useProgram(universalDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(universalDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(universalDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(universalDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.uniform4f(gl.getUniformLocation(universalDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
         gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'Xmult'), horizontalDisplayMult);
 

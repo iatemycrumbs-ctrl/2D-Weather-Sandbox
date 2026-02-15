@@ -114,21 +114,23 @@ const float lightningTexAspect = lightningTexRes.x / lightningTexRes.y;
 float calcLightningTime(float startIterNum)
 {
   float lightningTime = iterNum - startIterNum;
-  return lightningTime / 5.0; // 30.0    0. to 1. leader stage, 1. + Flash stage
+  return lightningTime / 3.8;
 }
 
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 {
-  float T0 = Tin - 1.;
+  float T0 = Tin - 1.0;
 
-  float repeatPeriod = map_range(random2d(lightningPos), 0., 1., 1.5, 3.0);                                            // 2.5
-  float numFlashes = floor(map_range(random2d(lightningPos * 2.737250), 0., 1., 1.0, max(intensity - 0.5, 0.) * 2.0)); // 0.4
+  float repeatPeriod = map_range(random2d(lightningPos), 0.0, 1.0, 0.9, 2.0);
+  float numFlashes = floor(map_range(random2d(lightningPos * 2.737250), 0.0, 1.0, 1.0, max(intensity - 0.3, 0.0) * 3.0));
 
-  float minT = max(T0 - (repeatPeriod * numFlashes), 0.);
-
+  float minT = max(T0 - (repeatPeriod * numFlashes), 0.0);
   float T = max(mod(T0, repeatPeriod), minT);
 
-  return max((1. / (0.05 + pow(T * 2.0, 3.))) - 0.005, 0.) * pow(intensity, 2.0); // fading out curve
+  float peak = exp(-pow(T * 4.3, 2.0)) * 3.0;
+  float tail = max((1.0 / (0.04 + pow(T * 2.2, 3.0))) - 0.01, 0.0);
+
+  return (peak + tail) * pow(intensity, 1.65);
 }
 
 vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningIntensity)
@@ -151,9 +153,9 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   float pixVal = texture(lightningTex, lightningTexCoord).r;
 
-  const float branchShowFactor = 2.5;       // 1.5
-  const float leaderBrightness = 50000.;    // 200.0
-  const float mainBoltBrightness = 100000.; // 100000.
+  const float branchShowFactor = 3.2;
+  const float leaderBrightness = 38000.;
+  const float mainBoltBrightness = 120000.;
 
   float brightnessThreshold = 1. - lightningTime * branchShowFactor;
   brightnessThreshold += lightningTexCoord.y * branchShowFactor; // grow from the top to the bottem
