@@ -102,11 +102,14 @@ void main()
                                                                                                                                     // if (spawnChance > rand2d(mass.xy)) {
                                                                                                                                     //  float spawnChance = (water[CLOUD] - threshold) / inactiveDroplets * resolution.x * resolution.y * spawnChanceMult;
 
-      float spawnChance = ((water[CLOUD] - threshold) / (inactiveDroplets + 10.0)) * resolution.x * resolution.y * spawnChanceMult; // 20.0  50.0
+      float cloudExcess = max(water[CLOUD] - threshold, 0.0);
+      float spawnChance = (cloudExcess / (inactiveDroplets + 12.0)) * resolution.x * resolution.y * spawnChanceMult;
+      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.5, 0.4, 1.6);
+      spawnChance = clamp(spawnChance, 0.0, 0.85);
 
       //    float nrmRand = random2d(vec2(mass[WATER] * 0.2324, iterNum * 0.1783 + random(mass[ICE]))); // normalized random value
 
-      float nrmRand = fract(pow(water[CLOUD] * 10.0, 2.0));
+      float nrmRand = random2d(vec2(texCoord.x + iterNum * 0.031, texCoord.y + mass[ICE] * 0.73));
 
       if (spawnChance > nrmRand) {                                       // spawn precipitation particle
         spawned = true;
@@ -120,26 +123,25 @@ void main()
 
           vec4 lightningData = texture(lightningDataTex, vec2(0.5)); // data from last lightning bolt
 
-          const float lightningCloudDensityThreshold = 0.1;          // 3.0
-          const float lightningChanceMult = 0.002;
-          
-          const float lightningChanceMultiplier = 1.275;            // 0.0011
+          const float lightningCloudDensityThreshold = 0.12; // minimum combined condensate before lightning can form
 
-          float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION];
+          float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION] * 1.2;
+          float mixedPhaseFactor = map_rangeC(realTemp, CtoK(-38.0), CtoK(-2.0), 0.0, 1.0);
+          float updraftFactor = map_rangeC(base[VY], 0.0, 0.020, 0.1, 1.6);
 
-          float lightningSpawnChance = max((cloudPlusPrecipDensity - lightningCloudDensityThreshold) * lightningChanceMultiplier, lightningChanceMult * 1.275);
+          float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
+          lightningSpawnChance *= mixedPhaseFactor * updraftFactor;
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.22);
 
-          const float lightningMinInterval = 0.0;
-
-          const float minIterationsSinceLastLightningBolt = lightningMinInterval;                                                                                                                       // 50.
-
-          if (lightningData[START_ITERNUM] < iterNum - minIterationsSinceLastLightningBolt && random2d(vec2(base[TEMPERATURE] * 0.5, water[TOTAL] * 7.75)) < lightningSpawnChance) { // Spawn lightning
+          if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval &&
+              random2d(vec2(base[TEMPERATURE] * 0.5 + texCoord.x * 2.0, water[TOTAL] * 7.75 + texCoord.y * 2.0)) < lightningSpawnChance) { // Spawn lightning
             lightningSpawned = true;
             isActive = false;
             gl_PointSize = 1.0;
             feedback.xy = texCoord;
             feedback[START_ITERNUM] = iterNum;
-            feedback[INTENSITY] = clamp(cloudPlusPrecipDensity / 10.0 + (random2d(texCoord) - 0.5), 0.01, 4.0);
+            float flashIntensity = cloudPlusPrecipDensity * 0.28 + updraftFactor * 0.65 + random2d(texCoord) * 0.45;
+            feedback[INTENSITY] = clamp(flashIntensity, 0.05, 4.0);
             gl_Position = vec4(vec2(-1. + texelSize.x * 3., -1. + texelSize.y), 0.0, 1.0); // render to bottem left corner (1, 0)
           }
         } else {
