@@ -1545,7 +1545,7 @@ function updateLightningShakePhysics()
       lightningShakeVelocityY += (Math.random() - 0.5) * impulse * 0.35;
 
       // high frequency shake burst for close/intense lightning
-      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 2.8, 0.0, 0.018);
+      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 3.4, 0.0, 0.028);
 
       pendingLightningShakeEvents.splice(i, 1);
     }
@@ -1565,13 +1565,14 @@ function updateLightningShakePhysics()
   lightningShakeOffsetY += lightningShakeVelocityY;
 
   // high-frequency random camera jitter (decays quickly)
-  lightningShakeHFAmplitude *= 0.86;
+  lightningShakeHFAmplitude *= 0.82;
 
   let hfRandomX = (Math.random() * 2.0 - 1.0) * lightningShakeHFAmplitude;
   let hfRandomY = (Math.random() * 2.0 - 1.0) * lightningShakeHFAmplitude;
 
-  lightningShakeHFOffsetX = mix(lightningShakeHFOffsetX, hfRandomX, 0.85);
-  lightningShakeHFOffsetY = mix(lightningShakeHFOffsetY, hfRandomY, 0.85);
+  // high frequency jitter should feel sharp and noisy
+  lightningShakeHFOffsetX = hfRandomX;
+  lightningShakeHFOffsetY = hfRandomY;
 
   lightningShakeOffsetX = clamp(lightningShakeOffsetX, -0.025, 0.025);
   lightningShakeOffsetY = clamp(lightningShakeOffsetY, -0.020, 0.020);

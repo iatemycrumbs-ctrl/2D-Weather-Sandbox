@@ -68,6 +68,8 @@ void main()
   newPos = dropPosition;
   newMass = mass;         // amount of water and ice carried
   newDensity = density;   // determines fall speed
+  feedback = vec4(0.0);
+  deposition = vec2(0.0);
 
   if (mass[WATER] < 0.) { // inactive
                           /*
@@ -89,7 +91,7 @@ void main()
     // check if position is okay to spawn
     realTemp = potentialToRealT(base[TEMPERATURE]); // in Kelvin
 
-#define initalMass 0.15                             // 0.05 initial droplet mass
+const float nominalSpawnMass = 0.14;
     float threshold;                                // minimal cloudwater before precipitation develops
     if (realTemp > CtoK(0.0))
       threshold = aboveZeroThreshold;               // in above freezing conditions coalescence only happens in really dense clouds
@@ -97,12 +99,14 @@ void main()
       //  treshHold = max(map_range(realTemp, CtoK(0.0), CtoK(-30.0), subZeroThreshold, initalMass), initalMass);
       threshold = subZeroThreshold;
 
+    float cloudExcess = max(water[CLOUD] - threshold, 0.0);
+    float baseSpawnMass = clamp(nominalSpawnMass + cloudExcess * 0.08, 0.08, 0.32);
+
     if (water[CLOUD] > threshold && base[TEMPERATURE] < 2500.) {                                                                     // if cloudwater above threshold and not wall
                                                                                                                                     // float spawnChance = (water[1] - threshold) * 1000.0 / inactiveDroplets;
                                                                                                                                     // if (spawnChance > rand2d(mass.xy)) {
                                                                                                                                     //  float spawnChance = (water[CLOUD] - threshold) / inactiveDroplets * resolution.x * resolution.y * spawnChanceMult;
 
-      float cloudExcess = max(water[CLOUD] - threshold, 0.0);
       float spawnChance = (cloudExcess / (inactiveDroplets + 12.0)) * resolution.x * resolution.y * spawnChanceMult;
       spawnChance *= map_rangeC(cloudExcess, 0.0, 2.5, 0.4, 1.6);
       spawnChance = clamp(spawnChance, 0.0, 0.85);
@@ -117,7 +121,7 @@ void main()
 
         if (realTemp < CtoK(0.0)) {                                      // below 0 C
           newMass[WATER] = 0.0;                                          // enable
-          newMass[ICE] = initalMass;                                     // snow
+          newMass[ICE] = baseSpawnMass;                                     // snow
           feedback[HEAT] += newMass[ICE] * meltingHeat;                  // add heat of freezing
           newDensity = snowDensity;
 
@@ -131,7 +135,8 @@ void main()
 
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
           lightningSpawnChance *= mixedPhaseFactor * updraftFactor;
-          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.22);
+          lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.55);
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.18);
 
           if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval &&
               random2d(vec2(base[TEMPERATURE] * 0.5 + texCoord.x * 2.0, water[TOTAL] * 7.75 + texCoord.y * 2.0)) < lightningSpawnChance) { // Spawn lightning
@@ -145,11 +150,14 @@ void main()
             gl_Position = vec4(vec2(-1. + texelSize.x * 3., -1. + texelSize.y), 0.0, 1.0); // render to bottem left corner (1, 0)
           }
         } else {
-          newMass[WATER] = initalMass; // rain
+          newMass[WATER] = baseSpawnMass; // rain
           newMass[ICE] = 0.0;
           newDensity = 1.0;
+
+          // warm-rain processes suppress lightning in this parcel but still contribute to precip loading.
+          feedback[MASS] += newMass[WATER] * 0.05;
         }
-        feedback[VAPOR] -= initalMass;
+        feedback[VAPOR] -= baseSpawnMass;
       }
     }
 
