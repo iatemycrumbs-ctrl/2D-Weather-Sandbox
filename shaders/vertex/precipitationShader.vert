@@ -107,7 +107,7 @@ const float nominalSpawnMass = 0.14;
                                                                                                                                     // if (spawnChance > rand2d(mass.xy)) {
                                                                                                                                     //  float spawnChance = (water[CLOUD] - threshold) / inactiveDroplets * resolution.x * resolution.y * spawnChanceMult;
 
-      float spawnChance = (cloudExcess / (inactiveDroplets + 12.0)) * resolution.x * resolution.y * spawnChanceMult;
+      float spawnChance = (cloudExcess / (inactiveDroplets + 12.0)) * resolution.x * resolution.y * 0.45;
       spawnChance *= map_rangeC(cloudExcess, 0.0, 2.5, 0.4, 1.6);
       spawnChance = clamp(spawnChance, 0.0, 0.85);
 
