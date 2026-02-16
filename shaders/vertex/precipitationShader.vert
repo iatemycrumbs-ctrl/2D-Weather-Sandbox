@@ -41,6 +41,9 @@ uniform float subZeroThreshold;   // 0.0
 uniform float spawnChanceMult;    //
 uniform float lightningChanceMult;
 uniform float lightningMinInterval;
+uniform float icLightningRatio;
+uniform float ctgLightningRatio;
+uniform float lightningFlashRate;
 uniform float snowDensity;        // 0.2 - 0.5
 uniform float fallSpeed;          // 0.0003
 uniform float growthRate0C;       // 0.0005
@@ -138,19 +141,30 @@ void main()
           float electricPotential = chargeDipole * pressureFactor * map_rangeC(base[VY], -0.01, 0.02, 0.6, 1.25);
 
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
-          lightningSpawnChance *= (0.22 + electricPotential * 1.6);
-          lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.55);
-          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.26);
+          lightningSpawnChance *= (0.18 + electricPotential * 1.9);
+          lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.50);
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.30);
+
+          float icWeight = max(icLightningRatio, 0.0);
+          float ctgWeight = max(ctgLightningRatio, 0.0);
+          float modeNorm = max(icWeight + ctgWeight, 0.001);
+          float icProb = icWeight / modeNorm;
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval && strikeRand < lightningSpawnChance) {
             lightningSpawned = true;
             isActive = false;
             gl_PointSize = 1.0;
-            feedback.xy = texCoord;
+
+            bool isIC = random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity)) < icProb;
+            float icYOffset = map_rangeC(random2d(spawnSeed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.04, 0.24);
+            feedback.xy = vec2(texCoord.x, isIC ? min(texCoord.y + icYOffset, 0.96) : texCoord.y);
             feedback[START_ITERNUM] = iterNum;
-            float flashIntensity = cloudPlusPrecipDensity * 0.28 + electricPotential * 1.40 + random2d(texCoord * 31.7) * 0.35;
-            feedback[INTENSITY] = clamp(flashIntensity, 0.08, 4.8);
+
+            float flashIntensity = cloudPlusPrecipDensity * 0.24 + electricPotential * 1.55 + random2d(texCoord * 31.7) * 0.30;
+            flashIntensity *= map_rangeC(lightningFlashRate, 0.3, 3.0, 0.75, 1.45);
+            flashIntensity = clamp(flashIntensity, 0.08, 5.4);
+            feedback[INTENSITY] = isIC ? -flashIntensity * 0.8 : flashIntensity;
             gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
           }
         } else {

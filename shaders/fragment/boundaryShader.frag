@@ -106,8 +106,8 @@ void main()
 
     float precipCoalescence = max(-precipFeedback[VAPOR], 0.); // how much cloud water turns into rain
 
-    water[CLOUD] -= precipCoalescence * 0.45;
-    water[TOTAL] -= precipCoalescence * 0.35;
+    water[CLOUD] -= precipCoalescence * 0.30;
+    water[TOTAL] -= precipCoalescence * 0.22;
 
     float precipEvaporation = max(precipFeedback[VAPOR], 0.);
 
@@ -520,6 +520,10 @@ void main()
           float lightningAge = iterNum - lightningData[START_ITERNUM];
           if (wall[VERT_DISTANCE] == 0 && wall[TYPE] == WALLTYPE_LAND && wall[VEGETATION] >= minimalFireVegetation &&
               lightningData[INTENSITY] > 0.05 && lightningData[START_ITERNUM] > 0.0 && lightningAge >= 0.0 && lightningAge <= 3.0) {
+            bool isCloudToGround = lightningData[INTENSITY] > 0.0;
+            if (!isCloudToGround)
+              break;
+
             float dxCells = abs(texCoord.x - lightningData.x) * resolution.x;
             dxCells = min(dxCells, resolution.x - dxCells); // map wraps horizontally
 
@@ -581,17 +585,19 @@ void main()
           vec4 waterAboveSurfaceNow = texture(waterTex, texCoordX0Yp);
           vec4 precipFeedbackAbove = texture(precipFeedbackTex, texCoordX0Yp);
 
-          float windMixing = clamp(length(texture(baseTex, texCoordX0Yp).xy) * 45.0, 0.2, 2.2);
-          float mixedLayerDepth = map_rangeC(windMixing, 0.2, 2.2, 0.7, 2.2); // deeper mixed layer => more thermal inertia
+          float windMixing = clamp(length(texture(baseTex, texCoordX0Yp).xy) * 45.0, 0.2, 2.5);
+          float precipMixing = map_rangeC(waterAboveSurfaceNow[PRECIPITATION], 0.0, 1.5, 0.0, 1.0);
+          float mixedLayerDepth = map_rangeC(windMixing + precipMixing * 0.5, 0.2, 2.8, 0.8, 2.8); // deeper mixed layer => more thermal inertia
 
           float netWaterHeating = 0.0;
           netWaterHeating += (airTemperature - base[TEMPERATURE]) * waterHeatExchangeRate * (0.9 + windMixing * 0.15); // turbulent exchange
 
-          float evaporativeCooling = max((maxWater(base[TEMPERATURE]) - waterAboveSurfaceNow[TOTAL]) * waterEvaporation, 0.) * evapHeat * 0.5;
+          float evaporativeCooling = max((maxWater(base[TEMPERATURE]) - waterAboveSurfaceNow[TOTAL]) * waterEvaporation, 0.) * evapHeat * 0.55;
           netWaterHeating -= evaporativeCooling;
 
-          float rainCooling = max(precipFeedbackAbove[VAPOR], 0.0) * evapHeat * 0.12;
-          netWaterHeating -= rainCooling;
+          float rainCooling = max(precipFeedbackAbove[VAPOR], 0.0) * evapHeat * 0.16;
+          float coldRainPulse = waterAboveSurfaceNow[PRECIPITATION] * map_rangeC(airTemperature, CtoK(-5.0), CtoK(20.0), 0.000035, 0.000008);
+          netWaterHeating -= (rainCooling + coldRainPulse);
 
           float lightPower = max(lightAboveSurface[SUNLIGHT] * cos(sunAngle), 0.0); // Light power per horizontal surface area;
           lightPower *= (1. - ALBEDO_WATER);
