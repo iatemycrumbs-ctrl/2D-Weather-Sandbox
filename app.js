@@ -410,6 +410,9 @@ const guiControls_default = {
   lightningTempMaxK : 33000.0,
   precipitationVisualBoost : 1.0,
   ambientScattering : 1.0,
+  precipitationEffectMult : 1.0,
+  lightningGroundBias : 1.0,
+  lightningBloomStrength : 1.0,
   showFPS : true,
   showWeatherBalloons : true,
   balloonRiseRate : 0.22,
@@ -3701,6 +3704,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'icLightningRatio'), guiControls.icLightningRatio);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ctgLightningRatio'), guiControls.ctgLightningRatio);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), guiControls.lightningFlashRate);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationEffectMult'), guiControls.precipitationEffectMult);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningGroundBias'), guiControls.lightningGroundBias);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
@@ -3715,6 +3720,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
   }
@@ -4027,6 +4033,20 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), guiControls.lightningFlashRate);
       })
       .name('Flash Rate');
+
+    precipitation_folder.add(guiControls, 'precipitationEffectMult', 0.4, 2.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationEffectMult'), guiControls.precipitationEffectMult);
+      })
+      .name('Precip Effect Mult');
+
+    precipitation_folder.add(guiControls, 'lightningGroundBias', 0.0, 2.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningGroundBias'), guiControls.lightningGroundBias);
+      })
+      .name('Ground Strike Bias');
       
     precipitation_folder.add(guiControls, 'snowDensity', 0.1, 0.9, 0.01)
       .onChange(function() {
@@ -4144,6 +4164,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     display_folder.add(guiControls, 'ambientScattering', 0.3, 2.5, 0.01).name('Ambient Scattering').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
+    });
+    display_folder.add(guiControls, 'lightningBloomStrength', 0.2, 2.5, 0.01).name('Lightning Bloom').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
     });
 
     display_folder.add(guiControls, 'camSpeed', 0.001, 0.050, 0.001).name('Camera Pan Speed');
@@ -4272,6 +4296,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
     datGui.show(); // unhide

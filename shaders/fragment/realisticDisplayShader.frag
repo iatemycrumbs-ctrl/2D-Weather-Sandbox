@@ -49,6 +49,7 @@ uniform float lightningTempMinK;
 uniform float lightningTempMaxK;
 uniform float precipitationVisualBoost;
 uniform float ambientScattering;
+uniform float lightningBloomStrength;
 
 uniform vec3 view;   // Xpos  Ypos    Zoom
 uniform vec4 cursor; // Xpos   Ypos  Size   type
@@ -162,6 +163,12 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     return vec3(0);
 
   float pixVal = texture(lightningTex, lightningTexCoord).r;
+  vec2 px = vec2(1.0 / lightningTexRes.x, 1.0 / lightningTexRes.y);
+  float neighborMax = max(max(texture(lightningTex, lightningTexCoord + vec2(px.x, 0.0)).r,
+                              texture(lightningTex, lightningTexCoord - vec2(px.x, 0.0)).r),
+                          max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y)).r,
+                              texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r));
+  pixVal = max(pixVal, neighborMax * (0.78 * lightningBloomStrength));
 
   const float branchShowFactor = 3.2;
   const float leaderBrightness = 42000.;
@@ -278,7 +285,7 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   if (abs(lightningData[INTENSITY]) > 0.18) { // show full bolt even for weaker mobile-sampled strikes
     emittedLight += displayLightning(lightningPos, lightningTime, currentLightningIntensity);
-    emittedLight /= 1. + cloudDensity * 100.0;
+    emittedLight /= 1. + cloudDensity * (95.0 / max(lightningBloomStrength, 0.2));
   }
 
 #define lightningOnLightBrightness 0.004 // 0.002
@@ -289,7 +296,7 @@ vec4 getAirColor(vec2 fragCoordIn)
   lightningOnLight *= abs(currentLightningIntensity);
 
   // Electric field / corona visualization around the active channel
-  float electricFieldGlow = abs(currentLightningIntensity) * 0.0000035 / (pow(length(dist), 1.25) + 0.045);
+  float electricFieldGlow = abs(currentLightningIntensity) * 0.0000035 * lightningBloomStrength / (pow(length(dist), 1.25) + 0.045);
   vec3 coronaColor = mix(vec3(0.45, 0.65, 1.0), vec3(1.0, 0.85, 0.55), clamp(lightningColorTempMult, 0.0, 1.5));
 
   onLight += vec3(lightningOnLight) + coronaColor * electricFieldGlow;
@@ -307,7 +314,7 @@ vec4 getAirColor(vec2 fragCoordIn)
   float rainbowMask = ring + ring2;
   rainbowMask *= rainRich * clamp(lightIntensity * 2.0, 0.0, 1.0);
   rainbowMask *= smoothstep(0.02, 0.30, texCoord.y); // keep arc above horizon band
-  onLight += rainbowCol * rainbowMask * 1.1;
+  onLight += rainbowCol * rainbowMask * (1.1 * sqrt(ambientScattering));
 
   return vec4(color, opacity);
 }
