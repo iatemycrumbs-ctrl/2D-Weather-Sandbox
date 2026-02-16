@@ -38,6 +38,7 @@ uniform float sunAngle;
 uniform float iterNum; // used as seed for random function
 
 uniform float dynamicWaterTemperature;
+uniform float precipitationRecycling;
 
 layout(location = 0) out vec4 base;
 layout(location = 1) out vec4 water;
@@ -112,10 +113,11 @@ void main()
     float precipEvaporation = max(precipFeedback[VAPOR], 0.);
 
     water[TOTAL] += precipEvaporation; // evaporating rain adds water vapor to air
+    water[CLOUD] += precipEvaporation * 0.045 * precipitationRecycling;
 
 
     //  0.004 for rain visualisation
-    water[PRECIPITATION] = max(water[PRECIPITATION] * 0.997 - 0.00001 + precipFeedback[MASS] * 0.005, 0.0);
+    water[PRECIPITATION] = max(water[PRECIPITATION] * 0.9972 - 0.000009 + precipFeedback[MASS] * 0.0055 * precipitationRecycling, 0.0);
 
 
     // rain removes smoke from air
@@ -149,6 +151,13 @@ void main()
     gravityForce -= precipFeedback[MASS] * gravMult * waterWeight; // precipitation weigth added to gravity force
 
     base[VY] += gravityForce;
+
+    // Convective cold-pool outflow proxy from precipitation loading/evaporation.
+    float coldPool = max(precipFeedback[MASS] * 18.0 + precipEvaporation * 6.0, 0.0) * precipitationRecycling;
+    float coldPoolSpread = clamp(1.0 - texCoord.y * 2.2, 0.0, 1.0);
+    float outflowSign = random2d(vec2(fragCoord.y * 0.17 + iterNum * 0.01, fragCoord.x * 0.11)) - 0.5;
+    base[VX] += outflowSign * coldPool * 0.00045 * coldPoolSpread;
+    base[PRESSURE] += coldPool * 0.00002 * coldPoolSpread;
 
     // base.x += sin(texCoord.x * PI * 2.0 + iterNum * 0.000005) * (1. - texCoord.y) * 0.00015; // phantom force to simulate high and low pressure areas
 

@@ -413,6 +413,9 @@ const guiControls_default = {
   precipitationEffectMult : 1.0,
   lightningGroundBias : 1.0,
   lightningBloomStrength : 1.0,
+  stormOrganization : 1.0,
+  aerosolLoad : 1.0,
+  precipitationRecycling : 1.0,
   showFPS : true,
   showWeatherBalloons : true,
   balloonRiseRate : 0.22,
@@ -3674,6 +3677,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dynamicWaterTemperature'), guiControls.dynamicWaterTemperature ? 1.0 : 0.0);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'evapHeat'), guiControls.evapHeat);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterWeight'), guiControls.waterWeight);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
     gl.useProgram(velocityProgram);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'dragMultiplier'), guiControls.dragMultiplier);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
@@ -3706,6 +3710,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), guiControls.lightningFlashRate);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationEffectMult'), guiControls.precipitationEffectMult);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningGroundBias'), guiControls.lightningGroundBias);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'stormOrganization'), guiControls.stormOrganization);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'aerosolLoad'), guiControls.aerosolLoad);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
@@ -3972,6 +3978,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() {
         gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterWeight'), guiControls.waterWeight);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
       })
       .name('Water Weight');
 
@@ -4047,6 +4054,20 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningGroundBias'), guiControls.lightningGroundBias);
       })
       .name('Ground Strike Bias');
+
+    precipitation_folder.add(guiControls, 'stormOrganization', 0.2, 2.5, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'stormOrganization'), guiControls.stormOrganization);
+      })
+      .name('Storm Organization');
+
+    precipitation_folder.add(guiControls, 'aerosolLoad', 0.2, 2.5, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'aerosolLoad'), guiControls.aerosolLoad);
+      })
+      .name('Aerosol Load');
       
     precipitation_folder.add(guiControls, 'snowDensity', 0.1, 0.9, 0.01)
       .onChange(function() {
@@ -5972,6 +5993,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterTemperature'),
                CtoK(guiControls.waterTemperature)); // can be changed by GUI input
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dryLapse'), dryLapse);
+  gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
   // gl.uniform1fv(gl.getUniformLocation(boundaryProgram, 'initial_T'), initial_T);
   gl.uniform4fv(gl.getUniformLocation(boundaryProgram, 'initial_Tv'), initial_T);
   gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'allowCaves'), guiControls.allowCaves ? 1 : 0);

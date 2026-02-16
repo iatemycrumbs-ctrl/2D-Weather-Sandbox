@@ -46,6 +46,8 @@ uniform float ctgLightningRatio;
 uniform float lightningFlashRate;
 uniform float precipitationEffectMult;
 uniform float lightningGroundBias;
+uniform float stormOrganization;
+uniform float aerosolLoad;
 uniform float snowDensity;        // 0.2 - 0.5
 uniform float fallSpeed;          // 0.0003
 uniform float growthRate0C;       // 0.0005
@@ -113,7 +115,9 @@ void main()
       float orographicBoost = map_rangeC(abs(base[VY]), 0.0, 0.020, 0.9, 1.45);
       float spawnChance = cloudExcess * spawnChanceMult * resolution.x * resolution.y;
       spawnChance /= (inactiveDroplets * spawnLimiter + 24.0);
-      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.35, 1.8) * moistureSupport * orographicBoost * precipitationEffectMult;
+      float organizationBoost = map_rangeC(stormOrganization, 0.2, 2.5, 0.65, 1.9);
+      float aerosolSpawnFactor = map_rangeC(aerosolLoad, 0.2, 2.5, 1.15, 0.72);
+      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.35, 1.8) * moistureSupport * orographicBoost * precipitationEffectMult * organizationBoost * aerosolSpawnFactor;
       float spawnFloor = clamp(1.0 / max(numDroplets, 1.0), 0.000001, 0.0015) * precipitationEffectMult;
       spawnChance = clamp(spawnChance, spawnFloor, 0.92);
 
@@ -155,8 +159,10 @@ void main()
           float icProb = icWeight / modeNorm;
           float cloudBaseFactor = map_rangeC(texCoord.y, 0.10, 0.65, 1.30, 0.70);
           float cgBoost = map_rangeC((ctgWeight / modeNorm) * lightningGroundBias * cloudBaseFactor, 0.0, 2.0, 1.0, 1.55);
-          lightningSpawnChance *= cgBoost;
-          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.34);
+          float organizationElectric = map_rangeC(stormOrganization, 0.2, 2.5, 0.65, 1.8);
+          float aerosolElectric = map_rangeC(aerosolLoad, 0.2, 2.5, 0.7, 1.25);
+          lightningSpawnChance *= cgBoost * organizationElectric * aerosolElectric;
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.40);
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval && strikeRand < lightningSpawnChance) {
@@ -171,7 +177,8 @@ void main()
 
             float flashIntensity = cloudPlusPrecipDensity * 0.24 + electricPotential * 1.55 + random2d(texCoord * 31.7) * 0.30;
             flashIntensity *= map_rangeC(lightningFlashRate, 0.3, 3.0, 0.75, 1.45);
-            flashIntensity = clamp(flashIntensity, 0.08, 5.4);
+            flashIntensity *= map_rangeC(stormOrganization * aerosolLoad, 0.04, 6.25, 0.85, 1.35);
+            flashIntensity = clamp(flashIntensity, 0.08, 6.2);
             feedback[INTENSITY] = isIC ? -flashIntensity * 0.8 : flashIntensity;
             gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
           }
