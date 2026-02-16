@@ -43,6 +43,7 @@ uniform float dryLapse;
 uniform float sunAngle;
 
 uniform float minShadowLight;
+uniform float lightningColorTempMult;
 
 uniform vec3 view;   // Xpos  Ypos    Zoom
 uniform vec4 cursor; // Xpos   Ypos  Size   type
@@ -114,21 +115,23 @@ const float lightningTexAspect = lightningTexRes.x / lightningTexRes.y;
 float calcLightningTime(float startIterNum)
 {
   float lightningTime = iterNum - startIterNum;
-  return lightningTime / 5.0; // 30.0    0. to 1. leader stage, 1. + Flash stage
+  return lightningTime / 3.8;
 }
 
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 {
-  float T0 = Tin - 1.;
+  float T0 = Tin - 1.0;
 
-  float repeatPeriod = map_range(random2d(lightningPos), 0., 1., 1.5, 3.0);                                            // 2.5
-  float numFlashes = floor(map_range(random2d(lightningPos * 2.737250), 0., 1., 1.0, max(intensity - 0.5, 0.) * 2.0)); // 0.4
+  float repeatPeriod = map_range(random2d(lightningPos), 0.0, 1.0, 0.9, 2.0);
+  float numFlashes = floor(map_range(random2d(lightningPos * 2.737250), 0.0, 1.0, 1.0, max(intensity - 0.3, 0.0) * 3.0));
 
-  float minT = max(T0 - (repeatPeriod * numFlashes), 0.);
-
+  float minT = max(T0 - (repeatPeriod * numFlashes), 0.0);
   float T = max(mod(T0, repeatPeriod), minT);
 
-  return max((1. / (0.05 + pow(T * 2.0, 3.))) - 0.005, 0.) * pow(intensity, 2.0); // fading out curve
+  float peak = exp(-pow(T * 4.3, 2.0)) * 3.0;
+  float tail = max((1.0 / (0.04 + pow(T * 2.2, 3.0))) - 0.01, 0.0);
+
+  return (peak + tail) * pow(intensity, 1.65);
 }
 
 vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningIntensity)
@@ -146,14 +149,14 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   lightningTexCoord.x += 0.5;                                                                                               // center lightning bolt
 
-  if (lightningTexCoord.x < 0.01 || lightningTexCoord.x > 1.01 || lightningTexCoord.y < 0.01 || lightningTexCoord.y > 1.01) // prevent edge effect when mipmapping
+  if (lightningTexCoord.x < -0.20 || lightningTexCoord.x > 1.20 || lightningTexCoord.y < -0.05 || lightningTexCoord.y > 1.20) // prevent edge effect when mipmapping
     return vec3(0);
 
   float pixVal = texture(lightningTex, lightningTexCoord).r;
 
-  const float branchShowFactor = 2.5;       // 1.5
-  const float leaderBrightness = 50000.;    // 200.0
-  const float mainBoltBrightness = 100000.; // 100000.
+  const float branchShowFactor = 3.2;
+  const float leaderBrightness = 38000.;
+  const float mainBoltBrightness = 120000.;
 
   float brightnessThreshold = 1. - lightningTime * branchShowFactor;
   brightnessThreshold += lightningTexCoord.y * branchShowFactor; // grow from the top to the bottem
@@ -161,7 +164,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   brightnessThreshold = clamp(brightnessThreshold, 0., 1.);
 
   if (lightningTime > 1.0) { // main bolt
-    brightnessThreshold = 0.95;
+    brightnessThreshold = 0.80;
     currentLightningIntensity *= mainBoltBrightness;
   } else {
     currentLightningIntensity = leaderBrightness;
@@ -173,7 +176,12 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   pixVal *= currentLightningIntensity;
 
-  const vec3 lightningCol = vec3(0.70, 0.57, 1.0); // 0.584, 0.576, 1.0
+  float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, 9000.0, 32000.0);
+  float thermalColorMix = map_rangeC(lightningTemp, 9000.0, 32000.0, 0.0, 1.0) * lightningColorTempMult;
+
+  vec3 coolLightningCol = vec3(0.62, 0.56, 1.0);
+  vec3 hotLightningCol = vec3(1.00, 0.96, 0.86);
+  vec3 lightningCol = mix(coolLightningCol, hotLightningCol, clamp(thermalColorMix, 0.0, 1.0));
 
   vec3 outputColor = max(pixVal * lightningCol, vec3(0));
 
@@ -269,7 +277,12 @@ vec4 getAirColor(vec2 fragCoordIn)
   dist.x *= aspectRatios[0];
   float lightningOnLight = lightningOnLightBrightness / (pow(length(dist), 2.) + 0.03);
   lightningOnLight *= currentLightningIntensity;
-  onLight += vec3(lightningOnLight);
+
+  // Electric field / corona visualization around the active channel
+  float electricFieldGlow = currentLightningIntensity * 0.000003 / (pow(length(dist), 1.25) + 0.045);
+  vec3 coronaColor = mix(vec3(0.45, 0.65, 1.0), vec3(1.0, 0.85, 0.55), clamp(lightningColorTempMult, 0.0, 1.5));
+
+  onLight += vec3(lightningOnLight) + coronaColor * electricFieldGlow;
 
   return vec4(color, opacity);
 }

@@ -39,6 +39,8 @@ uniform float meltingHeat;
 uniform float aboveZeroThreshold; // 1.0
 uniform float subZeroThreshold;   // 0.0
 uniform float spawnChanceMult;    //
+uniform float lightningChanceMult;
+uniform float lightningMinInterval;
 uniform float snowDensity;        // 0.2 - 0.5
 uniform float fallSpeed;          // 0.0003
 uniform float growthRate0C;       // 0.0005
@@ -68,6 +70,8 @@ void main()
   newPos = dropPosition;
   newMass = mass;         // amount of water and ice carried
   newDensity = density;   // determines fall speed
+  feedback = vec4(0.0);
+  deposition = vec2(0.0);
 
   if (mass[WATER] < 0.) { // inactive
                           /*
@@ -89,7 +93,7 @@ void main()
     // check if position is okay to spawn
     realTemp = potentialToRealT(base[TEMPERATURE]); // in Kelvin
 
-#define initalMass 0.15                             // 0.05 initial droplet mass
+const float nominalSpawnMass = 0.14;
     float threshold;                                // minimal cloudwater before precipitation develops
     if (realTemp > CtoK(0.0))
       threshold = aboveZeroThreshold;               // in above freezing conditions coalescence only happens in really dense clouds
@@ -97,16 +101,21 @@ void main()
       //  treshHold = max(map_range(realTemp, CtoK(0.0), CtoK(-30.0), subZeroThreshold, initalMass), initalMass);
       threshold = subZeroThreshold;
 
+    float cloudExcess = max(water[CLOUD] - threshold, 0.0);
+    float baseSpawnMass = clamp(nominalSpawnMass + cloudExcess * 0.08, 0.08, 0.32);
+
     if (water[CLOUD] > threshold && base[TEMPERATURE] < 2500.) {                                                                     // if cloudwater above threshold and not wall
                                                                                                                                     // float spawnChance = (water[1] - threshold) * 1000.0 / inactiveDroplets;
                                                                                                                                     // if (spawnChance > rand2d(mass.xy)) {
                                                                                                                                     //  float spawnChance = (water[CLOUD] - threshold) / inactiveDroplets * resolution.x * resolution.y * spawnChanceMult;
 
-      float spawnChance = ((water[CLOUD] - threshold) / (inactiveDroplets + 10.0)) * resolution.x * resolution.y * spawnChanceMult; // 20.0  50.0
+      float spawnChance = (cloudExcess / (inactiveDroplets + 12.0)) * resolution.x * resolution.y * spawnChanceMult;
+      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.5, 0.4, 1.6);
+      spawnChance = clamp(spawnChance, 0.0, 0.85);
 
       //    float nrmRand = random2d(vec2(mass[WATER] * 0.2324, iterNum * 0.1783 + random(mass[ICE]))); // normalized random value
 
-      float nrmRand = fract(pow(water[CLOUD] * 10.0, 2.0));
+      float nrmRand = random2d(vec2(texCoord.x + iterNum * 0.031, texCoord.y + mass[ICE] * 0.73));
 
       if (spawnChance > nrmRand) {                                       // spawn precipitation particle
         spawned = true;
@@ -114,40 +123,58 @@ void main()
 
         if (realTemp < CtoK(0.0)) {                                      // below 0 C
           newMass[WATER] = 0.0;                                          // enable
-          newMass[ICE] = initalMass;                                     // snow
+          newMass[ICE] = baseSpawnMass;                                  // initial ice core
           feedback[HEAT] += newMass[ICE] * meltingHeat;                  // add heat of freezing
-          newDensity = snowDensity;
+
+          float updraftChargeFactor = map_rangeC(base[VY], 0.0, 0.024, 0.0, 1.0);
+          float graupelization = clamp((water[PRECIPITATION] * 0.45 + updraftChargeFactor * 0.55) * map_rangeC(realTemp, CtoK(-35.0), CtoK(-5.0), 0.0, 1.0), 0.0, 1.0);
+          newDensity = mix(snowDensity, 1.20, graupelization); // graupel/hail forms in strong mixed-phase updrafts
 
           vec4 lightningData = texture(lightningDataTex, vec2(0.5)); // data from last lightning bolt
 
-          const float lightningCloudDensityThreshold = 0.1;          // 3.0
-          const float lightningChanceMult = 0.002;
-          
-          const float lightningChanceMultiplier = 1.275;            // 0.0011
+          const float lightningCloudDensityThreshold = 0.12; // minimum combined condensate before lightning can form
 
-          float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION];
+          float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION] * 1.2;
 
-          float lightningSpawnChance = max((cloudPlusPrecipDensity - lightningCloudDensityThreshold) * lightningChanceMultiplier, lightningChanceMult * 1.275);
+          // Charge separation proxy:
+          // Graupel carries dominant negative charge, while ice crystals/snow carry positive charge.
+          float mixedPhaseFactor = map_rangeC(realTemp, CtoK(-35.0), CtoK(-5.0), 0.0, 1.0);
+          float updraftFactor = map_rangeC(base[VY], 0.0, 0.020, 0.05, 1.8);
+          float downdraftFactor = map_rangeC(-base[VY], 0.0, 0.015, 0.0, 1.0);
+          float graupelFactor = map_rangeC(newDensity, snowDensity, 1.0, 0.2, 1.25);
+          float iceCrystalFactor = map_rangeC(1.0 - newDensity, 0.0, 1.0, 0.2, 1.4);
+          float collisionFactor = map_rangeC(water[PRECIPITATION] + newMass[WATER], 0.0, 1.4, 0.3, 1.7);
 
-          const float lightningMinInterval = 0.0;
+          float graupelNegativeCharge = mixedPhaseFactor * (0.55 + downdraftFactor) * graupelFactor * collisionFactor;
+          float icePositiveCharge = mixedPhaseFactor * updraftFactor * iceCrystalFactor;
+          float chargeSeparation = max(graupelNegativeCharge * icePositiveCharge, 0.0);
 
-          const float minIterationsSinceLastLightningBolt = lightningMinInterval;                                                                                                                       // 50.
+          float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
+          float pressureFactor = map_rangeC(base[PRESSURE], -0.06, 0.12, 0.80, 1.35);
+          lightningSpawnChance *= (0.30 + chargeSeparation * 1.8) * pressureFactor;
+          lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.55);
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.22);
 
-          if (lightningData[START_ITERNUM] < iterNum - minIterationsSinceLastLightningBolt && random2d(vec2(base[TEMPERATURE] * 0.5, water[TOTAL] * 7.75)) < lightningSpawnChance) { // Spawn lightning
+          if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval &&
+              random2d(vec2(base[TEMPERATURE] * 0.5 + texCoord.x * 2.0, water[TOTAL] * 7.75 + texCoord.y * 2.0)) < lightningSpawnChance) { // Spawn lightning
             lightningSpawned = true;
             isActive = false;
             gl_PointSize = 1.0;
             feedback.xy = texCoord;
             feedback[START_ITERNUM] = iterNum;
-            feedback[INTENSITY] = clamp(cloudPlusPrecipDensity / 10.0 + (random2d(texCoord) - 0.5), 0.01, 4.0);
+            float flashIntensity = cloudPlusPrecipDensity * 0.26 + chargeSeparation * 1.35 + updraftFactor * 0.40 + random2d(texCoord) * 0.35;
+            feedback[INTENSITY] = clamp(flashIntensity, 0.08, 4.5);
             gl_Position = vec4(vec2(-1. + texelSize.x * 3., -1. + texelSize.y), 0.0, 1.0); // render to bottem left corner (1, 0)
           }
         } else {
-          newMass[WATER] = initalMass; // rain
+          newMass[WATER] = baseSpawnMass; // rain
           newMass[ICE] = 0.0;
           newDensity = 1.0;
+
+          // warm-rain processes suppress lightning in this parcel but still contribute to precip loading.
+          feedback[MASS] += newMass[WATER] * 0.05;
         }
-        feedback[VAPOR] -= initalMass;
+        feedback[VAPOR] -= baseSpawnMass;
       }
     }
 
@@ -185,13 +212,28 @@ void main()
 
     } else if (newPos.y < -1.0 /* || base[TEMPERATURE] > 500. */ || water[TOTAL] > 1000.) { // water[TOTAL] > 1000.     base[TEMPERATURE] < 500.      to low or wall
 
-      if (texture(baseTex, vec2(texCoord.x, texCoord.y + texelSize.y))[TEMPERATURE] > 500.) // if above cell was already wall. because of fast fall speed
-        newPos.y += texelSize.y * 1.;                                                       // *2. ? move position up so that the water/snow is correcty added to the ground
+      bool hailImpact = newMass[ICE] > 0.06 && newDensity >= 1.0 && newPos.y < -1.0;
 
-      deposition[RAIN_DEPOSITION] = newMass[WATER];                                         // rain accumulation
-      deposition[SNOW_DEPOSITION] = newMass[ICE];                                           // snow accumulation
+      if (hailImpact && random2d(vec2(texCoord.x * 31.7 + iterNum, texCoord.y * 17.3 + mass[ICE])) < 0.50) {
+        // hail bounces/scatters instead of directly reusing snow deposition
+        deposition[RAIN_DEPOSITION] = newMass[WATER] * 0.35 + newMass[ICE] * 0.18;
+        deposition[SNOW_DEPOSITION] = newMass[ICE] * 0.08;
 
-      disableDroplet();
+        newMass[WATER] = newMass[WATER] * 0.15 + newMass[ICE] * 0.25;
+        newMass[ICE] *= 0.45;
+        newDensity = min(max(newDensity, 1.05), 1.35);
+
+        newPos.y = -1.0 + texelSize.y * (1.5 + random2d(vec2(iterNum, texCoord.x)) * 6.0);
+        newPos.x = mod(newPos.x + (random2d(vec2(iterNum * 0.31, texCoord.y)) - 0.5) * texelSize.x * 18.0 + 1.0, 2.0) - 1.0;
+      } else {
+        if (texture(baseTex, vec2(texCoord.x, texCoord.y + texelSize.y))[TEMPERATURE] > 500.) // if above cell was already wall. because of fast fall speed
+          newPos.y += texelSize.y * 1.;                                                       // *2. ? move position up so that the water/snow is correcty added to the ground
+
+        deposition[RAIN_DEPOSITION] = newMass[WATER];                                         // rain accumulation
+        deposition[SNOW_DEPOSITION] = newMass[ICE] * (newDensity >= 1.0 ? 0.25 : 1.0);       // hail compacts/splinters, less snowpack gain
+
+        disableDroplet();
+      }
 
     } else { // update droplet
 
@@ -206,7 +248,7 @@ void main()
       float growth = water[CLOUD] * growthRate * surfaceArea;
 
       // Hail growth enhancement:
-      if (realTemp < CtoK(0.0) && water[CLOUD] > 0.0 && density == 1.0) { // below freezing
+      if (realTemp < CtoK(0.0) && water[CLOUD] > 0.0 && newDensity >= 1.0) { // below freezing
         growth += surfaceArea * water[PRECIPITATION] * 0.0030;            // rain freezing onto hail
       }
 
@@ -222,6 +264,11 @@ void main()
         newMass[WATER] -= freezing;
         newMass[ICE] += freezing;
         feedback[HEAT] += freezing * meltingHeat;
+
+        if (newMass[ICE] > 0.08) {
+          float hailGrowthFactor = map_rangeC(water[PRECIPITATION] + max(base[VY], 0.0) * 30.0, 0.0, 1.8, 0.0, 1.0);
+          newDensity = min(max(newDensity, 1.0) + hailGrowthFactor * 0.18, 1.35);
+        }
 
       } else {                                                                                                    // above freezing
         newMass[WATER] += growth;                                                                                 // water growth
