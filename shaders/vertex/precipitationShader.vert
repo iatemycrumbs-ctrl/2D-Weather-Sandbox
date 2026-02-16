@@ -147,12 +147,12 @@ const float nominalSpawnMass = 0.14;
           float icePositiveCharge = mixedPhaseFactor * updraftFactor * iceCrystalFactor;
           float chargeSeparation = max(graupelNegativeCharge * icePositiveCharge, 0.0);
 
-          float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
+          float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * 0.95;
           lightningSpawnChance *= (0.30 + chargeSeparation * 1.8);
-          lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.55);
+          lightningSpawnChance *= map_rangeC(lightningSpawnChance, 0.0, 80.0, 1.0, 0.55);
           lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.22);
 
-          if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval &&
+          if (lightningData[START_ITERNUM] < iterNum - 0.56 &&
               random2d(vec2(base[TEMPERATURE] * 0.5 + texCoord.x * 2.0, water[TOTAL] * 7.75 + texCoord.y * 2.0)) < lightningSpawnChance) { // Spawn lightning
             lightningSpawned = true;
             isActive = false;
