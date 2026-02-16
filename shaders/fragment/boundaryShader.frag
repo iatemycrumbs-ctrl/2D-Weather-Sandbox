@@ -18,6 +18,7 @@ uniform isampler2D wallTex;
 uniform sampler2D lightTex;
 uniform sampler2D precipFeedbackTex;
 uniform sampler2D precipDepositionTex;
+uniform sampler2D lightningDataTex;
 
 uniform float dryLapse;
 uniform float evapHeat;
@@ -37,6 +38,11 @@ uniform float sunAngle;
 uniform float iterNum; // used as seed for random function
 
 uniform float dynamicWaterTemperature;
+uniform float precipitationRecycling;
+uniform float surfaceRunoffRate;
+uniform float soilInfiltrationRate;
+uniform float canopyInterception;
+uniform float urbanHeatIslandStrength;
 
 layout(location = 0) out vec4 base;
 layout(location = 1) out vec4 water;
@@ -68,7 +74,7 @@ float calcEvaporation(float T, float W, float V, float M)                       
   return max((maxWater(T) - W) * landEvaporation * (V / 127. + 0.1) * min(M + 1.0, 50.0) * 0.05, 0.); // landEvaporation should be adjusted to remove * 0.05 factor
 }
 
-float calcFireIntensity(int veg, float moist, float precip) { return max(float(veg) * 0.00025 - moist * 0.00020 - precip * 0.02, 0.); }
+float calcFireIntensity(int veg, float moist, float precip) { return max(float(veg) * 0.00025 - moist * 0.00020 - precip * 0.05, 0.); }
 
 void main()
 {
@@ -87,6 +93,7 @@ void main()
   ivec4 wallX0Yp = texture(wallTex, texCoordX0Yp);
 
   vec4 light = texture(lightTex, texCoord);
+  vec4 lightningData = texture(lightningDataTex, vec2(0.5));
 
   bool nextToWall = false;
 
@@ -104,16 +111,17 @@ void main()
 
     float precipCoalescence = max(-precipFeedback[VAPOR], 0.); // how much cloud water turns into rain
 
-    water[CLOUD] -= precipCoalescence;
-    water[TOTAL] -= precipCoalescence;
+    water[CLOUD] -= precipCoalescence * 0.30;
+    water[TOTAL] -= precipCoalescence * 0.22;
 
     float precipEvaporation = max(precipFeedback[VAPOR], 0.);
 
     water[TOTAL] += precipEvaporation; // evaporating rain adds water vapor to air
+    water[CLOUD] += precipEvaporation * 0.045 * precipitationRecycling;
 
 
     //  0.004 for rain visualisation
-    water[PRECIPITATION] = max(water[PRECIPITATION] * 0.997 - 0.00001 + precipFeedback[MASS] * 0.005, 0.0);
+    water[PRECIPITATION] = max(water[PRECIPITATION] * 0.9972 - 0.000009 + precipFeedback[MASS] * 0.0055 * precipitationRecycling, 0.0);
 
 
     // rain removes smoke from air
@@ -147,6 +155,13 @@ void main()
     gravityForce -= precipFeedback[MASS] * gravMult * waterWeight; // precipitation weigth added to gravity force
 
     base[VY] += gravityForce;
+
+    // Convective cold-pool outflow proxy from precipitation loading/evaporation.
+    float coldPool = max(precipFeedback[MASS] * 18.0 + precipEvaporation * 6.0, 0.0) * precipitationRecycling;
+    float coldPoolSpread = clamp(1.0 - texCoord.y * 2.2, 0.0, 1.0);
+    float outflowSign = random2d(vec2(fragCoord.y * 0.17 + iterNum * 0.01, fragCoord.x * 0.11)) - 0.5;
+    base[VX] += outflowSign * coldPool * 0.00045 * coldPoolSpread;
+    base[PRESSURE] += coldPool * 0.00002 * coldPoolSpread;
 
     // base.x += sin(texCoord.x * PI * 2.0 + iterNum * 0.000005) * (1. - texCoord.y) * 0.00015; // phantom force to simulate high and low pressure areas
 
@@ -326,7 +341,7 @@ void main()
         // nobreak!
       case WALLTYPE_INDUSTRIAL:
         if (wall[TYPE] == WALLTYPE_INDUSTRIAL) { // exclude WALLTYPE_FIRE
-          int texFragX = int(fragCoord.x) % 80;
+          int texFragX = int(texCoord.x * resolution.x) % 80;
 
           if (wall[VERT_DISTANCE] == 5 && (texFragX == 18 || texFragX == 22)) { // cooling towers
             water[TOTAL] += 0.25;
@@ -344,11 +359,13 @@ void main()
         // nobreak!
       case WALLTYPE_URBAN:
         water[SMOKE] += 0.000002; // Urban produces smog
+        base[TEMPERATURE] += 0.000010 * urbanHeatIslandStrength;
         // nobreak!
       case WALLTYPE_LAND:
         if (wall[VERT_DISTANCE] <= wallVerticalInfluence) {
 
-          float evaporation = calcEvaporation(realTemp, water[TOTAL], float(wall[VEGETATION]), waterInSurface[SOIL_MOISTURE]) / influenceDevider;
+          float dryStressFactor = map_rangeC(waterInSurface[SOIL_MOISTURE], 0.0, 25.0, 0.35, 1.0);
+          float evaporation = calcEvaporation(realTemp, water[TOTAL], float(wall[VEGETATION]), waterInSurface[SOIL_MOISTURE]) * dryStressFactor / influenceDevider;
 
           water[TOTAL] += evaporation;
           base[TEMPERATURE] -= evaporation * evapHeat * 0.5;                                // evaporative cooling (half the real value, to prevent boring non convective conditions)
@@ -402,16 +419,24 @@ void main()
         if (wall[TYPE] == WALLTYPE_FIRE) {            // extra check to make sure it's not urban
           float fireIntensity = calcFireIntensity(wall[VEGETATION], water[SOIL_MOISTURE], waterX0Yp[PRECIPITATION]);
 
-          if (fireIntensity < minimalFireIntensity) { // fire goes out
-            wall[TYPE] = WALLTYPE_LAND;               // turn off fire
+          // direct rain-out extinguishes active fire quickly
+          if (waterX0Yp[PRECIPITATION] > 0.08 || precipDeposition[RAIN_DEPOSITION] > 0.04) {
+            wall[TYPE] = WALLTYPE_LAND;
+            water[SMOKE] *= 0.70;
+          } else if (fireIntensity < minimalFireIntensity) { // fire goes out
+            wall[TYPE] = WALLTYPE_LAND;                      // turn off fire
           } else if (int(iterNum) % (int(10. / fireIntensity) + 1) == 0) {
-            wall[VEGETATION] -= 1;                    // reduce vegetation
+            wall[VEGETATION] -= 1;                           // reduce vegetation
             if (wall[VEGETATION] < 10)
-              wall[TYPE] = WALLTYPE_LAND;             // turn off fire
+              wall[TYPE] = WALLTYPE_LAND;                    // turn off fire
           }
         }
       case WALLTYPE_LAND:                                                                                          // no break,can also be fire or urban:
-        water[SOIL_MOISTURE] = clamp(water[SOIL_MOISTURE] + precipDeposition[RAIN_DEPOSITION] * 0.1, 0.0, 1000.0); // rain accumulation
+        float canopyBlock = map_rangeC(float(wall[VEGETATION]), 0.0, 127.0, 0.0, 0.35) * canopyInterception;
+        float effectiveRain = precipDeposition[RAIN_DEPOSITION] * max(1.0 - canopyBlock, 0.35);
+        float infiltration = effectiveRain * 0.1 * soilInfiltrationRate;
+        float runoff = max(effectiveRain - infiltration, 0.0) * 0.04 * surfaceRunoffRate;
+        water[SOIL_MOISTURE] = clamp(water[SOIL_MOISTURE] + infiltration - runoff, 0.0, 1000.0); // rain accumulation
         water[SNOW] = clamp(water[SNOW] + precipDeposition[SNOW_DEPOSITION] * snowMassToHeight, 0.0, 4000.0);      // snow accumulation in cm
 
 
@@ -420,9 +445,10 @@ void main()
 
         float realTempAboveSurface = potentialToRealT(baseAboveSurface[TEMPERATURE], texCoordX0Yp.y);
 
-        float evaporation = calcEvaporation(realTempAboveSurface, waterAboveSurface[TOTAL], float(wall[VEGETATION]), water[SOIL_MOISTURE]) * 0.10;
+        float evaporation = calcEvaporation(realTempAboveSurface, waterAboveSurface[TOTAL], float(wall[VEGETATION]), water[SOIL_MOISTURE]) * 0.08;
 
         water[SOIL_MOISTURE] -= evaporation;
+        water[SOIL_MOISTURE] += precipDeposition[RAIN_DEPOSITION] * 0.03 + waterAboveSurface[CLOUD] * 0.002;
 
 
         if (int(iterNum) % 100 == 0) { // snow and soil moisture smoothing
@@ -455,11 +481,50 @@ void main()
 
           // dynamic vegetation
 
-          int vegetationGrowthRate = int(water[SOIL_MOISTURE] * sqrt(lightAboveSurface[SUNLIGHT]) * 0.01);
+          // Reworked vegetation system: climate carrying capacity + stress decay + slow recovery.
+          float tempSuitability = map_rangeC(realTempAboveSurface, CtoK(-5.0), CtoK(28.0), 0.0, 1.0);
+          float moistureSuitability = map_rangeC(water[SOIL_MOISTURE], 3.0, 40.0, 0.0, 1.0);
+          float snowSuppression = map_rangeC(water[SNOW], 0.0, 120.0, 1.0, 0.25);
+          float climateCapacity = clamp(tempSuitability * moistureSuitability * snowSuppression, 0.0, 1.0) * 127.0;
+
+          int vegetationGrowthRate = int(climateCapacity * 0.05 + sqrt(max(lightAboveSurface[SUNLIGHT], 0.0)) * 2.5);
 
           if (vegetationGrowthRate > 0 && int(iterNum) % ((100 / vegetationGrowthRate) * 100) == 0) {      // growth interval
-            if (int(map_rangeC(realTempAboveSurface, CtoK(0.0), CtoK(25.0), 0., 127.)) > wall[VEGETATION]) // limit vegetation growth at lower temperatures
+            if (int(climateCapacity) > wall[VEGETATION])
               wall[VEGETATION] += 1;
+          }
+
+          // gradual dieback under persistent drought/heat stress
+          float droughtStress = max(8.0 - water[SOIL_MOISTURE], 0.0) * map_rangeC(realTempAboveSurface, CtoK(16.0), CtoK(38.0), 0.0, 1.0);
+          if (droughtStress > 0.0 && int(iterNum) % (80 + int(220.0 / (droughtStress + 1.0))) == 0)
+            wall[VEGETATION] = max(wall[VEGETATION] - 1, 0);
+
+          // Tree and structure wind physics (gust damage / flex proxy)
+          float windSpeed = length(baseAboveSurface.xy);
+          float gustStress = max(windSpeed - 0.045, 0.0);
+
+          // Trees lose biomass in severe wind, especially when dry and unfrozen.
+          if (wall[TYPE] == WALLTYPE_LAND && wall[VEGETATION] > 20 && gustStress > 0.0) {
+            float treeRootStrength = map_rangeC(water[SOIL_MOISTURE], 2.0, 45.0, 0.65, 1.20);
+            float snowLoadPenalty = map_rangeC(water[SNOW], 0.0, 120.0, 1.0, 0.65);
+            float treeDamageChance = clamp(gustStress * 9.0 * (1.0 / treeRootStrength) * (1.0 / snowLoadPenalty), 0.0, 0.55);
+            if (random2d(vec2(iterNum * 0.17, fragCoord.x * 0.11 + fragCoord.y * 0.07)) < treeDamageChance) {
+              wall[VEGETATION] -= int(clamp(1.0 + gustStress * 30.0, 1.0, 8.0));
+              wall[VEGETATION] = max(wall[VEGETATION], 0);
+              water[SMOKE] += gustStress * 0.04; // debris/dust lofting
+            }
+          }
+
+          // Urban / industrial storm damage under extreme winds.
+          if ((wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL) && gustStress > 0.025) {
+            float structureResilience = wall[TYPE] == WALLTYPE_INDUSTRIAL ? 1.2 : 1.0;
+            float destructionChance = clamp((gustStress - 0.025) * 5.0 / structureResilience, 0.0, 0.35);
+            if (random2d(vec2(iterNum * 0.23, fragCoord.x * 0.19 + fragCoord.y * 0.13)) < destructionChance) {
+              wall[TYPE] = WALLTYPE_LAND;
+              wall[VEGETATION] = max(wall[VEGETATION], 8);
+              water[SMOKE] += 0.08 + gustStress * 0.6;
+              water[SOIL_MOISTURE] = max(water[SOIL_MOISTURE], 6.0);
+            }
           }
 
           int subInterval = int(iterNum) / 100;
@@ -467,6 +532,43 @@ void main()
           if (subInterval % (int(water[SOIL_MOISTURE] * 0.1 + water[SNOW] * 0.5) + 10) == 0 && wall[VEGETATION] >= minimalFireVegetation &&
               (wallXmY0[TYPE] == WALLTYPE_FIRE || wallXpY0[TYPE] == WALLTYPE_FIRE || texture(waterTex, texCoordX0Yp)[SMOKE] > 4.5)) { // if left or right is on fire or fire is blowing over
             wall[TYPE] = WALLTYPE_FIRE;                                                                                               // spread fire
+          }
+
+          // Lightning ignition at the surface.
+          float lightningAge = iterNum - lightningData[START_ITERNUM];
+          if (wall[VERT_DISTANCE] == 0 && wall[TYPE] == WALLTYPE_LAND && wall[VEGETATION] >= minimalFireVegetation &&
+              lightningData[INTENSITY] > 0.05 && lightningData[START_ITERNUM] > 0.0 && lightningAge >= 0.0 && lightningAge <= 3.0) {
+            bool isCloudToGround = lightningData[INTENSITY] > 0.0;
+            if (!isCloudToGround)
+              break;
+
+            float dxCells = abs(texCoord.x - lightningData.x) * resolution.x;
+            dxCells = min(dxCells, resolution.x - dxCells); // map wraps horizontally
+
+            float strikeToGroundY = max(lightningData.y - texCoord.y, 0.0) * resolution.y;
+            float strikeDistanceCells = sqrt(dxCells * dxCells + strikeToGroundY * strikeToGroundY * 0.05);
+
+            float lightningTemp = map_rangeC(lightningData[INTENSITY], 0.05, 4.5, 9000.0, 32000.0);
+            float strikeRadiusCells = map_rangeC(lightningData[INTENSITY], 0.05, 4.5, 1.2, 7.2);
+            float wetnessPenalty = clamp((water[SOIL_MOISTURE] - 6.0) * 0.03 + water[SNOW] * 0.15 + waterAboveSurface[PRECIPITATION] * 0.20, 0.0, 0.97);
+            float treeFuelFactor = map_rangeC(float(wall[VEGETATION]), float(minimalFireVegetation), 127.0, 0.35, 1.0);
+            float thermalFactor = map_rangeC(lightningTemp, 9000.0, 32000.0, 0.75, 1.30);
+            float ignitionChance = clamp(map_rangeC(lightningData[INTENSITY], 0.05, 4.5, 0.16, 0.98) * treeFuelFactor * thermalFactor * (1.0 - wetnessPenalty), 0.0, 1.0);
+
+            if (strikeDistanceCells <= strikeRadiusCells && random2d(vec2(iterNum * 0.97, fragCoord.x + fragCoord.y * 7.0)) < ignitionChance) {
+              wall[TYPE] = WALLTYPE_FIRE;
+            }
+
+            // Lightning ground explosion: shock-heating, debris/smoke, and nearby tree ignition.
+            float explosionRadiusCells = strikeRadiusCells * 1.55;
+            if (strikeDistanceCells <= explosionRadiusCells) {
+              float blast = 1.0 - strikeDistanceCells / max(explosionRadiusCells, 0.001);
+              base[TEMPERATURE] += blast * lightningData[INTENSITY] * 0.004;
+              water[SMOKE] += blast * 0.22;
+
+              if (wall[TYPE] == WALLTYPE_LAND && wall[VEGETATION] > 28 && random2d(vec2(iterNum * 0.41, fragCoord.x * 0.31 + fragCoord.y * 0.27)) < blast * 0.45)
+                wall[TYPE] = WALLTYPE_FIRE;
+            }
           }
           //}
         }
@@ -498,23 +600,43 @@ void main()
           }
 
           float airTemperature = potentialToRealT(texture(baseTex, texCoordX0Yp)[TEMPERATURE], texCoordX0Yp.y);
+          vec4 waterAboveSurfaceNow = texture(waterTex, texCoordX0Yp);
+          vec4 precipFeedbackAbove = texture(precipFeedbackTex, texCoordX0Yp);
+
+          float windMixing = clamp(length(texture(baseTex, texCoordX0Yp).xy) * 45.0, 0.2, 2.5);
+          float precipMixing = map_rangeC(waterAboveSurfaceNow[PRECIPITATION], 0.0, 1.5, 0.0, 1.0);
+          float mixedLayerDepth = map_rangeC(windMixing + precipMixing * 0.5, 0.2, 2.8, 0.8, 2.8); // deeper mixed layer => more thermal inertia
 
           float netWaterHeating = 0.0;
-          netWaterHeating += (airTemperature - base[TEMPERATURE]) * waterHeatExchangeRate; // water heated or cooled by the air above
+          netWaterHeating += (airTemperature - base[TEMPERATURE]) * waterHeatExchangeRate * (0.9 + windMixing * 0.15); // turbulent exchange
 
-          netWaterHeating -=
-            max((maxWater(base[TEMPERATURE]) - waterX0Yp[TOTAL]) * waterEvaporation, 0.) * evapHeat * 0.5; // evaporative cooling (half the real value, to prevent boring non convective conditions)
+          float evaporativeCooling = max((maxWater(base[TEMPERATURE]) - waterAboveSurfaceNow[TOTAL]) * waterEvaporation, 0.) * evapHeat * 0.55;
+          netWaterHeating -= evaporativeCooling;
 
-          float lightPower = max(lightAboveSurface[SUNLIGHT] * cos(sunAngle), 0.0);                        // Light power per horizontal surface area;
+          float rainCooling = max(precipFeedbackAbove[VAPOR], 0.0) * evapHeat * 0.16;
+          float coldRainPulse = waterAboveSurfaceNow[PRECIPITATION] * map_rangeC(airTemperature, CtoK(-5.0), CtoK(20.0), 0.000035, 0.000008);
+          netWaterHeating -= (rainCooling + coldRainPulse);
 
+          float lightPower = max(lightAboveSurface[SUNLIGHT] * cos(sunAngle), 0.0); // Light power per horizontal surface area;
           lightPower *= (1. - ALBEDO_WATER);
           lightPower *= lightHeatingConst;
-          netWaterHeating += lightPower; // sun heating water
+          netWaterHeating += lightPower;
 
+          float cloudGreenhouse = map_rangeC(waterAboveSurfaceNow[CLOUD] + waterAboveSurfaceNow[PRECIPITATION], 0.0, 2.5, 0.0, 0.000022);
+          float smokeIRTrap = map_rangeC(waterAboveSurfaceNow[SMOKE], 0.0, 5.0, 0.0, 0.000010);
+          float clearSkyIRLoss = map_rangeC(waterAboveSurfaceNow[TOTAL], 2.0, 20.0, 0.000018, 0.000006);
 
-          netWaterHeating += lightAboveSurface[NET_HEATING]; // IR heating/cooling effect
+          netWaterHeating += lightAboveSurface[NET_HEATING]; // IR heating/cooling effect from atmosphere
+          netWaterHeating += cloudGreenhouse + smokeIRTrap;
+          netWaterHeating -= clearSkyIRLoss;
 
-          base[TEMPERATURE] += netWaterHeating / waterHeatCapacity * waterTempUpdateInterval;
+          // slow radiative cooling during calm clear night
+          if (lightAboveSurface[SUNLIGHT] < 0.04) {
+            float dryAirFactor = map_rangeC(waterAboveSurfaceNow[TOTAL], 2.0, 18.0, 1.0, 0.4);
+            netWaterHeating -= 0.000010 * dryAirFactor;
+          }
+
+          base[TEMPERATURE] += netWaterHeating / (waterHeatCapacity * mixedLayerDepth) * waterTempUpdateInterval;
         }
 
         base[TEMPERATURE] = clamp(base[TEMPERATURE], CtoK(0.0), CtoK(maxWaterTemp)); // limit water temperature range
