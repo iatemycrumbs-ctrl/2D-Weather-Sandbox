@@ -15,6 +15,8 @@ uniform float dragMultiplier;
 
 uniform float wind;
 uniform float coriolisStrength;
+uniform float turbulentMix;
+uniform float jetStreamCoupling;
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -35,6 +37,8 @@ void main()
   base = texture(baseTex, texCoord);
   vec4 baseXpY0 = texture(baseTex, texCoordXpY0);
   vec4 baseX0Yp = texture(baseTex, texCoordX0Yp);
+  vec4 baseXmY0 = texture(baseTex, vec2(texCoord.x - texelSize.x, texCoord.y));
+  vec4 baseX0Ym = texture(baseTex, vec2(texCoord.x, texCoord.y - texelSize.y));
 
   wall = texture(wallTex, texCoord);
   ivec4 wallX0Yp = texture(wallTex, texCoordX0Yp);
@@ -70,6 +74,20 @@ void main()
     base[VY] += base[VX] * coriolisParam;
 
     base[VY] *= 1. - dragMultiplier * 0.0002 * densityDrag;
+
+    // Complex feature upgrade: subgrid turbulent mixing + jet-stream baroclinic coupling.
+    vec2 laplacianV = vec2(baseXpY0[VX] + baseXmY0[VX] + baseX0Yp[VX] + baseX0Ym[VX] - 4.0 * base[VX],
+                           baseXpY0[VY] + baseXmY0[VY] + baseX0Yp[VY] + baseX0Ym[VY] - 4.0 * base[VY]);
+    float stratification = clamp((base[TEMPERATURE] - getInitialT(int(fragCoord.y))) * 0.08 + 0.5, 0.05, 1.9);
+    float mixCoeff = 0.018 * turbulentMix * stratification;
+    base.xy += laplacianV * mixCoeff;
+
+    float dTdx = (baseXpY0[TEMPERATURE] - baseXmY0[TEMPERATURE]);
+    float dTdy = (baseX0Yp[TEMPERATURE] - baseX0Ym[TEMPERATURE]);
+    vec2 baroclinic = vec2(-dTdy, dTdx) * (0.0000018 * jetStreamCoupling);
+    float upperLevelWeight = smoothstep(0.35, 0.95, texCoord.y);
+    base.xy += baroclinic * upperLevelWeight;
+
     // quadratic drag
     // base[VX] -= base[VX] * base[VX] * base[VX] * base[VX] * base[VX] *
     // dragMultiplier; base[VY] -= base[VY] * base[VY] * base[VY] * base[VY] *

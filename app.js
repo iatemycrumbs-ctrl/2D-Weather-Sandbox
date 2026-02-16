@@ -9,22 +9,55 @@ details. You should have received a copy of the GNU General Public License along
 with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
+
+function getEl(id)
+{
+  return document.getElementById(id);
+}
+
+function readNumericInput(id, fallback)
+{
+  const el = getEl(id);
+  if (!el || el.value == null)
+    return fallback;
+  const parsed = parseFloat(el.value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function updateSetupSliders()
 {
-  let simResX = parseInt(document.getElementById('simResSelX').value);
-  let simResY = parseInt(document.getElementById('simResSelY').value);
-  let simHeight = parseInt(document.getElementById('simHeightSel').value);
+  let simResX = Math.round(readNumericInput('simResSelX', 512));
+  let simResY = Math.round(readNumericInput('simResSelY', 300));
+  let simHeight = Math.round(readNumericInput('simHeightSel', 12000));
+
+  simResY = Math.max(simResY, 1);
 
   let cellHeight = simHeight / simResY;
   let simWidth = cellHeight * simResX;
 
-  document.getElementById('simWorldProperties').innerHTML = 'cellHeight: ' + cellHeight.toFixed(1) + ' m  &nbsp&nbsp&nbsp   Simulation width: ' + (simWidth / 1000).toFixed(1) + ' km';
+  const simWorldProperties = getEl('simWorldProperties');
+  if (simWorldProperties)
+    simWorldProperties.innerHTML = 'cellHeight: ' + cellHeight.toFixed(1) + ' m  &nbsp&nbsp&nbsp   Simulation width: ' + (simWidth / 1000).toFixed(1) + ' km';
 
-  document.getElementById('simHeightWarning').style.display = (simHeight == 12000) ? 'none' : 'block';
-  document.getElementById('simResYWarning').style.display = (simResY == 300) ? 'none' : 'block';
-  document.getElementById('simResShowX').value = simResX;
-  document.getElementById('simResShowY').value = simResY
-  document.getElementById('simHeightShow').value = simHeight + ' m';
+  const simHeightWarning = getEl('simHeightWarning');
+  if (simHeightWarning)
+    simHeightWarning.style.display = (simHeight == 12000) ? 'none' : 'block';
+
+  const simResYWarning = getEl('simResYWarning');
+  if (simResYWarning)
+    simResYWarning.style.display = (simResY == 300) ? 'none' : 'block';
+
+  const simResShowX = getEl('simResShowX');
+  if (simResShowX)
+    simResShowX.value = simResX;
+
+  const simResShowY = getEl('simResShowY');
+  if (simResShowY)
+    simResShowY.value = simResY;
+
+  const simHeightShow = getEl('simHeightShow');
+  if (simHeightShow)
+    simHeightShow.value = simHeight + ' m';
 }
 
 var FPS = 60.0;
@@ -347,6 +380,8 @@ const guiControls_default = {
   dragMultiplier : 0.001, // 0.01
   wind : 0.0,
   coriolisStrength : 1.0,
+  turbulentMix : 1.0,
+  jetStreamCoupling : 1.0,
   globalEffectsStartAlt : 0,
   globalEffectsEndAlt : 10000,
   globalDrying : 0.000000, // 0.000010
@@ -1506,9 +1541,9 @@ async function loadData()
     }
   } else {
     // no file, so create new simulation
-    sim_res_x = parseInt(document.getElementById('simResSelX').value);
-    sim_res_y = parseInt(document.getElementById('simResSelY').value);
-    sim_height = parseInt(document.getElementById('simHeightSel').value);
+    sim_res_x = Math.round(readNumericInput('simResSelX', 512));
+    sim_res_y = Math.round(readNumericInput('simResSelY', 300));
+    sim_height = Math.round(readNumericInput('simHeightSel', 12000));
 
     NUM_DROPLETS = computeNumDroplets(sim_res_x, sim_res_y);
     SETUP_MODE = true;
@@ -1659,12 +1694,12 @@ var soundingData;
 
 async function prepareSounding()
 {
-  const dateSel = document.getElementById('datePicker');
-  const date = new Date(dateSel.value);
+  const dateSel = getEl('datePicker');
+  const date = new Date(dateSel && dateSel.value ? dateSel.value : Date.now());
   let epochTime = Math.floor(date.getTime() / 1000);
 
-  const hourSelector = document.getElementById('hourSelector');
-  const hour = hourSelector.options[hourSelector.selectedIndex].value;
+  const hourSelector = getEl('hourSelector');
+  const hour = hourSelector && hourSelector.selectedIndex >= 0 ? hourSelector.options[hourSelector.selectedIndex].value : 0;
 
   epochTime += hour * 3600;
 
@@ -3682,6 +3717,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'dragMultiplier'), guiControls.dragMultiplier);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'coriolisStrength'), guiControls.coriolisStrength);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'turbulentMix'), guiControls.turbulentMix);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'jetStreamCoupling'), guiControls.jetStreamCoupling);
     gl.useProgram(lightingProgram);
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'greenhouseGases'), guiControls.greenhouseGases);
@@ -3795,6 +3832,20 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'coriolisStrength'), guiControls.coriolisStrength);
       })
       .name('Coriolis Strength');
+
+    fluidParams_folder.add(guiControls, 'turbulentMix', 0.1, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'turbulentMix'), guiControls.turbulentMix);
+      })
+      .name('Turbulent Mix');
+
+    fluidParams_folder.add(guiControls, 'jetStreamCoupling', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'jetStreamCoupling'), guiControls.jetStreamCoupling);
+      })
+      .name('Jet Stream Coupling');
 
     fluidParams_folder.add(guiControls, 'globalDrying', 0.0, 0.0001, 0.000001)
       .onChange(function() {
@@ -5969,6 +6020,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1i(gl.getUniformLocation(velocityProgram, 'wallTex'), 1);
   gl.uniform2f(gl.getUniformLocation(velocityProgram, 'texelSize'), texelSizeX, texelSizeY);
   gl.uniform1f(gl.getUniformLocation(velocityProgram, 'coriolisStrength'), guiControls.coriolisStrength);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'turbulentMix'), guiControls.turbulentMix);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'jetStreamCoupling'), guiControls.jetStreamCoupling);
 
   // gl.uniform1fv(gl.getUniformLocation(velocityProgram, 'initial_T'), initial_T);
   gl.uniform4fv(gl.getUniformLocation(velocityProgram, 'initial_Tv'), initial_T);
