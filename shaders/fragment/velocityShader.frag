@@ -17,6 +17,10 @@ uniform float wind;
 uniform float coriolisStrength;
 uniform float turbulentMix;
 uniform float jetStreamCoupling;
+uniform float gravityWaveDrag;
+uniform float mountainWaveStrength;
+uniform float vortexStretching;
+uniform float ageostrophicFlow;
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -87,6 +91,18 @@ void main()
     vec2 baroclinic = vec2(-dTdy, dTdx) * (0.0000018 * jetStreamCoupling);
     float upperLevelWeight = smoothstep(0.35, 0.95, texCoord.y);
     base.xy += baroclinic * upperLevelWeight;
+
+    float gravityWaveDamp = map_rangeC(abs(base[VY]), 0.0, 0.03, 0.0, 0.0009) * gravityWaveDrag;
+    base[VY] -= sign(base[VY]) * gravityWaveDamp;
+
+    float mountainLift = (1.0 - smoothstep(0.0, 0.45, texCoord.y)) * mountainWaveStrength;
+    base[VY] += sin(texCoord.x * 12.0 + float(fragCoord.y) * 0.017) * 0.00008 * mountainLift;
+
+    float vort = (baseXpY0[VY] - baseXmY0[VY]) - (baseX0Yp[VX] - baseX0Ym[VX]);
+    base[VY] += vort * 0.00005 * vortexStretching * upperLevelWeight;
+
+    vec2 geostrophicAdj = vec2(-dTdy, -dTdx) * (0.0000007 * ageostrophicFlow);
+    base.xy += geostrophicAdj;
 
     // quadratic drag
     // base[VX] -= base[VX] * base[VX] * base[VX] * base[VX] * base[VX] *

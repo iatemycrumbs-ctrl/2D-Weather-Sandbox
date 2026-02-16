@@ -382,6 +382,10 @@ const guiControls_default = {
   coriolisStrength : 1.0,
   turbulentMix : 1.0,
   jetStreamCoupling : 1.0,
+  gravityWaveDrag : 1.0,
+  mountainWaveStrength : 1.0,
+  vortexStretching : 1.0,
+  ageostrophicFlow : 1.0,
   globalEffectsStartAlt : 0,
   globalEffectsEndAlt : 10000,
   globalDrying : 0.000000, // 0.000010
@@ -450,7 +454,18 @@ const guiControls_default = {
   lightningBloomStrength : 1.0,
   stormOrganization : 1.0,
   aerosolLoad : 1.0,
+  entrainmentRate : 1.0,
+  downdraftCoolingMult : 1.0,
+  microburstStrength : 1.0,
+  lightningBranching : 1.0,
+  lightningAnvilDrift : 1.0,
+  precipitationSizeSpectrum : 1.0,
+  hailShatterFactor : 1.0,
   precipitationRecycling : 1.0,
+  surfaceRunoffRate : 1.0,
+  soilInfiltrationRate : 1.0,
+  canopyInterception : 1.0,
+  urbanHeatIslandStrength : 1.0,
   showFPS : true,
   showWeatherBalloons : true,
   balloonRiseRate : 0.22,
@@ -3713,12 +3728,20 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'evapHeat'), guiControls.evapHeat);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterWeight'), guiControls.waterWeight);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'surfaceRunoffRate'), guiControls.surfaceRunoffRate);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'soilInfiltrationRate'), guiControls.soilInfiltrationRate);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'canopyInterception'), guiControls.canopyInterception);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'urbanHeatIslandStrength'), guiControls.urbanHeatIslandStrength);
     gl.useProgram(velocityProgram);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'dragMultiplier'), guiControls.dragMultiplier);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'coriolisStrength'), guiControls.coriolisStrength);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'turbulentMix'), guiControls.turbulentMix);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'jetStreamCoupling'), guiControls.jetStreamCoupling);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityWaveDrag'), guiControls.gravityWaveDrag);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'mountainWaveStrength'), guiControls.mountainWaveStrength);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'vortexStretching'), guiControls.vortexStretching);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'ageostrophicFlow'), guiControls.ageostrophicFlow);
     gl.useProgram(lightingProgram);
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'greenhouseGases'), guiControls.greenhouseGases);
@@ -3749,6 +3772,13 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningGroundBias'), guiControls.lightningGroundBias);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'stormOrganization'), guiControls.stormOrganization);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'aerosolLoad'), guiControls.aerosolLoad);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'entrainmentRate'), guiControls.entrainmentRate);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'downdraftCoolingMult'), guiControls.downdraftCoolingMult);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'microburstStrength'), guiControls.microburstStrength);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningBranching'), guiControls.lightningBranching);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningAnvilDrift'), guiControls.lightningAnvilDrift);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationSizeSpectrum'), guiControls.precipitationSizeSpectrum);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'hailShatterFactor'), guiControls.hailShatterFactor);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
@@ -3846,6 +3876,34 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'jetStreamCoupling'), guiControls.jetStreamCoupling);
       })
       .name('Jet Stream Coupling');
+
+    fluidParams_folder.add(guiControls, 'gravityWaveDrag', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityWaveDrag'), guiControls.gravityWaveDrag);
+      })
+      .name('Gravity Wave Drag');
+
+    fluidParams_folder.add(guiControls, 'mountainWaveStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'mountainWaveStrength'), guiControls.mountainWaveStrength);
+      })
+      .name('Mountain Wave Strength');
+
+    fluidParams_folder.add(guiControls, 'vortexStretching', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'vortexStretching'), guiControls.vortexStretching);
+      })
+      .name('Vortex Stretching');
+
+    fluidParams_folder.add(guiControls, 'ageostrophicFlow', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'ageostrophicFlow'), guiControls.ageostrophicFlow);
+      })
+      .name('Ageostrophic Flow');
 
     fluidParams_folder.add(guiControls, 'globalDrying', 0.0, 0.0001, 0.000001)
       .onChange(function() {
@@ -4029,9 +4087,43 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() {
         gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterWeight'), guiControls.waterWeight);
-    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
       })
       .name('Water Weight');
+
+    water_folder.add(guiControls, 'precipitationRecycling', 0.2, 2.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
+      })
+      .name('Precip Recycling');
+
+    water_folder.add(guiControls, 'surfaceRunoffRate', 0.2, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'surfaceRunoffRate'), guiControls.surfaceRunoffRate);
+      })
+      .name('Surface Runoff');
+
+    water_folder.add(guiControls, 'soilInfiltrationRate', 0.2, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'soilInfiltrationRate'), guiControls.soilInfiltrationRate);
+      })
+      .name('Soil Infiltration');
+
+    water_folder.add(guiControls, 'canopyInterception', 0.0, 2.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'canopyInterception'), guiControls.canopyInterception);
+      })
+      .name('Canopy Interception');
+
+    water_folder.add(guiControls, 'urbanHeatIslandStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'urbanHeatIslandStrength'), guiControls.urbanHeatIslandStrength);
+      })
+      .name('Urban Heat Island');
 
     var precipitation_folder = datGui.addFolder('Precipitation');
 
@@ -4119,6 +4211,55 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'aerosolLoad'), guiControls.aerosolLoad);
       })
       .name('Aerosol Load');
+
+    precipitation_folder.add(guiControls, 'entrainmentRate', 0.2, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'entrainmentRate'), guiControls.entrainmentRate);
+      })
+      .name('Entrainment Rate');
+
+    precipitation_folder.add(guiControls, 'downdraftCoolingMult', 0.2, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'downdraftCoolingMult'), guiControls.downdraftCoolingMult);
+      })
+      .name('Downdraft Cooling');
+
+    precipitation_folder.add(guiControls, 'microburstStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'microburstStrength'), guiControls.microburstStrength);
+      })
+      .name('Microburst Strength');
+
+    precipitation_folder.add(guiControls, 'lightningBranching', 0.2, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningBranching'), guiControls.lightningBranching);
+      })
+      .name('Lightning Branching');
+
+    precipitation_folder.add(guiControls, 'lightningAnvilDrift', 0.0, 2.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningAnvilDrift'), guiControls.lightningAnvilDrift);
+      })
+      .name('Lightning Anvil Drift');
+
+    precipitation_folder.add(guiControls, 'precipitationSizeSpectrum', 0.2, 2.5, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationSizeSpectrum'), guiControls.precipitationSizeSpectrum);
+      })
+      .name('Size Spectrum');
+
+    precipitation_folder.add(guiControls, 'hailShatterFactor', 0.0, 2.5, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'hailShatterFactor'), guiControls.hailShatterFactor);
+      })
+      .name('Hail Shatter');
       
     precipitation_folder.add(guiControls, 'snowDensity', 0.1, 0.9, 0.01)
       .onChange(function() {

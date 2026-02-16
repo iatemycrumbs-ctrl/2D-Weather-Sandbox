@@ -39,6 +39,10 @@ uniform float iterNum; // used as seed for random function
 
 uniform float dynamicWaterTemperature;
 uniform float precipitationRecycling;
+uniform float surfaceRunoffRate;
+uniform float soilInfiltrationRate;
+uniform float canopyInterception;
+uniform float urbanHeatIslandStrength;
 
 layout(location = 0) out vec4 base;
 layout(location = 1) out vec4 water;
@@ -355,6 +359,7 @@ void main()
         // nobreak!
       case WALLTYPE_URBAN:
         water[SMOKE] += 0.000002; // Urban produces smog
+        base[TEMPERATURE] += 0.000010 * urbanHeatIslandStrength;
         // nobreak!
       case WALLTYPE_LAND:
         if (wall[VERT_DISTANCE] <= wallVerticalInfluence) {
@@ -427,7 +432,11 @@ void main()
           }
         }
       case WALLTYPE_LAND:                                                                                          // no break,can also be fire or urban:
-        water[SOIL_MOISTURE] = clamp(water[SOIL_MOISTURE] + precipDeposition[RAIN_DEPOSITION] * 0.1, 0.0, 1000.0); // rain accumulation
+        float canopyBlock = map_rangeC(float(wall[VEGETATION]), 0.0, 127.0, 0.0, 0.35) * canopyInterception;
+        float effectiveRain = precipDeposition[RAIN_DEPOSITION] * max(1.0 - canopyBlock, 0.35);
+        float infiltration = effectiveRain * 0.1 * soilInfiltrationRate;
+        float runoff = max(effectiveRain - infiltration, 0.0) * 0.04 * surfaceRunoffRate;
+        water[SOIL_MOISTURE] = clamp(water[SOIL_MOISTURE] + infiltration - runoff, 0.0, 1000.0); // rain accumulation
         water[SNOW] = clamp(water[SNOW] + precipDeposition[SNOW_DEPOSITION] * snowMassToHeight, 0.0, 4000.0);      // snow accumulation in cm
 
 

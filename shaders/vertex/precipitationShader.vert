@@ -48,6 +48,13 @@ uniform float precipitationEffectMult;
 uniform float lightningGroundBias;
 uniform float stormOrganization;
 uniform float aerosolLoad;
+uniform float entrainmentRate;
+uniform float downdraftCoolingMult;
+uniform float microburstStrength;
+uniform float lightningBranching;
+uniform float lightningAnvilDrift;
+uniform float precipitationSizeSpectrum;
+uniform float hailShatterFactor;
 uniform float snowDensity;        // 0.2 - 0.5
 uniform float fallSpeed;          // 0.0003
 uniform float growthRate0C;       // 0.0005
@@ -104,7 +111,9 @@ void main()
 
     float cloudExcess = max(water[CLOUD] - threshold, 0.0);
     float instability = map_rangeC(-base[PRESSURE], -0.05, 0.15, 0.6, 1.35);
-    float baseSpawnMass = clamp((nominalSpawnMass + cloudExcess * 0.07) * instability, 0.05, 0.34);
+    float sizeSpectrumMass = map_rangeC(precipitationSizeSpectrum, 0.2, 2.5, 0.75, 1.45);
+    float entrainmentSuppression = map_rangeC(entrainmentRate, 0.2, 3.0, 1.20, 0.68);
+    float baseSpawnMass = clamp((nominalSpawnMass + cloudExcess * 0.07) * instability * sizeSpectrumMass * entrainmentSuppression, 0.04, 0.42);
 
     if (water[CLOUD] > threshold && base[TEMPERATURE] < 2500.0) {
       float inactiveFrac = clamp(inactiveDroplets / max(numDroplets, 1.0), 0.0, 1.0);
@@ -113,11 +122,12 @@ void main()
 
       float moistureSupport = map_rangeC(water[TOTAL], 2.0, 24.0, 0.35, 1.25);
       float orographicBoost = map_rangeC(abs(base[VY]), 0.0, 0.020, 0.9, 1.45);
+      float downdraftEnhancement = map_rangeC(max(-base[VY], 0.0), 0.0, 0.018, 1.0, 1.0 + downdraftCoolingMult * 0.45);
       float spawnChance = cloudExcess * spawnChanceMult * resolution.x * resolution.y;
       spawnChance /= (inactiveDroplets * spawnLimiter + 24.0);
       float organizationBoost = map_rangeC(stormOrganization, 0.2, 2.5, 0.65, 1.9);
       float aerosolSpawnFactor = map_rangeC(aerosolLoad, 0.2, 2.5, 1.15, 0.72);
-      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.35, 1.8) * moistureSupport * orographicBoost * precipitationEffectMult * organizationBoost * aerosolSpawnFactor;
+      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.35, 1.8) * moistureSupport * orographicBoost * downdraftEnhancement * precipitationEffectMult * organizationBoost * aerosolSpawnFactor;
       float spawnFloor = clamp(1.0 / max(numDroplets, 1.0), 0.000001, 0.0015) * precipitationEffectMult;
       spawnChance = clamp(spawnChance, spawnFloor, 0.92);
 
@@ -162,7 +172,8 @@ void main()
           float organizationElectric = map_rangeC(stormOrganization, 0.2, 2.5, 0.65, 1.8);
           float aerosolElectric = map_rangeC(aerosolLoad, 0.2, 2.5, 0.7, 1.25);
           lightningSpawnChance *= cgBoost * organizationElectric * aerosolElectric;
-          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.40);
+          lightningSpawnChance *= map_rangeC(lightningBranching, 0.2, 3.0, 0.70, 1.65);
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.48);
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval && strikeRand < lightningSpawnChance) {
@@ -172,7 +183,9 @@ void main()
 
             bool isIC = random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity)) < icProb;
             float icYOffset = map_rangeC(random2d(spawnSeed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.04, 0.24);
-            feedback.xy = vec2(texCoord.x, isIC ? min(texCoord.y + icYOffset, 0.96) : texCoord.y);
+            float anvilShift = (random2d(spawnSeed * 5.11 + vec2(iterNum * 0.004)) - 0.5) * texelSize.x * 120.0 * lightningAnvilDrift;
+            float shiftedX = mod(texCoord.x + anvilShift + 1.0, 1.0);
+            feedback.xy = vec2(shiftedX, isIC ? min(texCoord.y + icYOffset, 0.96) : texCoord.y);
             feedback[START_ITERNUM] = iterNum;
 
             float flashIntensity = cloudPlusPrecipDensity * 0.24 + electricPotential * 1.55 + random2d(texCoord * 31.7) * 0.30;
@@ -236,6 +249,7 @@ void main()
         newMass[WATER] = newMass[WATER] * 0.15 + newMass[ICE] * 0.25;
         newMass[ICE] *= 0.45;
         newDensity = min(max(newDensity, 1.05), 1.35);
+        deposition[RAIN_DEPOSITION] += newMass[ICE] * hailShatterFactor * 0.06;
 
         newPos.y = -1.0 + texelSize.y * (1.5 + random2d(vec2(iterNum, texCoord.x)) * 6.0);
         newPos.x = mod(newPos.x + (random2d(vec2(iterNum * 0.31, texCoord.y)) - 0.5) * texelSize.x * 18.0 + 1.0, 2.0) - 1.0;
@@ -319,7 +333,8 @@ void main()
 
       // Update position
       // move with air    * 2. because droplet position goes from -1. to 1
-      newPos += base.xy / resolution * 2.;
+      float microburstPush = max(-base[VY], 0.0) * microburstStrength;
+      newPos += vec2(base.x, base.y - microburstPush * 0.0015) / resolution * 2.;
       newPos.y -= fallSpeed * newDensity * sqrt(totalMass / surfaceArea); // fall speed relative to air
       /*
        // falling at fixed speed:
