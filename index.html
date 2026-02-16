@@ -475,10 +475,64 @@
             font-size: 0.82rem;
         }
 
+        .intro-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .intro-kpi {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(8, 22, 40, 0.78);
+            border: 1px solid rgba(105, 198, 255, 0.35);
+        }
+
+        .intro-kpi b {
+            display: block;
+            font-size: 1.1rem;
+            color: #9de8ff;
+            margin-bottom: 2px;
+        }
+
+        .intro-kpi span {
+            font-size: 0.82rem;
+            color: rgba(228, 244, 255, 0.85);
+        }
+
+        .launch-pipeline {
+            margin-top: 14px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(119, 195, 255, 0.30);
+            background: rgba(5, 18, 33, 0.65);
+            display: grid;
+            gap: 8px;
+        }
+
+        .launch-pipeline .step {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 0.9rem;
+            color: rgba(230, 241, 255, 0.88);
+        }
+
+        .launch-pipeline .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #6be6ff;
+            box-shadow: 0 0 8px rgba(104, 231, 255, 0.85);
+            flex: 0 0 auto;
+        }
+
         @media (max-width: 1050px) {
             .intro-hero,
             .intro-top,
-            .controls-workspace {
+            .controls-workspace,
+            .intro-kpi-grid {
                 grid-template-columns: 1fr;
             }
 
@@ -515,16 +569,22 @@
 
         <div class="intro-hero">
             <div class="intro-hero-card">
-                <h2>Build storms from real atmospheric data</h2>
-                <p>Choose a sounding, tune simulation scale, preview generated terrain, then launch and sculpt live weather in real time.</p>
+                <h2>Atmospheric Command Deck</h2>
+                <p>Import real soundings, configure a large-domain mesoscale sandbox, and launch a high-fidelity weather run with live terrain + microphysics preview.</p>
+                <div class="intro-kpi-grid">
+                    <div class="intro-kpi"><b>GPU Solver</b><span>Multiphase fluids + lightning</span></div>
+                    <div class="intro-kpi"><b>Live Tools</b><span>Stations, balloons, thermal forcing</span></div>
+                    <div class="intro-kpi"><b>Scale</b><span>From local cell to synoptic setup</span></div>
+                </div>
             </div>
             <div class="intro-panel">
-                <b>What's new</b>
-                <ul>
-                    <li>Redesigned startup interface for faster setup</li>
-                    <li>Improved terrain generation consistency</li>
-                    <li>Refined lightning and precipitation behavior</li>
-                </ul>
+                <b>Launch Pipeline</b>
+                <div class="launch-pipeline">
+                    <div class="step"><span class="dot"></span>Pick preset or station sounding</div>
+                    <div class="step"><span class="dot"></span>Set domain resolution and height</div>
+                    <div class="step"><span class="dot"></span>Inspect sounding + terrain seed</div>
+                    <div class="step"><span class="dot"></span>Start simulation and open controls panel</div>
+                </div>
             </div>
         </div>
 
@@ -567,9 +627,9 @@
         <div class="controls-workspace">
             <div class="controls-stack">
                 <form id="startBtn" class="control-card" oninput="updateSetupSliders();">
-                    <h3>Simulation Setup</h3>
+                    <h3>Simulation Setup Matrix</h3>
                     <div class="resolution-warning">
-                        <p>Choose a resolution — higher values improve detail but increase GPU load.</p>
+                        <p>Choose domain resolution and altitude. Higher values increase model fidelity, complexity, and GPU cost.</p>
                     </div>
 
                     <table class="resolution-table">

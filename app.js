@@ -386,6 +386,9 @@ const guiControls_default = {
   mountainWaveStrength : 1.0,
   vortexStretching : 1.0,
   ageostrophicFlow : 1.0,
+  moistBuoyancyBoost : 1.0,
+  gravityCurrentStrength : 1.0,
+  shearProduction : 1.0,
   globalEffectsStartAlt : 0,
   globalEffectsEndAlt : 10000,
   globalDrying : 0.000000, // 0.000010
@@ -3768,6 +3771,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'mountainWaveStrength'), guiControls.mountainWaveStrength);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'vortexStretching'), guiControls.vortexStretching);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'ageostrophicFlow'), guiControls.ageostrophicFlow);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'moistBuoyancyBoost'), guiControls.moistBuoyancyBoost);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityCurrentStrength'), guiControls.gravityCurrentStrength);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
     gl.useProgram(lightingProgram);
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'greenhouseGases'), guiControls.greenhouseGases);
@@ -3938,6 +3944,27 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'ageostrophicFlow'), guiControls.ageostrophicFlow);
       })
       .name('Ageostrophic Flow');
+
+    fluidParams_folder.add(guiControls, 'moistBuoyancyBoost', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'moistBuoyancyBoost'), guiControls.moistBuoyancyBoost);
+      })
+      .name('Moist Buoyancy Boost');
+
+    fluidParams_folder.add(guiControls, 'gravityCurrentStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityCurrentStrength'), guiControls.gravityCurrentStrength);
+      })
+      .name('Gravity Current Strength');
+
+    fluidParams_folder.add(guiControls, 'shearProduction', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
+      })
+      .name('Shear Production');
 
     fluidParams_folder.add(guiControls, 'globalDrying', 0.0, 0.0001, 0.000001)
       .onChange(function() {
@@ -6237,10 +6264,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.useProgram(velocityProgram);
   gl.uniform1i(gl.getUniformLocation(velocityProgram, 'baseTex'), 0);
   gl.uniform1i(gl.getUniformLocation(velocityProgram, 'wallTex'), 1);
+  gl.uniform1i(gl.getUniformLocation(velocityProgram, 'waterTex'), 2);
   gl.uniform2f(gl.getUniformLocation(velocityProgram, 'texelSize'), texelSizeX, texelSizeY);
   gl.uniform1f(gl.getUniformLocation(velocityProgram, 'coriolisStrength'), guiControls.coriolisStrength);
   gl.uniform1f(gl.getUniformLocation(velocityProgram, 'turbulentMix'), guiControls.turbulentMix);
   gl.uniform1f(gl.getUniformLocation(velocityProgram, 'jetStreamCoupling'), guiControls.jetStreamCoupling);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'moistBuoyancyBoost'), guiControls.moistBuoyancyBoost);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityCurrentStrength'), guiControls.gravityCurrentStrength);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
 
   // gl.uniform1fv(gl.getUniformLocation(velocityProgram, 'initial_T'), initial_T);
   gl.uniform4fv(gl.getUniformLocation(velocityProgram, 'initial_Tv'), initial_T);
@@ -6577,6 +6608,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             gl.bindTexture(gl.TEXTURE_2D, baseTexture_0);
             gl.activeTexture(gl.TEXTURE1);
             gl.bindTexture(gl.TEXTURE_2D, wallTexture_0);
+            gl.activeTexture(gl.TEXTURE2);
+            gl.bindTexture(gl.TEXTURE_2D, waterTexture_0);
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.NONE, gl.COLOR_ATTACHMENT2 ]);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);

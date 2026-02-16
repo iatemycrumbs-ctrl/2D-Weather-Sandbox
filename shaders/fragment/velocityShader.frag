@@ -9,6 +9,7 @@ in vec2 texCoordXpY0; // right
 in vec2 texCoordX0Yp; // up
 
 uniform sampler2D baseTex;
+uniform sampler2D waterTex;
 uniform isampler2D wallTex;
 
 uniform float dragMultiplier;
@@ -21,6 +22,9 @@ uniform float gravityWaveDrag;
 uniform float mountainWaveStrength;
 uniform float vortexStretching;
 uniform float ageostrophicFlow;
+uniform float moistBuoyancyBoost;
+uniform float gravityCurrentStrength;
+uniform float shearProduction;
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -43,6 +47,8 @@ void main()
   vec4 baseX0Yp = texture(baseTex, texCoordX0Yp);
   vec4 baseXmY0 = texture(baseTex, vec2(texCoord.x - texelSize.x, texCoord.y));
   vec4 baseX0Ym = texture(baseTex, vec2(texCoord.x, texCoord.y - texelSize.y));
+  vec4 water = texture(waterTex, texCoord);
+  vec4 waterX0Ym = texture(waterTex, vec2(texCoord.x, texCoord.y - texelSize.y));
 
   wall = texture(wallTex, texCoord);
   ivec4 wallX0Yp = texture(wallTex, texCoordX0Yp);
@@ -103,6 +109,18 @@ void main()
 
     vec2 geostrophicAdj = vec2(-dTdy, -dTdx) * (0.0000007 * ageostrophicFlow);
     base.xy += geostrophicAdj;
+
+    // Complex moisture / density-current / shear production coupling
+    float moistureAnomaly = clamp((water[TOTAL] - 8.0) * 0.09, -0.7, 1.2);
+    float cloudBuoyancy = clamp(water[CLOUD] * 0.16 + moistureAnomaly * 0.45, -0.3, 1.4);
+    float coldPoolSignal = clamp((waterX0Ym[PRECIPITATION] - water[PRECIPITATION]) * 2.2 + (waterX0Ym[CLOUD] - water[CLOUD]) * 0.6, -1.1, 1.4);
+
+    base[VY] += cloudBuoyancy * 0.00009 * moistBuoyancyBoost;
+    base[VX] += -sign(coldPoolSignal) * abs(coldPoolSignal) * 0.00006 * gravityCurrentStrength;
+
+    float verticalShear = abs(baseX0Yp[VX] - baseX0Ym[VX]) + abs(baseXpY0[VY] - baseXmY0[VY]);
+    float shearMixing = min(verticalShear * 0.06, 2.0) * shearProduction;
+    base.xy += laplacianV * (0.0045 * shearMixing);
 
     // quadratic drag
     // base[VX] -= base[VX] * base[VX] * base[VX] * base[VX] * base[VX] *
