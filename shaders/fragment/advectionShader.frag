@@ -337,6 +337,15 @@ void main()
           }
           break;
 
+        case 24: // skyscraper tool (dense high-rise district proxy)
+          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL) &&
+              texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) {
+            wall[TYPE] = WALLTYPE_INDUSTRIAL;
+            wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 0.0, 8.0));
+            water[SOIL_MOISTURE] = max(water[SOIL_MOISTURE] - 0.8, 0.0);
+          }
+          break;
+
         case 20:                                                                                                      // add soil moisture
           if (wall[DISTANCE] == 0 && wall[TYPE] != WALLTYPE_WATER && texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) { // if land wall and no wall above
             water[SOIL_MOISTURE] += userInputValues[BRUSH_INTENSITY] * 10.0;
@@ -380,8 +389,8 @@ void main()
           } else if (userInputType == 15) {
             if (wall[TYPE] == WALLTYPE_RUNWAY) // remove runway
               wall[TYPE] = WALLTYPE_LAND;
-          } else if (userInputType == 16) {
-            if (wall[TYPE] == WALLTYPE_INDUSTRIAL) // remove industry
+          } else if (userInputType == 16 || userInputType == 24) {
+            if (wall[TYPE] == WALLTYPE_INDUSTRIAL) // remove industry/skyscraper
               wall[TYPE] = WALLTYPE_LAND;
           } else if (userInputType == 20) {        // remove moisture
             water[SOIL_MOISTURE] += userInputValues[BRUSH_INTENSITY] * 10.0;

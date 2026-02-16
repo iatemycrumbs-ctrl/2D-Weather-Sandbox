@@ -528,6 +528,21 @@
             flex: 0 0 auto;
         }
 
+        .control-card, .intro-panel, .intro-hero-card {
+            animation: introFloat 8s ease-in-out infinite;
+        }
+
+        .control-card:hover, .intro-panel:hover, .intro-hero-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 36px rgba(0,0,0,0.35), 0 0 22px rgba(90,205,255,0.20);
+            transition: transform 220ms ease, box-shadow 220ms ease;
+        }
+
+        @keyframes introFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-2px); }
+        }
+
         @media (max-width: 1050px) {
             .intro-hero,
             .intro-top,
@@ -670,6 +685,18 @@
                     <div class="control-label">Continue from an existing .weathersandbox file.</div>
                     <label for="fileInput">Select file:</label>
                     <input type="file" id="fileInput" name="fileInput" accept=".weathersandbox " onchange="loadData()" />
+                </div>
+
+
+                <div class="control-card">
+                    <h3>Advanced Panel</h3>
+                    <div class="control-label">High-end experimental systems are available after launch in the GUI:</div>
+                    <ul>
+                        <li>Tornado diagnostics + storm-front controls</li>
+                        <li>Dynamic charge-separation electric field visualization</li>
+                        <li>Skyscraper tool + SAN (sand) interaction forcing</li>
+                        <li>Mobile precipitation + full-bolt lightning safety tuning</li>
+                    </ul>
                 </div>
             </div>
 

@@ -160,11 +160,11 @@ void main()
       float flatlandFactor = 1.0 - smoothstep(0.06, 0.24, slopeProbe);
       float urbanSuitability = lowlandFactor * flatlandFactor * smoothstep(0.45, 0.92, urbanNoise);
 
-      float soilMoisture = mix(32.0, 8.0, smoothstep(0.0, 0.20, slopeProbe));
+      float soilMoisture = mix(38.0, 14.0, smoothstep(0.0, 0.20, slopeProbe));
       soilMoisture *= mix(0.70, 1.20, fertileBand);
-      soilMoisture *= mix(0.75, 1.15, aridNoise);
+      soilMoisture *= mix(0.88, 1.18, aridNoise);
       soilMoisture *= mix(1.0, 0.72, urbanSuitability);
-      water[SOIL_MOISTURE] = clamp(soilMoisture, 2.0, 45.0);
+      water[SOIL_MOISTURE] = clamp(soilMoisture, 4.0, 55.0);
 
       float vegetation = 18.0 + fertileBand * 110.0 - slopeProbe * 55.0;
       vegetation += (noise2(vec2(x * 2.4 + seedB, seedA * 0.43)) - 0.5) * 30.0;

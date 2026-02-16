@@ -112,14 +112,16 @@ void main()
 
 
     float precipCoalescence = max(-precipFeedback[VAPOR], 0.); // how much cloud water turns into rain
+    float precipMassSink = max(precipFeedback[MASS], 0.0);
 
-    water[CLOUD] -= precipCoalescence * 0.30;
-    water[TOTAL] -= precipCoalescence * 0.22;
+    // cloud depletion now directly follows precip production and retained falling hydrometeors
+    water[CLOUD] -= precipCoalescence * 0.48 + precipMassSink * 0.35;
+    water[TOTAL] -= precipCoalescence * 0.28 + precipMassSink * 0.09;
 
     float precipEvaporation = max(precipFeedback[VAPOR], 0.);
 
     water[TOTAL] += precipEvaporation; // evaporating rain adds water vapor to air
-    water[CLOUD] += precipEvaporation * 0.045 * precipitationRecycling;
+    water[CLOUD] += precipEvaporation * 0.028 * precipitationRecycling;
 
 
     //  0.004 for rain visualisation
@@ -135,6 +137,10 @@ void main()
     water[SMOKE] -= max((water[SMOKE] - 4.0) * 0.01, 0.); // dissipate fire color to smoke
 
     water[SMOKE] = max(water[SMOKE], 0.0);                // snow and smoke can't go below 0
+
+
+    water[CLOUD] = max(water[CLOUD], 0.0);
+    water[TOTAL] = max(water[TOTAL], 0.0);
 
     if (water[SMOKE] > 4.0) {
       water[SMOKE] -= water[PRECIPITATION] * 0.02; // falling precipitation extinguishes flames

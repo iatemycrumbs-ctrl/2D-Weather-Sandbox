@@ -54,6 +54,8 @@ uniform float flashlightIntensity;
 uniform float flashlightFocus;
 uniform float flashlightRange;
 uniform float radiationHaze;
+uniform float electricFieldVizStrength;
+uniform float dynamicChargeSeparation;
 
 uniform vec3 view;   // Xpos  Ypos    Zoom
 uniform vec4 cursor; // Xpos   Ypos  Size   type
@@ -301,11 +303,15 @@ vec4 getAirColor(vec2 fragCoordIn)
   float lightningOnLight = lightningOnLightBrightness / (pow(length(dist), 2.) + 0.03);
   lightningOnLight *= abs(currentLightningIntensity);
 
-  // Electric field / corona visualization around the active channel
+  // Electric field / dynamic charge-separation visualization
   float electricFieldGlow = abs(currentLightningIntensity) * 0.0000035 * lightningBloomStrength / (pow(length(dist), 1.25) + 0.045);
+  float chargeGradient = length(vec2(dFdx(water[CLOUD] + water[PRECIPITATION]), dFdy(water[CLOUD] + water[PRECIPITATION])));
+  float chargeShear = length(vec2(dFdx(base[VY]), dFdy(base[VX])));
+  float chargeSeparation = (chargeGradient * 3.6 + chargeShear * 120.0 + abs(texture(curlTex, texCoord).r) * 2.0) * dynamicChargeSeparation;
+  float ambientField = smoothstep(0.05, 0.65, chargeSeparation) * electricFieldVizStrength;
   vec3 coronaColor = mix(vec3(0.45, 0.65, 1.0), vec3(1.0, 0.85, 0.55), clamp(lightningColorTempMult, 0.0, 1.5));
 
-  onLight += vec3(lightningOnLight) + coronaColor * electricFieldGlow;
+  onLight += vec3(lightningOnLight) + coronaColor * (electricFieldGlow * electricFieldVizStrength + ambientField * 0.018);
 
   // Reworked physically-inspired rainbow: appears opposite the sun in rain-rich air.
   float rainRich = clamp(water[PRECIPITATION] * 2.2 + cloudOpacity * 0.6, 0.0, 1.0);
@@ -425,9 +431,11 @@ void main()
 
       vec4 baseX0Yp = texture(baseTex, texCoordX0Yp);
       float windSpeed = baseX0Yp[VX] * 10.;
+      float precipChop = clamp(water[PRECIPITATION] * 0.7 + abs(baseX0Yp[VY]) * 18.0, 0.0, 1.4);
+      float swell = 1.0 + precipChop * 0.35 + abs(windSpeed) * 0.05;
 
       // combine based on wind direction
-      float waterLevel = 0.8 + waveSignalL * max(-windSpeed, 0.) + waveSignalR * max(windSpeed, 0.);
+      float waterLevel = 0.8 + (waveSignalL * max(-windSpeed, 0.) + waveSignalR * max(windSpeed, 0.)) * swell;
 
       if (wall[VERT_DISTANCE] == 0 && fract(fragCoord.y) > waterLevel) { // air
         vec4 airColor = getAirColor(fragCoord + vec2(0., 0.5));
