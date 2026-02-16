@@ -142,14 +142,14 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   lightningTexCoord.y -= pos.y;
 
-  float scaleMult = 1. / max(pos.y, 0.08); // clamp for mobile precision so full bolt remains visible
+  float scaleMult = 1. / max(pos.y, 0.05); // stronger clamp for mobile precision so full bolt remains visible
 
   lightningTexCoord.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
   lightningTexCoord.y *= -scaleMult;
 
   lightningTexCoord.x += 0.5;                                                                                               // center lightning bolt
 
-  if (lightningTexCoord.x < -0.35 || lightningTexCoord.x > 1.35 || lightningTexCoord.y < -0.18 || lightningTexCoord.y > 1.35) // prevent edge effect when mipmapping
+  if (lightningTexCoord.x < -0.50 || lightningTexCoord.x > 1.50 || lightningTexCoord.y < -0.30 || lightningTexCoord.y > 1.50) // prevent edge effect when mipmapping
     return vec3(0);
 
   float pixVal = texture(lightningTex, lightningTexCoord).r;
@@ -266,7 +266,7 @@ vec4 getAirColor(vec2 fragCoordIn)
   float currentLightningIntensity = lightningIntensityOverTime(lightningTime, lightningPos, lightningData[INTENSITY]);
 
 
-  if (lightningData[INTENSITY] > 1.0) { // CG
+  if (lightningData[INTENSITY] > 0.25) { // show full bolt even for weaker mobile-sampled strikes
     emittedLight += displayLightning(lightningPos, lightningTime, currentLightningIntensity);
     emittedLight /= 1. + cloudDensity * 100.0;
   }

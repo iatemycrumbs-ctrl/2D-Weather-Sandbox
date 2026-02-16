@@ -463,12 +463,23 @@ void main()
 
           // dynamic vegetation
 
-          int vegetationGrowthRate = int(water[SOIL_MOISTURE] * sqrt(lightAboveSurface[SUNLIGHT]) * 0.01);
+          // Reworked vegetation system: climate carrying capacity + stress decay + slow recovery.
+          float tempSuitability = map_rangeC(realTempAboveSurface, CtoK(-5.0), CtoK(28.0), 0.0, 1.0);
+          float moistureSuitability = map_rangeC(water[SOIL_MOISTURE], 3.0, 40.0, 0.0, 1.0);
+          float snowSuppression = map_rangeC(water[SNOW], 0.0, 120.0, 1.0, 0.25);
+          float climateCapacity = clamp(tempSuitability * moistureSuitability * snowSuppression, 0.0, 1.0) * 127.0;
+
+          int vegetationGrowthRate = int(climateCapacity * 0.05 + sqrt(max(lightAboveSurface[SUNLIGHT], 0.0)) * 2.5);
 
           if (vegetationGrowthRate > 0 && int(iterNum) % ((100 / vegetationGrowthRate) * 100) == 0) {      // growth interval
-            if (int(map_rangeC(realTempAboveSurface, CtoK(0.0), CtoK(25.0), 0., 127.)) > wall[VEGETATION]) // limit vegetation growth at lower temperatures
+            if (int(climateCapacity) > wall[VEGETATION])
               wall[VEGETATION] += 1;
           }
+
+          // gradual dieback under persistent drought/heat stress
+          float droughtStress = max(8.0 - water[SOIL_MOISTURE], 0.0) * map_rangeC(realTempAboveSurface, CtoK(16.0), CtoK(38.0), 0.0, 1.0);
+          if (droughtStress > 0.0 && int(iterNum) % (80 + int(220.0 / (droughtStress + 1.0))) == 0)
+            wall[VEGETATION] = max(wall[VEGETATION] - 1, 0);
 
           // Tree and structure wind physics (gust damage / flex proxy)
           float windSpeed = length(baseAboveSurface.xy);
@@ -524,6 +535,17 @@ void main()
 
             if (strikeDistanceCells <= strikeRadiusCells && random2d(vec2(iterNum * 0.97, fragCoord.x + fragCoord.y * 7.0)) < ignitionChance) {
               wall[TYPE] = WALLTYPE_FIRE;
+            }
+
+            // Lightning ground explosion: shock-heating, debris/smoke, and nearby tree ignition.
+            float explosionRadiusCells = strikeRadiusCells * 1.55;
+            if (strikeDistanceCells <= explosionRadiusCells) {
+              float blast = 1.0 - strikeDistanceCells / max(explosionRadiusCells, 0.001);
+              base[TEMPERATURE] += blast * lightningData[INTENSITY] * 0.004;
+              water[SMOKE] += blast * 0.22;
+
+              if (wall[TYPE] == WALLTYPE_LAND && wall[VEGETATION] > 28 && random2d(vec2(iterNum * 0.41, fragCoord.x * 0.31 + fragCoord.y * 0.27)) < blast * 0.45)
+                wall[TYPE] = WALLTYPE_FIRE;
             }
           }
           //}

@@ -602,10 +602,12 @@ function maxWater(Td)
 
 function dewpoint(W)
 {
-  //  if (W < 0.00001) // can't remember why this was here...
-  //    return 0.0;
-  //  else
-  return wf_devider * Math.pow(W, 1.0 / wf_pow);
+  // Reworked dew point approximation from absolute humidity (g/m^3) to improve realism.
+  const absHumidity = Math.max(W, 0.0001);
+  const vaporPressure_hPa = clamp(absHumidity * 0.40, 0.01, 110.0);
+  const lnRatio = Math.log(vaporPressure_hPa / 6.112);
+  const TdC = (243.5 * lnRatio) / (17.67 - lnRatio);
+  return CtoK(clamp(TdC, -90.0, 55.0));
 }
 
 function relativeHumd(T, W) { return (W / maxWater(T)) * 100.0; }
@@ -1518,6 +1520,7 @@ class LoadingBar
   #underBar;
   #percent;
   #description;
+  #title;
 
   constructor(percentIn)
   {
@@ -1529,29 +1532,50 @@ class LoadingBar
     // create html
     this.loadingBar = document.createElement('div');
     this.bar = document.createElement('div');
-    this.loadingBar.appendChild(this.bar);
-
+    this.title = document.createElement('div');
     this.underBar = document.createElement('div');
+
+    this.loadingBar.appendChild(this.title);
+    this.loadingBar.appendChild(this.bar);
     this.loadingBar.appendChild(this.underBar);
 
-    this.loadingBar.style.width = '100%';
-    this.loadingBar.style.height = '100px';
-    this.loadingBar.style.color = 'white';
+    this.loadingBar.style.width = 'min(760px, 92vw)';
+    this.loadingBar.style.height = '170px';
+    this.loadingBar.style.color = '#d7f4ff';
     this.loadingBar.style.textAlign = 'center';
-    this.loadingBar.style.lineHeight = '50px';
-    this.loadingBar.style.backgroundColor = 'gray';
-    this.loadingBar.style.marginTop = '400px';
-    this.loadingBar.style.position = 'absolute';
-    this.loadingBar.style.zIndex = '2';
+    this.loadingBar.style.background = 'rgba(8,16,34,0.75)';
+    this.loadingBar.style.backdropFilter = 'blur(8px)';
+    this.loadingBar.style.border = '1px solid rgba(90,225,255,0.40)';
+    this.loadingBar.style.borderRadius = '16px';
+    this.loadingBar.style.boxShadow = '0 14px 38px rgba(0,0,0,0.50), inset 0 0 22px rgba(41,190,255,0.12)';
+    this.loadingBar.style.position = 'fixed';
+    this.loadingBar.style.left = '50%';
+    this.loadingBar.style.top = '50%';
+    this.loadingBar.style.transform = 'translate(-50%, -50%)';
+    this.loadingBar.style.padding = '14px 16px';
+    this.loadingBar.style.zIndex = '4';
+
+    this.title.style.height = '30px';
+    this.title.style.lineHeight = '30px';
+    this.title.style.fontSize = '16px';
+    this.title.style.letterSpacing = '1.2px';
+    this.title.style.fontWeight = '700';
+    this.title.style.textTransform = 'uppercase';
+    this.title.innerHTML = 'Initializing Weather Simulation';
 
     this.underBar.style.width = '100%';
-    this.underBar.style.height = '50px';
-    this.underBar.style.backgroundColor = 'black';
+    this.underBar.style.height = '30px';
+    this.underBar.style.lineHeight = '30px';
+    this.underBar.style.fontSize = '14px';
+    this.underBar.style.color = '#9bd9ff';
 
-    this.bar.style.height = '50px';
-
-    this.bar.style.backgroundColor = 'green';
+    this.bar.style.height = '44px';
+    this.bar.style.lineHeight = '44px';
+    this.bar.style.borderRadius = '10px';
+    this.bar.style.background = 'linear-gradient(90deg, #1b6fff, #2dd7ff)';
+    this.bar.style.boxShadow = '0 0 20px rgba(45,215,255,0.35)';
     this.bar.style.fontSize = '20px';
+    this.bar.style.fontWeight = '700';
 
     this.#update();
 
@@ -1609,7 +1633,7 @@ function setLoadingBar()
         element.parentNode.removeChild(element); // remove introscreen div
     }
 
-    document.body.style.backgroundColor = 'black';
+    document.body.style.backgroundColor = '#050b17';
 
     loadingBar = new LoadingBar(1);
 
@@ -4157,6 +4181,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     datGui.add(guiControls, 'paused').onChange(handlePause).name('Paused').listen();
     datGui.add(guiControls, 'download').name('Save Simulation to File');
+
+    // keep core controls visible when simulation starts
+    fluidParams_folder.open();
+    precipitation_folder.open();
+    lightning_folder.open();
+    display_folder.open();
 
     datGui.width = 400;
   }

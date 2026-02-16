@@ -107,7 +107,7 @@ void main()
       float spawnChance = cloudExcess * spawnChanceMult * resolution.x * resolution.y;
       spawnChance /= (inactiveDroplets * spawnLimiter + 24.0);
       spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.35, 1.8);
-      spawnChance = clamp(spawnChance, 0.0, 0.92);
+      spawnChance = clamp(spawnChance, 0.00002 * spawnChanceMult * resolution.x, 0.92);
 
       float nrmRand = random2d(spawnSeed * 1.31 + vec2(iterNum * 0.009, -iterNum * 0.007));
 
@@ -149,7 +149,7 @@ void main()
             gl_PointSize = 1.0;
             feedback.xy = texCoord;
             feedback[START_ITERNUM] = iterNum;
-            float flashIntensity = cloudPlusPrecipDensity * 0.24 + electricPotential * 1.25 + random2d(texCoord * 31.7) * 0.32;
+            float flashIntensity = cloudPlusPrecipDensity * 0.28 + electricPotential * 1.40 + random2d(texCoord * 31.7) * 0.35;
             feedback[INTENSITY] = clamp(flashIntensity, 0.08, 4.8);
             gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
           }
