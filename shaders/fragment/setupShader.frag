@@ -158,7 +158,7 @@ void main()
       float industrialNoise = noise2(vec2(x * 1.10 + seedB * 0.63, seedA * 0.39));
       float lowlandFactor = 1.0 - smoothstep(700.0, 1700.0, terrainHeightM);
       float flatlandFactor = 1.0 - smoothstep(0.06, 0.24, slopeProbe);
-      float urbanSuitability = lowlandFactor * flatlandFactor * smoothstep(0.55, 0.95, urbanNoise);
+      float urbanSuitability = lowlandFactor * flatlandFactor * smoothstep(0.45, 0.92, urbanNoise);
 
       float soilMoisture = mix(32.0, 8.0, smoothstep(0.0, 0.20, slopeProbe));
       soilMoisture *= mix(0.70, 1.20, fertileBand);
@@ -171,11 +171,11 @@ void main()
       vegetation *= mix(1.0, 0.38, urbanSuitability);
       wall[VEGETATION] = int(clamp(vegetation, 0.0, 127.0));
 
-      if (urbanSuitability > 0.62) {
+      if (urbanSuitability > 0.48) {
         wall[TYPE] = WALLTYPE_URBAN;
         wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 6.0, 72.0));
 
-        if (industrialNoise > 0.86) {
+        if (industrialNoise > 0.72) {
           wall[TYPE] = WALLTYPE_INDUSTRIAL;
           wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 0.0, 18.0));
         }

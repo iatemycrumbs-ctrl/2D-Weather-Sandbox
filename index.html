@@ -655,11 +655,10 @@
                         <tr>
                             <td><b>Simulation height</b></td>
                             <td>
-                                <input type="range" min="5000" max="15000" value="12000" step="100" id="simHeightSel" />
+                                <input type="range" min="4000" max="22000" value="12000" step="100" id="simHeightSel" />
                                 <output id="simHeightShow"></output>
                             </td>
-                            <td><i id="simHeightWarning" style="color:rgb(255, 61, 61); display: none;">Sim heights other than
-                                    12000 m are not optimized and may be buggy!</i></td>
+                            <td><i id="simHeightWarning" style="color:rgb(255, 61, 61); display: none;">Extreme heights may reduce stability/performance on some GPUs.</i></td>
                         </tr>
                     </table>
                     <input type="button" value="Create New Simulation" onclick="loadData ()" />

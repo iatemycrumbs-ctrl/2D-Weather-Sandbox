@@ -29,6 +29,7 @@ function updateSetupSliders()
   let simResX = Math.round(readNumericInput('simResSelX', 512));
   let simResY = Math.round(readNumericInput('simResSelY', 300));
   let simHeight = Math.round(readNumericInput('simHeightSel', 12000));
+  simHeight = clamp(simHeight, 4000, 22000);
 
   simResY = Math.max(simResY, 1);
 
@@ -37,7 +38,7 @@ function updateSetupSliders()
 
   const simWorldProperties = getEl('simWorldProperties');
   if (simWorldProperties)
-    simWorldProperties.innerHTML = 'cellHeight: ' + cellHeight.toFixed(1) + ' m  &nbsp&nbsp&nbsp   Simulation width: ' + (simWidth / 1000).toFixed(1) + ' km';
+    simWorldProperties.innerHTML = 'cellHeight: ' + cellHeight.toFixed(1) + ' m  &nbsp&nbsp&nbsp   Simulation width: ' + (simWidth / 1000).toFixed(1) + ' km' + ' &nbsp&nbsp&nbsp Vertical levels: ' + simResY;
 
   const simHeightWarning = getEl('simHeightWarning');
   if (simHeightWarning)
@@ -61,6 +62,19 @@ function updateSetupSliders()
 }
 
 var FPS = 60.0;
+
+
+const VALID_DISPLAY_MODES = new Set([
+  'DISP_TEMPERATURE', 'DISP_WATER', 'DISP_REAL', 'DISP_HORIVEL', 'DISP_VERTVEL',
+  'DISP_IRHEATING', 'DISP_IRDOWNTEMP', 'DISP_IRUPTEMP', 'DISP_PRECIPFEEDBACK_MASS',
+  'DISP_PRECIPFEEDBACK_HEAT', 'DISP_PRECIPFEEDBACK_VAPOR', 'DISP_PRECIPFEEDBACK_RAIN',
+  'DISP_PRECIPFEEDBACK_SNOW', 'DISP_SOIL_MOISTURE', 'DISP_CURL', 'DISP_AIRQUALITY'
+]);
+
+function sanitizeDisplayMode(mode)
+{
+  return VALID_DISPLAY_MODES.has(mode) ? mode : 'DISP_REAL';
+}
 
 
 function mixGeneric(a, b, t, {clamp = false} = {})
@@ -389,6 +403,10 @@ const guiControls_default = {
   moistBuoyancyBoost : 1.0,
   gravityCurrentStrength : 1.0,
   shearProduction : 1.0,
+  tornadoPotential : 1.0,
+  frontogenesisStrength : 1.0,
+  airplanePitchAuthority : 1.0,
+  airplaneThrottleResponse : 1.0,
   globalEffectsStartAlt : 0,
   globalEffectsEndAlt : 10000,
   globalDrying : 0.000000, // 0.000010
@@ -1586,6 +1604,7 @@ async function loadData()
     sim_res_x = Math.round(readNumericInput('simResSelX', 512));
     sim_res_y = Math.round(readNumericInput('simResSelY', 300));
     sim_height = Math.round(readNumericInput('simHeightSel', 12000));
+    sim_height = clamp(sim_height, 4000, 22000);
 
     NUM_DROPLETS = computeNumDroplets(sim_res_x, sim_res_y);
     SETUP_MODE = true;
@@ -1717,12 +1736,15 @@ function setLoadingBar()
 {
   return new Promise((resolve) => {
     var element = document.getElementById('IntroScreen');
+    var navEl = document.querySelector('.main-nav');
     if (element) {
       element.style.display = 'none';
       element.style.pointerEvents = 'none';
       if (element.parentNode)
         element.parentNode.removeChild(element); // remove introscreen div
     }
+    if (navEl)
+      navEl.style.display = 'none';
 
     document.body.style.backgroundColor = '#050b17';
 
@@ -3621,9 +3643,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       this.prevThrottle = this.throttle;
 
       if (upPressed) {
-        this.throttle += 0.01;
+        this.throttle += 0.01 * guiControls.airplaneThrottleResponse;
       } else if (downPressed) {
-        this.throttle -= 0.01;
+        this.throttle -= 0.01 * guiControls.airplaneThrottleResponse;
       }
 
       const [autopilotElevator, autopilotThrottle] = this.#autopilot.update(this.phys.angle * radToDeg, this.phys.pos.y, this.phys.vel, this.#IAS, this.calcVecToRunway(), this.#gearOnGround);
@@ -3647,7 +3669,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       } else if (gp) {
         this.elevator = -gp.axes[1];
       } else {                                                              // manual elevator control
-        this.elevator = (mouseY - canvas.height / 2) / canvas.height * 2.0; // pitch input -1.0 to +1.0
+        this.elevator = ((mouseY - canvas.height / 2) / canvas.height * 2.0) * guiControls.airplanePitchAuthority; // pitch input -1.0 to +1.0
       }
 
       // this.elevator /= 1.0 + Math.max(this.#airspeed - 80, 0.) * 0.01;          // limit elevator throw at higher airspeed
@@ -3774,6 +3796,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'moistBuoyancyBoost'), guiControls.moistBuoyancyBoost);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityCurrentStrength'), guiControls.gravityCurrentStrength);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'tornadoPotential'), guiControls.tornadoPotential);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'frontogenesisStrength'), guiControls.frontogenesisStrength);
     gl.useProgram(lightingProgram);
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'greenhouseGases'), guiControls.greenhouseGases);
@@ -3958,13 +3982,26 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityCurrentStrength'), guiControls.gravityCurrentStrength);
       })
       .name('Gravity Current Strength');
-
     fluidParams_folder.add(guiControls, 'shearProduction', 0.0, 3.0, 0.01)
       .onChange(function() {
         gl.useProgram(velocityProgram);
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
       })
       .name('Shear Production');
+
+    fluidParams_folder.add(guiControls, 'tornadoPotential', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'tornadoPotential'), guiControls.tornadoPotential);
+      })
+      .name('Tornado Potential');
+
+    fluidParams_folder.add(guiControls, 'frontogenesisStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'frontogenesisStrength'), guiControls.frontogenesisStrength);
+      })
+      .name('Storm Front Strength');
 
     fluidParams_folder.add(guiControls, 'globalDrying', 0.0, 0.0001, 0.000001)
       .onChange(function() {
@@ -4028,6 +4065,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         'Industrial' : 'TOOL_WALL_INDUSTRIAL',
         'Fire' : 'TOOL_WALL_FIRE',
         'Smoke / Dust' : 'TOOL_SMOKE',
+        'Sand (SAN)' : 'TOOL_SAND',
         'Soil Moisture' : 'TOOL_WALL_MOIST',
         'Vegetation' : 'TOOL_VEGETATION',
         'Snow' : 'TOOL_WALL_SNOW',
@@ -4052,6 +4090,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightRange'), guiControls.flashlightRange);
     });
+    UI_folder.add(guiControls, 'airplanePitchAuthority', 0.5, 2.2, 0.01).name('Airplane Pitch Authority');
+    UI_folder.add(guiControls, 'airplaneThrottleResponse', 0.4, 2.0, 0.01).name('Airplane Throttle Response');
     UI_folder.add(guiControls, 'allowCaves')
       .onChange(function() {
         gl.useProgram(boundaryProgram);
@@ -6272,6 +6312,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1f(gl.getUniformLocation(velocityProgram, 'moistBuoyancyBoost'), guiControls.moistBuoyancyBoost);
   gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityCurrentStrength'), guiControls.gravityCurrentStrength);
   gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'tornadoPotential'), guiControls.tornadoPotential);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'frontogenesisStrength'), guiControls.frontogenesisStrength);
 
   // gl.uniform1fv(gl.getUniformLocation(velocityProgram, 'initial_T'), initial_T);
   gl.uniform4fv(gl.getUniformLocation(velocityProgram, 'initial_Tv'), initial_T);
@@ -6525,6 +6567,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = 2;
         else if (guiControls.tool == 'TOOL_SMOKE')
           inputType = 3;
+        else if (guiControls.tool == 'TOOL_SAND')
+          inputType = 23;
         else if (guiControls.tool == 'TOOL_WIND')
           inputType = 4;
         else if (guiControls.tool == 'TOOL_WALL')
@@ -6551,6 +6595,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = 22;
 
         var intensity = guiControls.brushIntensity;
+        if (guiControls.tool == 'TOOL_SAND')
+          intensity *= 1.8;
 
         if (ctrlPressed) {
           intensity *= -1;
@@ -6868,6 +6914,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
 
+    guiControls.displayMode = sanitizeDisplayMode(guiControls.displayMode);
     if (guiControls.displayMode == 'DISP_REAL') {
 
       { //  Abient Light Calculation

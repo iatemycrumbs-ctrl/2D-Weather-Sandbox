@@ -25,6 +25,8 @@ uniform float ageostrophicFlow;
 uniform float moistBuoyancyBoost;
 uniform float gravityCurrentStrength;
 uniform float shearProduction;
+uniform float tornadoPotential;
+uniform float frontogenesisStrength;
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -121,6 +123,19 @@ void main()
     float verticalShear = abs(baseX0Yp[VX] - baseX0Ym[VX]) + abs(baseXpY0[VY] - baseXmY0[VY]);
     float shearMixing = min(verticalShear * 0.06, 2.0) * shearProduction;
     base.xy += laplacianV * (0.0045 * shearMixing);
+
+    // Tornado proxy: low-level stretch + buoyancy + vorticity focus
+    float lowLevel = 1.0 - smoothstep(0.10, 0.42, texCoord.y);
+    float convergence = max((baseXmY0[VX] - baseXpY0[VX]) + (baseX0Ym[VY] - baseX0Yp[VY]), 0.0);
+    float tornadoSpin = max(vort, 0.0) * convergence * cloudBuoyancy * lowLevel;
+    base[VX] += -base[VY] * tornadoSpin * 0.000025 * tornadoPotential;
+    base[VY] += base[VX] * tornadoSpin * 0.000018 * tornadoPotential;
+
+    // Storm-front proxy: strengthen horizontal thermal-gradient acceleration near low levels
+    float frontGradient = length(vec2(dTdx, dTdy));
+    float frontWeight = (1.0 - smoothstep(0.18, 0.75, texCoord.y)) * smoothstep(0.0001, 0.008, frontGradient);
+    vec2 frontPush = normalize(vec2(-dTdx, -dTdy) + vec2(1e-6)) * frontGradient * 0.0000009 * frontogenesisStrength;
+    base.xy += frontPush * frontWeight;
 
     // quadratic drag
     // base[VX] -= base[VX] * base[VX] * base[VX] * base[VX] * base[VX] *

@@ -281,6 +281,11 @@ void main()
       water[SMOKE] += userInputValues[BRUSH_INTENSITY];
       water[SMOKE] = min(max(water[SMOKE], 0.0), 2.0);
 
+    } else if (userInputType == 23 && wall[DISTANCE] != 0) { // SAN tool: lofted sand/dust plume
+      water[SMOKE] += userInputValues[BRUSH_INTENSITY] * 1.8;
+      base[TEMPERATURE] += userInputValues[BRUSH_INTENSITY] * 40.0;
+      water[SMOKE] = min(max(water[SMOKE], 0.0), 3.5);
+
     } else if (userInputType == 4) {                                                 // drag/move air
 
       if (userInputValues.x < -0.5) {                                                // whole width brush
