@@ -27,19 +27,21 @@ void main()
   fragmentColor = vec4(0.0, 1.0, 1.0, 1.0); // rain
   */
 
-  float opacity = (mass_out[WATER] + mass_out[ICE]) * 0.10;
+  float totalMass = mass_out[WATER] + mass_out[ICE];
+  vec2 local = gl_PointCoord - vec2(0.5);
+  float radialFade = max(1.0 - length(local) * 2.0, 0.0);
+  float streakFade = max(1.0 - abs(local.x) * 2.8, 0.0);
+  float centerFade = mix(radialFade, streakFade, 0.45);
+  float opacity = min(totalMass * 0.14, 1.0) * centerFade;
 
   if (mass_out[ICE] > 0.) {                           // has ice
-    if (mass_out[WATER] == 0.) {                      // has no liquid water, pure ice
-      if (density_out < 1.0)                          // snow
-        fragmentColor = vec4(1.0, 1.0, 1.0, opacity); // white
-      else
-        fragmentColor = vec4(1.0, 1.0, 0.0, opacity); // hail
-    } else {                                          // mix of ice and water
-      fragmentColor = vec4(0.5, 1.0, 1.0, opacity);   // light blue
+    if (density_out >= 1.0) {                          // graupel / hail carries negative charge
+      fragmentColor = vec4(0.25, 0.55, 1.0, opacity); // blue charge dots
+    } else {                                           // ice crystals / snow carry positive charge
+      fragmentColor = vec4(1.0, 0.35, 0.35, opacity); // red charge dots
     }
-  } else {                                            // rain
-    fragmentColor = vec4(0.0, 0.5, 1.0, opacity);     // dark blue
+  } else {                                             // rain / neutral
+    fragmentColor = vec4(0.36, 0.70, 1.0, opacity * 0.9);
   }
 
   // fragmentColor = vec4(1.0, 1.0, 0.0, 1.0); // all highly visible for DEBUG
