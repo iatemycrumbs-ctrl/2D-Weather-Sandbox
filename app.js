@@ -11,9 +11,9 @@ with this program. If not, see <https://www.gnu.org/licenses/>.
 
 function updateSetupSliders()
 {
-  let simResX = parseInt(simResSelX.value);
-  let simResY = parseInt(simResSelY.value);
-  let simHeight = parseInt(simHeightSel.value);
+  let simResX = parseInt(document.getElementById('simResSelX').value);
+  let simResY = parseInt(document.getElementById('simResSelY').value);
+  let simHeight = parseInt(document.getElementById('simHeightSel').value);
 
   let cellHeight = simHeight / simResY;
   let simWidth = cellHeight * simResX;
@@ -346,6 +346,7 @@ const guiControls_default = {
   vorticity : 0.005,
   dragMultiplier : 0.001, // 0.01
   wind : 0.0,
+  coriolisStrength : 1.0,
   globalEffectsStartAlt : 0,
   globalEffectsEndAlt : 10000,
   globalDrying : 0.000000, // 0.000010
@@ -3625,6 +3626,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.useProgram(velocityProgram);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'dragMultiplier'), guiControls.dragMultiplier);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'coriolisStrength'), guiControls.coriolisStrength);
     gl.useProgram(lightingProgram);
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'greenhouseGases'), guiControls.greenhouseGases);
@@ -3716,6 +3718,13 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
       })
       .name('Wind');
+
+    fluidParams_folder.add(guiControls, 'coriolisStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'coriolisStrength'), guiControls.coriolisStrength);
+      })
+      .name('Coriolis Strength');
 
     fluidParams_folder.add(guiControls, 'globalDrying', 0.0, 0.0001, 0.000001)
       .onChange(function() {
@@ -5801,6 +5810,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1i(gl.getUniformLocation(velocityProgram, 'baseTex'), 0);
   gl.uniform1i(gl.getUniformLocation(velocityProgram, 'wallTex'), 1);
   gl.uniform2f(gl.getUniformLocation(velocityProgram, 'texelSize'), texelSizeX, texelSizeY);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'coriolisStrength'), guiControls.coriolisStrength);
 
   // gl.uniform1fv(gl.getUniformLocation(velocityProgram, 'initial_T'), initial_T);
   gl.uniform4fv(gl.getUniformLocation(velocityProgram, 'initial_Tv'), initial_T);

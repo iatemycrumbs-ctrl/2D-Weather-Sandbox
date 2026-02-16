@@ -470,6 +470,34 @@ void main()
               wall[VEGETATION] += 1;
           }
 
+          // Tree and structure wind physics (gust damage / flex proxy)
+          float windSpeed = length(baseAboveSurface.xy);
+          float gustStress = max(windSpeed - 0.045, 0.0);
+
+          // Trees lose biomass in severe wind, especially when dry and unfrozen.
+          if (wall[TYPE] == WALLTYPE_LAND && wall[VEGETATION] > 20 && gustStress > 0.0) {
+            float treeRootStrength = map_rangeC(water[SOIL_MOISTURE], 2.0, 45.0, 0.65, 1.20);
+            float snowLoadPenalty = map_rangeC(water[SNOW], 0.0, 120.0, 1.0, 0.65);
+            float treeDamageChance = clamp(gustStress * 9.0 * (1.0 / treeRootStrength) * (1.0 / snowLoadPenalty), 0.0, 0.55);
+            if (random2d(vec2(iterNum * 0.17, fragCoord.x * 0.11 + fragCoord.y * 0.07)) < treeDamageChance) {
+              wall[VEGETATION] -= int(clamp(1.0 + gustStress * 30.0, 1.0, 8.0));
+              wall[VEGETATION] = max(wall[VEGETATION], 0);
+              water[SMOKE] += gustStress * 0.04; // debris/dust lofting
+            }
+          }
+
+          // Urban / industrial storm damage under extreme winds.
+          if ((wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL) && gustStress > 0.025) {
+            float structureResilience = wall[TYPE] == WALLTYPE_INDUSTRIAL ? 1.2 : 1.0;
+            float destructionChance = clamp((gustStress - 0.025) * 5.0 / structureResilience, 0.0, 0.35);
+            if (random2d(vec2(iterNum * 0.23, fragCoord.x * 0.19 + fragCoord.y * 0.13)) < destructionChance) {
+              wall[TYPE] = WALLTYPE_LAND;
+              wall[VEGETATION] = max(wall[VEGETATION], 8);
+              water[SMOKE] += 0.08 + gustStress * 0.6;
+              water[SOIL_MOISTURE] = max(water[SOIL_MOISTURE], 6.0);
+            }
+          }
+
           int subInterval = int(iterNum) / 100;
 
           if (subInterval % (int(water[SOIL_MOISTURE] * 0.1 + water[SNOW] * 0.5) + 10) == 0 && wall[VEGETATION] >= minimalFireVegetation &&

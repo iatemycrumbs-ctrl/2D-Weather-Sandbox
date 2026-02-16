@@ -14,6 +14,7 @@ uniform isampler2D wallTex;
 uniform float dragMultiplier;
 
 uniform float wind;
+uniform float coriolisStrength;
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -61,6 +62,13 @@ void main()
     }
 
     base[VY] += base[PRESSURE] - baseX0Yp[PRESSURE];
+
+    // Realistic-ish Coriolis term (f-plane approximation) with latitude from GUI control.
+    float coriolisParam = 0.00045 * coriolisStrength;
+    float vOld = base[VY];
+    base[VX] += -vOld * coriolisParam;
+    base[VY] += base[VX] * coriolisParam;
+
     base[VY] *= 1. - dragMultiplier * 0.0002 * densityDrag;
     // quadratic drag
     // base[VX] -= base[VX] * base[VX] * base[VX] * base[VX] * base[VX] *
