@@ -43,6 +43,13 @@ uniform float dryLapse;
 uniform float sunAngle;
 
 uniform float minShadowLight;
+uniform float lightningColorTempMult;
+uniform float lightningFlashPersistence;
+uniform float lightningTempMinK;
+uniform float lightningTempMaxK;
+uniform float precipitationVisualBoost;
+uniform float ambientScattering;
+uniform float lightningBloomStrength;
 
 uniform vec3 view;   // Xpos  Ypos    Zoom
 uniform vec4 cursor; // Xpos   Ypos  Size   type
@@ -114,46 +121,58 @@ const float lightningTexAspect = lightningTexRes.x / lightningTexRes.y;
 float calcLightningTime(float startIterNum)
 {
   float lightningTime = iterNum - startIterNum;
-  return lightningTime / 5.0; // 30.0    0. to 1. leader stage, 1. + Flash stage
+  return lightningTime / (3.8 * lightningFlashPersistence);
 }
 
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 {
-  float T0 = Tin - 1.;
+  float T0 = Tin - 1.0;
 
-  float repeatPeriod = map_range(random2d(lightningPos), 0., 1., 1.5, 3.0);                                            // 2.5
-  float numFlashes = floor(map_range(random2d(lightningPos * 2.737250), 0., 1., 1.0, max(intensity - 0.5, 0.) * 2.0)); // 0.4
+  float repeatPeriod = map_range(random2d(lightningPos), 0.0, 1.0, 0.55, 1.6) / max(lightningFlashPersistence, 0.3);
+  float numFlashes = floor(map_range(random2d(lightningPos * 2.737250), 0.0, 1.0, 1.0, max(intensity - 0.2, 0.0) * 4.2));
 
-  float minT = max(T0 - (repeatPeriod * numFlashes), 0.);
-
+  float minT = max(T0 - (repeatPeriod * numFlashes), 0.0);
   float T = max(mod(T0, repeatPeriod), minT);
 
-  return max((1. / (0.05 + pow(T * 2.0, 3.))) - 0.005, 0.) * pow(intensity, 2.0); // fading out curve
+  float peak = exp(-pow(T * 4.3, 2.0)) * 3.0;
+  float tail = max((1.0 / (0.04 + pow(T * 2.2, 3.0))) - 0.01, 0.0);
+
+  return (peak + tail) * pow(intensity, 1.65);
 }
 
 vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningIntensity)
 {
+  float signedIntensity = currentLightningIntensity;
+  float strikeTypeSign = signedIntensity < 0.0 ? -1.0 : 1.0; // <0 IC, >0 CG
+  currentLightningIntensity = abs(currentLightningIntensity);
   vec2 lightningTexCoord = texCoord;
 
   lightningTexCoord.x -= mod(pos.x, 1.);
 
   lightningTexCoord.y -= pos.y;
 
-  float scaleMult = 1. / pos.y; // 1.0 means lightning is as tall as the simheight
+  float anchorY = strikeTypeSign < 0.0 ? max(pos.y + 0.18, 0.25) : max(pos.y, 0.05);
+  float scaleMult = 1. / anchorY; // stronger clamp for mobile precision so full bolt remains visible
 
   lightningTexCoord.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
   lightningTexCoord.y *= -scaleMult;
 
   lightningTexCoord.x += 0.5;                                                                                               // center lightning bolt
 
-  if (lightningTexCoord.x < 0.01 || lightningTexCoord.x > 1.01 || lightningTexCoord.y < 0.01 || lightningTexCoord.y > 1.01) // prevent edge effect when mipmapping
+  if (lightningTexCoord.x < -0.50 || lightningTexCoord.x > 1.50 || lightningTexCoord.y < -0.42 || lightningTexCoord.y > 1.55) // prevent edge effect when mipmapping
     return vec3(0);
 
   float pixVal = texture(lightningTex, lightningTexCoord).r;
+  vec2 px = vec2(1.0 / lightningTexRes.x, 1.0 / lightningTexRes.y);
+  float neighborMax = max(max(texture(lightningTex, lightningTexCoord + vec2(px.x, 0.0)).r,
+                              texture(lightningTex, lightningTexCoord - vec2(px.x, 0.0)).r),
+                          max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y)).r,
+                              texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r));
+  pixVal = max(pixVal, neighborMax * (0.78 * lightningBloomStrength));
 
-  const float branchShowFactor = 2.5;       // 1.5
-  const float leaderBrightness = 50000.;    // 200.0
-  const float mainBoltBrightness = 100000.; // 100000.
+  const float branchShowFactor = 3.2;
+  const float leaderBrightness = 42000.;
+  const float mainBoltBrightness = 145000.;
 
   float brightnessThreshold = 1. - lightningTime * branchShowFactor;
   brightnessThreshold += lightningTexCoord.y * branchShowFactor; // grow from the top to the bottem
@@ -161,8 +180,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   brightnessThreshold = clamp(brightnessThreshold, 0., 1.);
 
   if (lightningTime > 1.0) { // main bolt
-    brightnessThreshold = 0.95;
-    currentLightningIntensity *= mainBoltBrightness;
+    brightnessThreshold = strikeTypeSign < 0.0 ? 0.79 : 0.68;
+    currentLightningIntensity *= strikeTypeSign < 0.0 ? leaderBrightness * 1.55 : mainBoltBrightness;
   } else {
     currentLightningIntensity = leaderBrightness;
   }
@@ -173,7 +192,12 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   pixVal *= currentLightningIntensity;
 
-  const vec3 lightningCol = vec3(0.70, 0.57, 1.0); // 0.584, 0.576, 1.0
+  float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
+  float thermalColorMix = map_rangeC(lightningTemp, lightningTempMinK, lightningTempMaxK, 0.0, 1.0) * lightningColorTempMult;
+
+  vec3 coolLightningCol = strikeTypeSign < 0.0 ? vec3(0.62, 0.70, 1.0) : vec3(0.62, 0.56, 1.0);
+  vec3 hotLightningCol = strikeTypeSign < 0.0 ? vec3(0.90, 0.95, 1.00) : vec3(1.00, 0.96, 0.86);
+  vec3 lightningCol = mix(coolLightningCol, hotLightningCol, clamp(thermalColorMix, 0.0, 1.0));
 
   vec3 outputColor = max(pixVal * lightningCol, vec3(0));
 
@@ -227,7 +251,7 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   float cloudDensity = max(cloudwater * 13.6, 0.0);
 
-  float totalDensity = cloudDensity + water[PRECIPITATION] * 0.8; // visualize precipitation
+  float totalDensity = cloudDensity + water[PRECIPITATION] * (0.8 * precipitationVisualBoost); // visualize precipitation
 
 
   // float cloudOpacity = clamp(cloudwater * 4.0, 0.0, 1.0);
@@ -255,12 +279,13 @@ vec4 getAirColor(vec2 fragCoordIn)
   float lightningStartIterNum = lightningData[START_ITERNUM];
 
   float lightningTime = calcLightningTime(lightningStartIterNum);
-  float currentLightningIntensity = lightningIntensityOverTime(lightningTime, lightningPos, lightningData[INTENSITY]);
+  float lightningSign = lightningData[INTENSITY] < 0.0 ? -1.0 : 1.0;
+  float currentLightningIntensity = lightningIntensityOverTime(lightningTime, lightningPos, abs(lightningData[INTENSITY])) * lightningSign;
 
 
-  if (lightningData[INTENSITY] > 1.0) { // CG
+  if (abs(lightningData[INTENSITY]) > 0.18) { // show full bolt even for weaker mobile-sampled strikes
     emittedLight += displayLightning(lightningPos, lightningTime, currentLightningIntensity);
-    emittedLight /= 1. + cloudDensity * 100.0;
+    emittedLight /= 1. + cloudDensity * (95.0 / max(lightningBloomStrength, 0.2));
   }
 
 #define lightningOnLightBrightness 0.004 // 0.002
@@ -268,8 +293,28 @@ vec4 getAirColor(vec2 fragCoordIn)
   vec2 dist = vec2(lightningPos.x - texCoord.x, max((abs(lightningPos.y / 2. - texCoord.y) - 0.1), 0.));
   dist.x *= aspectRatios[0];
   float lightningOnLight = lightningOnLightBrightness / (pow(length(dist), 2.) + 0.03);
-  lightningOnLight *= currentLightningIntensity;
-  onLight += vec3(lightningOnLight);
+  lightningOnLight *= abs(currentLightningIntensity);
+
+  // Electric field / corona visualization around the active channel
+  float electricFieldGlow = abs(currentLightningIntensity) * 0.0000035 * lightningBloomStrength / (pow(length(dist), 1.25) + 0.045);
+  vec3 coronaColor = mix(vec3(0.45, 0.65, 1.0), vec3(1.0, 0.85, 0.55), clamp(lightningColorTempMult, 0.0, 1.5));
+
+  onLight += vec3(lightningOnLight) + coronaColor * electricFieldGlow;
+
+  // Reworked physically-inspired rainbow: appears opposite the sun in rain-rich air.
+  float rainRich = clamp(water[PRECIPITATION] * 2.2 + cloudOpacity * 0.6, 0.0, 1.0);
+  float sunElevNorm = clamp((sunAngle + 0.15) * 1.4, 0.0, 1.0);
+  vec2 rainbowCenter = vec2(0.5, 0.16 + sunElevNorm * 0.22);
+  vec2 toPix = vec2((texCoord.x - rainbowCenter.x) * aspectRatios[0], texCoord.y - rainbowCenter.y);
+  float r = length(toPix);
+  float ring = exp(-pow((r - 0.52) / 0.020, 2.0));
+  float ring2 = exp(-pow((r - 0.565) / 0.028, 2.0)) * 0.35;
+  float spectralW = map_rangeC(r, 0.49, 0.57, 700.0, 410.0);
+  vec3 rainbowCol = spectral_zucconi(spectralW);
+  float rainbowMask = ring + ring2;
+  rainbowMask *= rainRich * clamp(lightIntensity * 2.0, 0.0, 1.0);
+  rainbowMask *= smoothstep(0.02, 0.30, texCoord.y); // keep arc above horizon band
+  onLight += rainbowCol * rainbowMask * (1.1 * sqrt(ambientScattering));
 
   return vec4(color, opacity);
 }
@@ -600,8 +645,10 @@ void main()
 
   vec3 ambientLight = texture(ambientLightTex, texCoord).rgb;
 
-  onLight += ambientLight * pow(1. - clamp(-texCoord.y * 15., 0., 1.), 2.5);
+  onLight += ambientLight * pow(1. - clamp(-texCoord.y * 15., 0., 1.), 2.5) * ambientScattering;
 
+  float twilightScatter = clamp(map_range(abs(sunAngle), 60. * deg2rad, 92. * deg2rad, 0.0, 1.0), 0.0, 1.0);
+  onLight += vec3(0.42, 0.53, 0.75) * twilightScatter * 0.22 * ambientScattering;
 
   finalLight += vec3(shadowLight) + onLight;
 
