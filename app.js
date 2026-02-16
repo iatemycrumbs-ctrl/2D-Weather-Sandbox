@@ -6332,7 +6332,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     let cursorType = 1.0; // normal circular brush
     if (guiControls.wholeWidth) {
       cursorType = 2.0;   // cursor whole width brush
-    } else if (SETUP_MODE || (inputType <= 0 && !bPressed && (guiControls.tool == 'TOOL_NONE' || guiControls.tool == 'TOOL_STATION'))) {
+    } else if (SETUP_MODE || (inputType <= 0 && !bPressed && (guiControls.tool == 'TOOL_NONE' || guiControls.tool == 'TOOL_STATION' || guiControls.tool == 'TOOL_BALLOON'))) {
       cursorType = 0;     // cursor off sig
     }
 

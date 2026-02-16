@@ -74,17 +74,16 @@ void main()
   deposition = vec2(0.0);
 
   if (mass[WATER] < 0.) { // inactive
-                          /*
-                          We have to generate a random position before we know if the droplet is actually gonna spawn, seems ineffcient but there is no way arround it.
-                          This is because spawn chance depends on the conditions at the spawn position, we have to sample the textures for every inactive droplet. this is a huge performance bottleneck
-                       */
+    // Reworked spawn system:
+    // - seed from gl_VertexID to avoid state-collapse patterns (mobile precision friendly)
+    // - adaptive spawn limiter from active/inactive ratio
+    // - cloud/instability driven spawn mass and lightning generation
 
-                          // generate random spawn position: x and y from 0. to 1.
-    // texCoord = vec2(random(mass[WATER] + iterNum), random(mass[ICE] + iterNum)); func2D
-    // texCoord = vec2(func2D(vec2(mass[WATER], dropPosition.x), iterNum * 0.3754), func2D(vec2(mass[ICE], dropPosition.x), iterNum * 0.073162));
-
-    texCoord = vec2(random2d(vec2(mass[WATER], dropPosition.x + iterNum * 0.3754)), random2d(vec2(mass[ICE], dropPosition.x + iterNum * 0.073162)));
-
+    float dropID = float(gl_VertexID) + 1.0;
+    vec2 spawnSeed = vec2(dropID * 0.754877 + iterNum * 0.013,
+                          dropID * 0.569840 - iterNum * 0.017);
+    texCoord = vec2(random2d(spawnSeed), random2d(spawnSeed.yx + 13.37));
+    texCoord = clamp(texCoord, texelSize * 2.0, vec2(1.0) - texelSize * 2.0);
 
     // sample fluid at generated position
     base = texture(baseTex, texCoord);
@@ -93,87 +92,74 @@ void main()
     // check if position is okay to spawn
     realTemp = potentialToRealT(base[TEMPERATURE]); // in Kelvin
 
-const float nominalSpawnMass = 0.14;
-    float threshold;                                // minimal cloudwater before precipitation develops
-    if (realTemp > CtoK(0.0))
-      threshold = aboveZeroThreshold;               // in above freezing conditions coalescence only happens in really dense clouds
-    else                                            // the colder it gets, the faster ice starts to form
-      //  treshHold = max(map_range(realTemp, CtoK(0.0), CtoK(-30.0), subZeroThreshold, initalMass), initalMass);
-      threshold = subZeroThreshold;
+    const float nominalSpawnMass = 0.12;
+    float threshold = realTemp > CtoK(0.0) ? aboveZeroThreshold : subZeroThreshold;
 
     float cloudExcess = max(water[CLOUD] - threshold, 0.0);
-    float baseSpawnMass = clamp(nominalSpawnMass + cloudExcess * 0.08, 0.08, 0.32);
+    float instability = map_rangeC(-base[PRESSURE], -0.05, 0.15, 0.6, 1.35);
+    float baseSpawnMass = clamp((nominalSpawnMass + cloudExcess * 0.07) * instability, 0.05, 0.34);
 
-    if (water[CLOUD] > threshold && base[TEMPERATURE] < 2500.) {                                                                     // if cloudwater above threshold and not wall
-                                                                                                                                    // float spawnChance = (water[1] - threshold) * 1000.0 / inactiveDroplets;
-                                                                                                                                    // if (spawnChance > rand2d(mass.xy)) {
-                                                                                                                                    //  float spawnChance = (water[CLOUD] - threshold) / inactiveDroplets * resolution.x * resolution.y * spawnChanceMult;
+    if (water[CLOUD] > threshold && base[TEMPERATURE] < 2500.0) {
+      float inactiveFrac = clamp(inactiveDroplets / max(numDroplets, 1.0), 0.0, 1.0);
+      float activeFrac = 1.0 - inactiveFrac;
+      float spawnLimiter = mix(1.25, 0.45, activeFrac);
 
-      float spawnChance = (cloudExcess / (inactiveDroplets + 12.0)) * resolution.x * resolution.y * spawnChanceMult;
-      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.5, 0.4, 1.6);
-      spawnChance = clamp(spawnChance, 0.0, 0.85);
+      float spawnChance = cloudExcess * spawnChanceMult * resolution.x * resolution.y;
+      spawnChance /= (inactiveDroplets * spawnLimiter + 24.0);
+      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.35, 1.8);
+      spawnChance = clamp(spawnChance, 0.0, 0.92);
 
-      //    float nrmRand = random2d(vec2(mass[WATER] * 0.2324, iterNum * 0.1783 + random(mass[ICE]))); // normalized random value
+      float nrmRand = random2d(spawnSeed * 1.31 + vec2(iterNum * 0.009, -iterNum * 0.007));
 
-      float nrmRand = random2d(vec2(texCoord.x + iterNum * 0.031, texCoord.y + mass[ICE] * 0.73));
-
-      if (spawnChance > nrmRand) {                                       // spawn precipitation particle
+      if (spawnChance > nrmRand) { // spawn precipitation particle
         spawned = true;
-        newPos = vec2((texCoord.x - 0.5) * 2., (texCoord.y - 0.5) * 2.); // convert texture coordinate (0 to 1) to position (-1 to 1)
+        newPos = vec2((texCoord.x - 0.5) * 2.0, (texCoord.y - 0.5) * 2.0);
 
-        if (realTemp < CtoK(0.0)) {                                      // below 0 C
-          newMass[WATER] = 0.0;                                          // enable
-          newMass[ICE] = baseSpawnMass;                                  // initial ice core
-          feedback[HEAT] += newMass[ICE] * meltingHeat;                  // add heat of freezing
+        if (realTemp < CtoK(0.0)) {
+          newMass[WATER] = 0.0;
+          newMass[ICE] = baseSpawnMass;
+          feedback[HEAT] += newMass[ICE] * meltingHeat;
 
-          float updraftChargeFactor = map_rangeC(base[VY], 0.0, 0.024, 0.0, 1.0);
-          float graupelization = clamp((water[PRECIPITATION] * 0.45 + updraftChargeFactor * 0.55) * map_rangeC(realTemp, CtoK(-35.0), CtoK(-5.0), 0.0, 1.0), 0.0, 1.0);
-          newDensity = mix(snowDensity, 1.20, graupelization); // graupel/hail forms in strong mixed-phase updrafts
-
-          vec4 lightningData = texture(lightningDataTex, vec2(0.5)); // data from last lightning bolt
-
-          const float lightningCloudDensityThreshold = 0.12; // minimum combined condensate before lightning can form
-
-          float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION] * 1.2;
-
-          // Charge separation proxy:
-          // Graupel carries dominant negative charge, while ice crystals/snow carry positive charge.
           float mixedPhaseFactor = map_rangeC(realTemp, CtoK(-35.0), CtoK(-5.0), 0.0, 1.0);
           float updraftFactor = map_rangeC(base[VY], 0.0, 0.020, 0.05, 1.8);
           float downdraftFactor = map_rangeC(-base[VY], 0.0, 0.015, 0.0, 1.0);
-          float graupelFactor = map_rangeC(newDensity, snowDensity, 1.0, 0.2, 1.25);
-          float iceCrystalFactor = map_rangeC(1.0 - newDensity, 0.0, 1.0, 0.2, 1.4);
-          float collisionFactor = map_rangeC(water[PRECIPITATION] + newMass[WATER], 0.0, 1.4, 0.3, 1.7);
+          float graupelization = clamp((water[PRECIPITATION] * 0.50 + updraftFactor * 0.45) * mixedPhaseFactor, 0.0, 1.0);
+          newDensity = mix(snowDensity, 1.22, graupelization);
 
-          float graupelNegativeCharge = mixedPhaseFactor * (0.55 + downdraftFactor) * graupelFactor * collisionFactor;
-          float icePositiveCharge = mixedPhaseFactor * updraftFactor * iceCrystalFactor;
-          float chargeSeparation = max(graupelNegativeCharge * icePositiveCharge, 0.0);
+          vec4 lightningData = texture(lightningDataTex, vec2(0.5));
+          const float lightningCloudDensityThreshold = 0.10;
+
+          float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION] * 1.25;
+          float graupelNegativeCharge = mixedPhaseFactor * (0.55 + downdraftFactor) * map_rangeC(newDensity, snowDensity, 1.3, 0.25, 1.45);
+          float icePositiveCharge = mixedPhaseFactor * updraftFactor * map_rangeC(1.0 - min(newDensity, 1.0), 0.0, 1.0, 0.2, 1.4);
+
+          float chargeDipole = max(graupelNegativeCharge + icePositiveCharge - abs(graupelNegativeCharge - icePositiveCharge) * 0.35, 0.0);
+          float pressureFactor = map_rangeC(base[PRESSURE], -0.06, 0.12, 0.82, 1.35);
+          float electricPotential = chargeDipole * pressureFactor * map_rangeC(base[VY], -0.01, 0.02, 0.6, 1.25);
 
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
-          float pressureFactor = map_rangeC(base[PRESSURE], -0.06, 0.12, 0.80, 1.35);
-          lightningSpawnChance *= (0.30 + chargeSeparation * 1.8) * pressureFactor;
+          lightningSpawnChance *= (0.22 + electricPotential * 1.6);
           lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.55);
-          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.22);
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.26);
 
-          if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval &&
-              random2d(vec2(base[TEMPERATURE] * 0.5 + texCoord.x * 2.0, water[TOTAL] * 7.75 + texCoord.y * 2.0)) < lightningSpawnChance) { // Spawn lightning
+          float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
+          if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval && strikeRand < lightningSpawnChance) {
             lightningSpawned = true;
             isActive = false;
             gl_PointSize = 1.0;
             feedback.xy = texCoord;
             feedback[START_ITERNUM] = iterNum;
-            float flashIntensity = cloudPlusPrecipDensity * 0.26 + chargeSeparation * 1.35 + updraftFactor * 0.40 + random2d(texCoord) * 0.35;
-            feedback[INTENSITY] = clamp(flashIntensity, 0.08, 4.5);
-            gl_Position = vec4(vec2(-1. + texelSize.x * 3., -1. + texelSize.y), 0.0, 1.0); // render to bottem left corner (1, 0)
+            float flashIntensity = cloudPlusPrecipDensity * 0.24 + electricPotential * 1.25 + random2d(texCoord * 31.7) * 0.32;
+            feedback[INTENSITY] = clamp(flashIntensity, 0.08, 4.8);
+            gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
           }
         } else {
-          newMass[WATER] = baseSpawnMass; // rain
+          newMass[WATER] = baseSpawnMass;
           newMass[ICE] = 0.0;
           newDensity = 1.0;
-
-          // warm-rain processes suppress lightning in this parcel but still contribute to precip loading.
           feedback[MASS] += newMass[WATER] * 0.05;
         }
+
         feedback[VAPOR] -= baseSpawnMass;
       }
     }
@@ -187,8 +173,7 @@ const float nominalSpawnMass = 0.14;
       isActive = false;
       gl_PointSize = 1.0;
       feedback[MASS] = 1.0;                                                     // count 1 inactive droplet
-      gl_Position = vec4(vec2(-1. + texelSize.x, -1. + texelSize.y), 0.0, 1.0); // render to bottem left corner (0, 0) to count inactive droplets
-                                                                                // return;
+      gl_Position = vec4(vec2(-1.0 + texelSize.x, -1.0 + texelSize.y), 0.0, 1.0); // render to bottom left corner (0, 0)
     }
   }
 
