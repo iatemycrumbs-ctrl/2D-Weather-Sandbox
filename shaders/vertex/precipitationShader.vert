@@ -55,6 +55,7 @@ uniform float lightningBranching;
 uniform float lightningAnvilDrift;
 uniform float precipitationSizeSpectrum;
 uniform float hailShatterFactor;
+uniform float mobilePrecipBoost;
 uniform float snowDensity;        // 0.2 - 0.5
 uniform float fallSpeed;          // 0.0003
 uniform float growthRate0C;       // 0.0005
@@ -127,9 +128,9 @@ void main()
       spawnChance /= (inactiveDroplets * spawnLimiter + 24.0);
       float organizationBoost = map_rangeC(stormOrganization, 0.2, 2.5, 0.65, 1.9);
       float aerosolSpawnFactor = map_rangeC(aerosolLoad, 0.2, 2.5, 1.15, 0.72);
-      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.35, 1.8) * moistureSupport * orographicBoost * downdraftEnhancement * precipitationEffectMult * organizationBoost * aerosolSpawnFactor;
-      float spawnFloor = clamp(1.0 / max(numDroplets, 1.0), 0.000001, 0.0015) * precipitationEffectMult;
-      spawnChance = clamp(spawnChance, spawnFloor, 0.92);
+      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.35, 1.8) * moistureSupport * orographicBoost * downdraftEnhancement * precipitationEffectMult * organizationBoost * aerosolSpawnFactor * mobilePrecipBoost;
+      float spawnFloor = clamp(1.0 / max(numDroplets, 1.0), 0.000001, 0.0015) * precipitationEffectMult * mobilePrecipBoost;
+      spawnChance = clamp(spawnChance, spawnFloor, 0.96);
 
       float nrmRand = random2d(spawnSeed * 1.31 + vec2(iterNum * 0.009, -iterNum * 0.007));
 

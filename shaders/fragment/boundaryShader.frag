@@ -43,6 +43,8 @@ uniform float surfaceRunoffRate;
 uniform float soilInfiltrationRate;
 uniform float canopyInterception;
 uniform float urbanHeatIslandStrength;
+uniform float coastalMixing;
+uniform float waterAlbedoShift;
 
 layout(location = 0) out vec4 base;
 layout(location = 1) out vec4 water;
@@ -605,7 +607,7 @@ void main()
 
           float windMixing = clamp(length(texture(baseTex, texCoordX0Yp).xy) * 45.0, 0.2, 2.5);
           float precipMixing = map_rangeC(waterAboveSurfaceNow[PRECIPITATION], 0.0, 1.5, 0.0, 1.0);
-          float mixedLayerDepth = map_rangeC(windMixing + precipMixing * 0.5, 0.2, 2.8, 0.8, 2.8); // deeper mixed layer => more thermal inertia
+          float mixedLayerDepth = map_rangeC((windMixing + precipMixing * 0.5) * coastalMixing, 0.2, 3.2, 0.8, 3.0); // deeper mixed layer => more thermal inertia
 
           float netWaterHeating = 0.0;
           netWaterHeating += (airTemperature - base[TEMPERATURE]) * waterHeatExchangeRate * (0.9 + windMixing * 0.15); // turbulent exchange
@@ -618,7 +620,8 @@ void main()
           netWaterHeating -= (rainCooling + coldRainPulse);
 
           float lightPower = max(lightAboveSurface[SUNLIGHT] * cos(sunAngle), 0.0); // Light power per horizontal surface area;
-          lightPower *= (1. - ALBEDO_WATER);
+          float adjustedWaterAlbedo = clamp(ALBEDO_WATER + waterAlbedoShift, 0.02, 0.45);
+          lightPower *= (1. - adjustedWaterAlbedo);
           lightPower *= lightHeatingConst;
           netWaterHeating += lightPower;
 

@@ -50,6 +50,10 @@ uniform float lightningTempMaxK;
 uniform float precipitationVisualBoost;
 uniform float ambientScattering;
 uniform float lightningBloomStrength;
+uniform float flashlightIntensity;
+uniform float flashlightFocus;
+uniform float flashlightRange;
+uniform float radiationHaze;
 
 uniform vec3 view;   // Xpos  Ypos    Zoom
 uniform vec4 cursor; // Xpos   Ypos  Size   type
@@ -159,7 +163,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   lightningTexCoord.x += 0.5;                                                                                               // center lightning bolt
 
-  if (lightningTexCoord.x < -0.50 || lightningTexCoord.x > 1.50 || lightningTexCoord.y < -0.42 || lightningTexCoord.y > 1.55) // prevent edge effect when mipmapping
+  if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68) // prevent edge effect when mipmapping
     return vec3(0);
 
   float pixVal = texture(lightningTex, lightningTexCoord).r;
@@ -168,6 +172,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
                               texture(lightningTex, lightningTexCoord - vec2(px.x, 0.0)).r),
                           max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y)).r,
                               texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r));
+  neighborMax = max(neighborMax, max(texture(lightningTex, lightningTexCoord + vec2(px.x, px.y)).r,
+                                      texture(lightningTex, lightningTexCoord + vec2(-px.x, px.y)).r));
   pixVal = max(pixVal, neighborMax * (0.78 * lightningBloomStrength));
 
   const float branchShowFactor = 3.2;
@@ -180,7 +186,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   brightnessThreshold = clamp(brightnessThreshold, 0., 1.);
 
   if (lightningTime > 1.0) { // main bolt
-    brightnessThreshold = strikeTypeSign < 0.0 ? 0.79 : 0.68;
+    brightnessThreshold = strikeTypeSign < 0.0 ? 0.77 : 0.60;
     currentLightningIntensity *= strikeTypeSign < 0.0 ? leaderBrightness * 1.55 : mainBoltBrightness;
   } else {
     currentLightningIntensity = leaderBrightness;
@@ -639,13 +645,14 @@ void main()
   if (fract(cursor.w) > 0.5) {                                               // enable flashlight
     vec2 vecFromMouse = cursor.xy - texCoord;
     vecFromMouse.x *= texelSize.y / texelSize.x;                             // aspect ratio correction to make it a circle
-                                                                             // shadowLight += max(1. / (1.+length(vecFromMouse)*5.0),0.0); // point light
-    shadowLight += max(cos(min(length(vecFromMouse) * 5.0, 2.)) * 1.0, 0.0); // smooth flashlight
+    float rangeScaledDist = length(vecFromMouse) * (5.0 / max(flashlightRange, 0.2));
+    float focusedCone = pow(max(cos(min(rangeScaledDist, 2.6)), 0.0), max(flashlightFocus * 1.5, 0.25));
+    shadowLight += focusedCone * flashlightIntensity;
   }
 
   vec3 ambientLight = texture(ambientLightTex, texCoord).rgb;
 
-  onLight += ambientLight * pow(1. - clamp(-texCoord.y * 15., 0., 1.), 2.5) * ambientScattering;
+  onLight += ambientLight * pow(1. - clamp(-texCoord.y * 15., 0., 1.), 2.5) * ambientScattering * radiationHaze;
 
   float twilightScatter = clamp(map_range(abs(sunAngle), 60. * deg2rad, 92. * deg2rad, 0.0, 1.0), 0.0, 1.0);
   onLight += vec3(0.42, 0.53, 0.75) * twilightScatter * 0.22 * ambientScattering;
