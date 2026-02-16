@@ -142,14 +142,14 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   lightningTexCoord.y -= pos.y;
 
-  float scaleMult = 1. / pos.y; // 1.0 means lightning is as tall as the simheight
+  float scaleMult = 1. / max(pos.y, 0.08); // clamp for mobile precision so full bolt remains visible
 
   lightningTexCoord.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
   lightningTexCoord.y *= -scaleMult;
 
   lightningTexCoord.x += 0.5;                                                                                               // center lightning bolt
 
-  if (lightningTexCoord.x < -0.20 || lightningTexCoord.x > 1.20 || lightningTexCoord.y < -0.05 || lightningTexCoord.y > 1.20) // prevent edge effect when mipmapping
+  if (lightningTexCoord.x < -0.35 || lightningTexCoord.x > 1.35 || lightningTexCoord.y < -0.18 || lightningTexCoord.y > 1.35) // prevent edge effect when mipmapping
     return vec3(0);
 
   float pixVal = texture(lightningTex, lightningTexCoord).r;
@@ -164,7 +164,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   brightnessThreshold = clamp(brightnessThreshold, 0., 1.);
 
   if (lightningTime > 1.0) { // main bolt
-    brightnessThreshold = 0.80;
+    brightnessThreshold = 0.72;
     currentLightningIntensity *= mainBoltBrightness;
   } else {
     currentLightningIntensity = leaderBrightness;
@@ -283,6 +283,21 @@ vec4 getAirColor(vec2 fragCoordIn)
   vec3 coronaColor = mix(vec3(0.45, 0.65, 1.0), vec3(1.0, 0.85, 0.55), clamp(lightningColorTempMult, 0.0, 1.5));
 
   onLight += vec3(lightningOnLight) + coronaColor * electricFieldGlow;
+
+  // Reworked physically-inspired rainbow: appears opposite the sun in rain-rich air.
+  float rainRich = clamp(water[PRECIPITATION] * 2.2 + cloudOpacity * 0.6, 0.0, 1.0);
+  float sunElevNorm = clamp((sunAngle + 0.15) * 1.4, 0.0, 1.0);
+  vec2 rainbowCenter = vec2(0.5, 0.16 + sunElevNorm * 0.22);
+  vec2 toPix = vec2((texCoord.x - rainbowCenter.x) * aspectRatios[0], texCoord.y - rainbowCenter.y);
+  float r = length(toPix);
+  float ring = exp(-pow((r - 0.52) / 0.020, 2.0));
+  float ring2 = exp(-pow((r - 0.565) / 0.028, 2.0)) * 0.35;
+  float spectralW = map_rangeC(r, 0.49, 0.57, 700.0, 410.0);
+  vec3 rainbowCol = spectral_zucconi(spectralW);
+  float rainbowMask = ring + ring2;
+  rainbowMask *= rainRich * clamp(lightIntensity * 2.0, 0.0, 1.0);
+  rainbowMask *= smoothstep(0.02, 0.30, texCoord.y); // keep arc above horizon band
+  onLight += rainbowCol * rainbowMask * 1.1;
 
   return vec4(color, opacity);
 }

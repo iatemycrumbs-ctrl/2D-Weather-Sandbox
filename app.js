@@ -475,6 +475,22 @@ const timePerIteration = 0.00008; // in hours (0.00008 = 0.288 sec, at 40m cell 
 var NUM_DROPLETS;
 const NUM_DROPLET_MULTIPLIER = 1.25;
 
+function computeNumDroplets(resX, resY)
+{
+  const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  const touchCapable = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  const mobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  let mobileFactor = (coarsePointer || touchCapable || mobileUA) ? 0.48 : 1.0;
+
+  // Extra safety for high DPR mobile browsers.
+  if (window.devicePixelRatio >= 2.0 && mobileFactor < 1.0)
+    mobileFactor *= 0.85;
+
+  const rawDroplets = Math.floor(resX * resY * NUM_DROPLET_MULTIPLIER * mobileFactor);
+  const maxDroplets = mobileFactor < 1.0 ? 220000 : 700000;
+  return clamp(rawDroplets, 24000, maxDroplets);
+}
+
 let hdrFBO;
 
 let bloomFBOs = [];
@@ -1399,7 +1415,7 @@ async function loadData()
       sim_res_x = resArray[0];
       sim_res_y = resArray[1];
 
-      NUM_DROPLETS = Math.floor(sim_res_x * sim_res_y * NUM_DROPLET_MULTIPLIER * (window.matchMedia("(pointer: coarse)").matches ? 0.7 : 1.0));
+      NUM_DROPLETS = computeNumDroplets(sim_res_x, sim_res_y);
 
       saveFileName = file.name;
 
@@ -1478,7 +1494,7 @@ async function loadData()
     sim_res_y = parseInt(document.getElementById('simResSelY').value);
     sim_height = parseInt(document.getElementById('simHeightSel').value);
 
-    NUM_DROPLETS = Math.floor(sim_res_x * sim_res_y * NUM_DROPLET_MULTIPLIER * (window.matchMedia("(pointer: coarse)").matches ? 0.7 : 1.0));
+    NUM_DROPLETS = computeNumDroplets(sim_res_x, sim_res_y);
     SETUP_MODE = true;
 
     mainScript(null); // run without initial textures
