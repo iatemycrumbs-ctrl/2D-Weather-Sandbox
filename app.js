@@ -9,25 +9,72 @@ details. You should have received a copy of the GNU General Public License along
 with this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
+
+function getEl(id)
+{
+  return document.getElementById(id);
+}
+
+function readNumericInput(id, fallback)
+{
+  const el = getEl(id);
+  if (!el || el.value == null)
+    return fallback;
+  const parsed = parseFloat(el.value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function updateSetupSliders()
 {
-  let simResX = parseInt(simResSelX.value);
-  let simResY = parseInt(simResSelY.value);
-  let simHeight = parseInt(simHeightSel.value);
+  let simResX = Math.round(readNumericInput('simResSelX', 512));
+  let simResY = Math.round(readNumericInput('simResSelY', 300));
+  let simHeight = Math.round(readNumericInput('simHeightSel', 12000));
+  simHeight = clamp(simHeight, 4000, 22000);
+
+  simResY = Math.max(simResY, 1);
 
   let cellHeight = simHeight / simResY;
   let simWidth = cellHeight * simResX;
 
-  document.getElementById('simWorldProperties').innerHTML = 'cellHeight: ' + cellHeight.toFixed(1) + ' m  &nbsp&nbsp&nbsp   Simulation width: ' + (simWidth / 1000).toFixed(1) + ' km';
+  const simWorldProperties = getEl('simWorldProperties');
+  if (simWorldProperties)
+    simWorldProperties.innerHTML = 'cellHeight: ' + cellHeight.toFixed(1) + ' m  &nbsp&nbsp&nbsp   Simulation width: ' + (simWidth / 1000).toFixed(1) + ' km' + ' &nbsp&nbsp&nbsp Vertical levels: ' + simResY;
 
-  document.getElementById('simHeightWarning').style.display = (simHeight == 12000) ? 'none' : 'block';
-  document.getElementById('simResYWarning').style.display = (simResY == 300) ? 'none' : 'block';
-  document.getElementById('simResShowX').value = simResX;
-  document.getElementById('simResShowY').value = simResY
-  document.getElementById('simHeightShow').value = simHeight + ' m';
+  const simHeightWarning = getEl('simHeightWarning');
+  if (simHeightWarning)
+    simHeightWarning.style.display = (simHeight == 12000) ? 'none' : 'block';
+
+  const simResYWarning = getEl('simResYWarning');
+  if (simResYWarning)
+    simResYWarning.style.display = (simResY == 300) ? 'none' : 'block';
+
+  const simResShowX = getEl('simResShowX');
+  if (simResShowX)
+    simResShowX.value = simResX;
+
+  const simResShowY = getEl('simResShowY');
+  if (simResShowY)
+    simResShowY.value = simResY;
+
+  const simHeightShow = getEl('simHeightShow');
+  if (simHeightShow)
+    simHeightShow.value = simHeight + ' m';
 }
 
 var FPS = 60.0;
+
+
+const VALID_DISPLAY_MODES = new Set([
+  'DISP_TEMPERATURE', 'DISP_WATER', 'DISP_REAL', 'DISP_HORIVEL', 'DISP_VERTVEL',
+  'DISP_IRHEATING', 'DISP_IRDOWNTEMP', 'DISP_IRUPTEMP', 'DISP_PRECIPFEEDBACK_MASS',
+  'DISP_PRECIPFEEDBACK_HEAT', 'DISP_PRECIPFEEDBACK_VAPOR', 'DISP_PRECIPFEEDBACK_RAIN',
+  'DISP_PRECIPFEEDBACK_SNOW', 'DISP_SOIL_MOISTURE', 'DISP_CURL', 'DISP_AIRQUALITY'
+]);
+
+function sanitizeDisplayMode(mode)
+{
+  return VALID_DISPLAY_MODES.has(mode) ? mode : 'DISP_REAL';
+}
 
 
 function mixGeneric(a, b, t, {clamp = false} = {})
@@ -346,6 +393,36 @@ const guiControls_default = {
   vorticity : 0.005,
   dragMultiplier : 0.001, // 0.01
   wind : 0.0,
+  coriolisStrength : 1.0,
+  turbulentMix : 1.0,
+  jetStreamCoupling : 1.0,
+  gravityWaveDrag : 1.0,
+  mountainWaveStrength : 1.0,
+  vortexStretching : 1.0,
+  ageostrophicFlow : 1.0,
+  moistBuoyancyBoost : 1.0,
+  gravityCurrentStrength : 1.0,
+  shearProduction : 1.0,
+  tornadoPotential : 1.0,
+  frontogenesisStrength : 1.0,
+  airplanePitchAuthority : 1.0,
+  airplaneThrottleResponse : 1.0,
+  showTornadoLabels : true,
+  electricFieldVizStrength : 1.0,
+  dynamicChargeSeparation : 1.0,
+  electricFieldDiffusion : 1.0,
+  cloudAutoconversionRate : 1.0,
+  cloudLifetimeBoost : 1.0,
+  lightningRodRadiusKm : 25.0,
+  showLightningRods : true,
+  allowEditingWhenPaused : true,
+  entrainmentDilution : 1.0,
+  drizzleThresholdShift : 1.0,
+  graupelChargeGain : 1.0,
+  iceCrystalChargeGain : 1.0,
+  terrainRuggednessBoost : 1.0,
+  terrainWetnessRecovery : 1.0,
+  terrainRiverBias : 1.0,
   globalEffectsStartAlt : 0,
   globalEffectsEndAlt : 10000,
   globalDrying : 0.000000, // 0.000010
@@ -387,15 +464,58 @@ const guiControls_default = {
   greenhouseGases : 0.001,
   waterGreenHouseEffect : 0.0015,
   IR_rate : 1.0,
+  radiationHaze : 1.0,
   tool : 'TOOL_NONE',
   brushSize : 20,
   wholeWidth : false,
   brushIntensity : 0.01,
+  flashlightIntensity : 1.0,
+  flashlightFocus : 1.0,
+  flashlightRange : 1.0,
   allowCaves : true,
   showGraph : false,
   realDewPoint : false, // show real dew point in graph, instead of dew point with cloud water included
   enablePrecipitation : true,
   showDrops : false,
+  cameraShake : true,
+  shakeFrequency : 1.45,
+  shakeDecay : 0.78,
+  lightningTempShakeMult : 1.20,
+  lightningColorTempMult : 1.0,
+  icLightningRatio : 0.62,
+  ctgLightningRatio : 0.38,
+  lightningFlashRate : 1.35,
+  lightningFlashPersistence : 1.0,
+  lightningTempMinK : 9000.0,
+  lightningTempMaxK : 33000.0,
+  precipitationVisualBoost : 1.0,
+  ambientScattering : 1.0,
+  precipitationEffectMult : 1.0,
+  lightningGroundBias : 1.0,
+  lightningBloomStrength : 1.0,
+  stormOrganization : 1.0,
+  aerosolLoad : 1.0,
+  entrainmentRate : 1.0,
+  downdraftCoolingMult : 1.0,
+  microburstStrength : 1.0,
+  lightningBranching : 1.0,
+  lightningAnvilDrift : 1.0,
+  precipitationSizeSpectrum : 1.0,
+  hailShatterFactor : 1.0,
+  precipitationRecycling : 1.0,
+  surfaceRunoffRate : 1.0,
+  soilInfiltrationRate : 1.0,
+  canopyInterception : 1.0,
+  urbanHeatIslandStrength : 1.0,
+  coastalMixing : 1.0,
+  waterAlbedoShift : 0.0,
+  mobilePrecipBoost : 1.0,
+  balloonBurstPressure : 250.0,
+  balloonTelemetryDetailed : false,
+  showFPS : true,
+  showWeatherBalloons : true,
+  balloonRiseRate : 0.22,
+  balloonDriftMult : 1.0,
   paused : false,
   IterPerFrame : 10,
   auto_IterPerFrame : true,
@@ -425,6 +545,8 @@ var dropletFollowID = -1;
 var minShadowLight = 0.02;
 
 var saveFileName = '';
+var fpsCounterEl;
+var tornadoLabelEl;
 
 var guiControlsFromSaveFile = null;
 var datGui;
@@ -441,6 +563,17 @@ var lastFrameNum = 0;
 
 var iterNum = 0;
 
+var lightningShakeOffsetX = 0.0;
+var lightningShakeOffsetY = 0.0;
+var lightningShakeVelocityX = 0.0;
+var lightningShakeVelocityY = 0.0;
+var lightningShakeHFAmplitude = 0.0;
+var lightningShakeHFOffsetX = 0.0;
+var lightningShakeHFOffsetY = 0.0;
+var lightningShakePhaseX = 0.0;
+var lightningShakePhaseY = 0.0;
+var pendingLightningShakeEvents = [];
+
 // global framebuffers for measurements
 var frameBuff_0;
 var lightFrameBuff_0;
@@ -451,7 +584,23 @@ var dryLapse;
 const timePerIteration = 0.00008; // in hours (0.00008 = 0.288 sec, at 40m cell size that means the speed of light & sound = 138.88 m/s = 500 km/h)
 
 var NUM_DROPLETS;
-const NUM_DROPLETS_DEVIDER = 1;
+const NUM_DROPLET_MULTIPLIER = 1.25;
+
+function computeNumDroplets(resX, resY)
+{
+  const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+  const touchCapable = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  const mobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+  let mobileFactor = (coarsePointer || touchCapable || mobileUA) ? 0.48 : 1.0;
+
+  // Extra safety for high DPR mobile browsers.
+  if (window.devicePixelRatio >= 2.0 && mobileFactor < 1.0)
+    mobileFactor *= 0.85;
+
+  const rawDroplets = Math.floor(resX * resY * NUM_DROPLET_MULTIPLIER * mobileFactor);
+  const maxDroplets = mobileFactor < 1.0 ? 220000 : 700000;
+  return clamp(rawDroplets, 24000, maxDroplets);
+}
 
 let hdrFBO;
 
@@ -564,10 +713,12 @@ function maxWater(Td)
 
 function dewpoint(W)
 {
-  //  if (W < 0.00001) // can't remember why this was here...
-  //    return 0.0;
-  //  else
-  return wf_devider * Math.pow(W, 1.0 / wf_pow);
+  // Reworked dew point approximation from absolute humidity (g/m^3) to improve realism.
+  const absHumidity = Math.max(W, 0.0001);
+  const vaporPressure_hPa = clamp(absHumidity * 0.40, 0.01, 110.0);
+  const lnRatio = Math.log(vaporPressure_hPa / 6.112);
+  const TdC = (243.5 * lnRatio) / (17.67 - lnRatio);
+  return CtoK(clamp(TdC, -90.0, 55.0));
 }
 
 function relativeHumd(T, W) { return (W / maxWater(T)) * 100.0; }
@@ -878,6 +1029,9 @@ class Weatherstation
   #snowHeight = 0;   // cm
   #airQuality = 0;   // AQI
   #waterTemperature = 0;
+  #pressure_hPa = 1013.25;
+  #pressureTrend = 0.0;
+  #verticalVelocity = 0.0;
 
   #netIRpow = 0;
   #solarPower = 0;
@@ -980,7 +1134,8 @@ class Weatherstation
           {label : 'Air Quality', data : [], backgroundColor : '#803c00', borderColor : '#803c00', radius : 0, borderWidth : 1, fill : false, hidden : true},                           //
           {label : 'Precipitation', data : [], backgroundColor : '#0055FF', borderColor : '#0055FF', radius : 0, borderWidth : 1, fill : false, hidden : true, reallyHidden : true},    //
           {label : 'Snow Height', data : [], backgroundColor : '#FFFFFF', borderColor : '#FFFFFF', radius : 0, borderWidth : 1, fill : false, hidden : true, reallyHidden : true},      //
-          {label : 'Water Temperature', data : [], backgroundColor : '#406cff', borderColor : '#406cff', radius : 0, borderWidth : 1, fill : false, hidden : true, reallyHidden : true} //
+          {label : 'Water Temperature', data : [], backgroundColor : '#406cff', borderColor : '#406cff', radius : 0, borderWidth : 1, fill : false, hidden : true, reallyHidden : true}, //
+          {label : 'Pressure (hPa)', data : [], backgroundColor : '#ffc857', borderColor : '#ffc857', radius : 0, borderWidth : 1, fill : false, hidden : true} //
         ]
       },
       options : {
@@ -1042,6 +1197,7 @@ class Weatherstation
       this.#historyChart.data.datasets[1].data.push(convertTempToSelectedUnit(this.#dewpoint));
       this.#historyChart.data.datasets[2].data.push(convertVelocityToSelectedUnit(this.#velocity));
       this.#historyChart.data.datasets[3].data.push(this.#airQuality);
+      this.#historyChart.data.datasets[7].data.push(this.#pressure_hPa);
 
       if (this.#isOnLand) {
         this.#historyChart.data.datasets[4].data.push(guiControls.lengthUnit == 'LENGTH_UNIT_IMPERIAL' ? mmToIn(this.#soilMoisture) : this.#soilMoisture);
@@ -1092,6 +1248,13 @@ class Weatherstation
 
     this.#temperature = KtoC(T);
     this.#velocity = rawVelocityTo_ms(Math.sqrt(Math.pow(baseTextureValues[2 * 4 + 0], 2) + Math.pow(baseTextureValues[4 + 1], 2)));
+
+    let altitudeM = this.#y * cellHeight;
+    let hydrostaticPressure = 1013.25 * Math.exp(-altitudeM / 8400.0);
+    let newPressure = hydrostaticPressure + baseTextureValues[1 * 4 + 2] * 120.0;
+    this.#pressureTrend = newPressure - this.#pressure_hPa;
+    this.#pressure_hPa = newPressure;
+    this.#verticalVelocity = baseTextureValues[1 * 4 + 1] * 100.0;
 
     // gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_0);
     gl.readBuffer(gl.COLOR_ATTACHMENT1); // watertexture
@@ -1223,20 +1386,25 @@ class Weatherstation
 
       c.fillStyle = '#FFFFFF';
       c.fillText(printVelocity(this.#velocity), 20, 40);
+      c.fillStyle = '#ffc857';
+      const trendArrow = this.#pressureTrend > 0.03 ? '↑' : (this.#pressureTrend < -0.03 ? '↓' : '→');
+      c.fillText(this.#pressure_hPa.toFixed(1) + ' hPa ' + trendArrow, 2, 52);
+      c.fillStyle = '#b5d9ff';
+      c.fillText((this.#verticalVelocity >= 0 ? '↑' : '↓') + ' ' + Math.abs(this.#verticalVelocity).toFixed(1) + ' m/s', 58, 40);
 
       if (this.#soilMoisture > 0.) {
-        c.fillText(printSoilMoisture(this.#soilMoisture), 0, 52);
-        c.fillText('💧', 20, 65);
+        c.fillText(printSoilMoisture(this.#soilMoisture), 0, 64);
+        c.fillText('💧', 20, 68);
       } else if (this.#waterTemperature > -1.0) {
         c.fillStyle = '#406cff';
-        c.fillText(printTemp(this.#waterTemperature), 0, 52);
-        c.fillText('🌊 🌡', 20, 65);
+        c.fillText(printTemp(this.#waterTemperature), 0, 64);
+        c.fillText('🌊 🌡', 20, 68);
       }
 
       if (this.#snowHeight > 0.) {
-        c.fillText(printSnowHeight(this.#snowHeight), 67, 52);
+        c.fillText(printSnowHeight(this.#snowHeight), 67, 64);
         c.font = '14px Arial';
-        c.fillText('❄', 85, 65);
+        c.fillText('❄', 85, 68);
       }
     }
 
@@ -1252,7 +1420,102 @@ class Weatherstation
 }
 
 
+class WeatherBalloon
+{
+  constructor(xIn, yIn)
+  {
+    this.x = Math.floor(xIn);
+    this.y = Math.floor(yIn);
+    this.age = 0;
+    this.maxAge = 3600;
+    this.destroyed = false;
+
+    this.mainDiv = document.createElement('div');
+    this.mainDiv.style.position = 'absolute';
+    this.mainDiv.style.zIndex = '2';
+    this.mainDiv.style.fontFamily = 'monospace';
+    this.mainDiv.style.fontSize = '14px';
+    this.mainDiv.style.color = '#ffd7f7';
+    this.mainDiv.style.textShadow = '0 0 4px #000';
+    document.body.appendChild(this.mainDiv);
+
+    this.temperature = 0.0;
+    this.dewpoint = 0.0;
+    this.pressure_hPa = 1013.25;
+    this.verticalWind = 0.0;
+    this.ascentRate = 0.0;
+  }
+
+  measure()
+  {
+    if (this.destroyed)
+      return;
+
+    let clampedX = Math.floor(((this.x % sim_res_x) + sim_res_x) % sim_res_x);
+    let clampedY = Math.floor(clamp(this.y, 1, sim_res_y - 2));
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_0);
+    gl.readBuffer(gl.COLOR_ATTACHMENT0);
+    let baseValues = new Float32Array(4);
+    gl.readPixels(clampedX, clampedY, 1, 1, gl.RGBA, gl.FLOAT, baseValues);
+
+    gl.readBuffer(gl.COLOR_ATTACHMENT1);
+    let waterValues = new Float32Array(4);
+    gl.readPixels(clampedX, clampedY, 1, 1, gl.RGBA, gl.FLOAT, waterValues);
+
+    if (waterValues[0] > 1000.0) {
+      this.destroy();
+      return;
+    }
+
+    this.temperature = KtoC(potentialToRealT(baseValues[3], clampedY / sim_res_y));
+    this.dewpoint = KtoC(dewpoint(waterValues[0]));
+
+    let altitudeM = clampedY * cellHeight;
+    let hydrostaticPressure = 1013.25 * Math.exp(-altitudeM / 8400.0);
+    this.pressure_hPa = hydrostaticPressure + baseValues[2] * 120.0;
+    this.verticalWind = baseValues[1] * 100.0;
+
+    let driftScale = 0.5 * (sim_res_x / 900.0);
+    this.x += baseValues[0] * driftScale * guiControls.balloonDriftMult;
+    this.ascentRate = guiControls.balloonRiseRate + Math.max(baseValues[1], 0.0) * 3.5;
+    this.y += this.ascentRate;
+    this.age++;
+
+    if (this.age > this.maxAge || this.y >= sim_res_y - 2 || this.pressure_hPa <= guiControls.balloonBurstPressure)
+      this.destroy();
+  }
+
+  updateCanvas()
+  {
+    if (this.destroyed)
+      return;
+
+    let screenX = simToScreenX(this.x);
+    let screenY = simToScreenY(this.y);
+    this.mainDiv.style.left = screenX + 'px';
+    this.mainDiv.style.top = (screenY - 20) + 'px';
+    if (guiControls.balloonTelemetryDetailed)
+      this.mainDiv.innerText = '🎈 ' + this.pressure_hPa.toFixed(0) + 'hPa  T:' + this.temperature.toFixed(1) + '°C  Td:' + this.dewpoint.toFixed(1) + '°C  w:' + this.verticalWind.toFixed(1) + 'm/s';
+    else
+      this.mainDiv.innerText = '🎈 ' + this.pressure_hPa.toFixed(0) + 'hPa';
+  }
+
+  destroy()
+  {
+    if (this.destroyed)
+      return;
+    this.destroyed = true;
+    if (this.mainDiv && this.mainDiv.parentNode)
+      this.mainDiv.parentNode.removeChild(this.mainDiv);
+  }
+}
+
+
 let weatherStations = []; // array holding all weather stations
+let weatherBalloons = [];
+let lightningRods = [];
+
 
 
 async function loadData()
@@ -1281,7 +1544,7 @@ async function loadData()
       sim_res_x = resArray[0];
       sim_res_y = resArray[1];
 
-      NUM_DROPLETS = (sim_res_x * sim_res_y) / NUM_DROPLETS_DEVIDER;
+      NUM_DROPLETS = computeNumDroplets(sim_res_x, sim_res_y);
 
       saveFileName = file.name;
 
@@ -1356,11 +1619,12 @@ async function loadData()
     }
   } else {
     // no file, so create new simulation
-    sim_res_x = parseInt(document.getElementById('simResSelX').value);
-    sim_res_y = parseInt(document.getElementById('simResSelY').value);
-    sim_height = parseInt(document.getElementById('simHeightSel').value);
+    sim_res_x = Math.round(readNumericInput('simResSelX', 512));
+    sim_res_y = Math.round(readNumericInput('simResSelY', 300));
+    sim_height = Math.round(readNumericInput('simHeightSel', 12000));
+    sim_height = clamp(sim_height, 4000, 22000);
 
-    NUM_DROPLETS = (sim_res_x * sim_res_y) / NUM_DROPLETS_DEVIDER;
+    NUM_DROPLETS = computeNumDroplets(sim_res_x, sim_res_y);
     SETUP_MODE = true;
 
     mainScript(null); // run without initial textures
@@ -1384,6 +1648,7 @@ class LoadingBar
   #underBar;
   #percent;
   #description;
+  #title;
 
   constructor(percentIn)
   {
@@ -1395,29 +1660,50 @@ class LoadingBar
     // create html
     this.loadingBar = document.createElement('div');
     this.bar = document.createElement('div');
-    this.loadingBar.appendChild(this.bar);
-
+    this.title = document.createElement('div');
     this.underBar = document.createElement('div');
+
+    this.loadingBar.appendChild(this.title);
+    this.loadingBar.appendChild(this.bar);
     this.loadingBar.appendChild(this.underBar);
 
-    this.loadingBar.style.width = '100%';
-    this.loadingBar.style.height = '100px';
-    this.loadingBar.style.color = 'white';
+    this.loadingBar.style.width = 'min(760px, 92vw)';
+    this.loadingBar.style.height = '170px';
+    this.loadingBar.style.color = '#d7f4ff';
     this.loadingBar.style.textAlign = 'center';
-    this.loadingBar.style.lineHeight = '50px';
-    this.loadingBar.style.backgroundColor = 'gray';
-    this.loadingBar.style.marginTop = '400px';
-    this.loadingBar.style.position = 'absolute';
-    this.loadingBar.style.zIndex = '2';
+    this.loadingBar.style.background = 'rgba(8,16,34,0.75)';
+    this.loadingBar.style.backdropFilter = 'blur(8px)';
+    this.loadingBar.style.border = '1px solid rgba(90,225,255,0.40)';
+    this.loadingBar.style.borderRadius = '16px';
+    this.loadingBar.style.boxShadow = '0 14px 38px rgba(0,0,0,0.50), inset 0 0 22px rgba(41,190,255,0.12)';
+    this.loadingBar.style.position = 'fixed';
+    this.loadingBar.style.left = '50%';
+    this.loadingBar.style.top = '50%';
+    this.loadingBar.style.transform = 'translate(-50%, -50%)';
+    this.loadingBar.style.padding = '14px 16px';
+    this.loadingBar.style.zIndex = '4';
+
+    this.title.style.height = '30px';
+    this.title.style.lineHeight = '30px';
+    this.title.style.fontSize = '16px';
+    this.title.style.letterSpacing = '1.2px';
+    this.title.style.fontWeight = '700';
+    this.title.style.textTransform = 'uppercase';
+    this.title.innerHTML = 'Initializing Weather Simulation';
 
     this.underBar.style.width = '100%';
-    this.underBar.style.height = '50px';
-    this.underBar.style.backgroundColor = 'black';
+    this.underBar.style.height = '30px';
+    this.underBar.style.lineHeight = '30px';
+    this.underBar.style.fontSize = '14px';
+    this.underBar.style.color = '#9bd9ff';
 
-    this.bar.style.height = '50px';
-
-    this.bar.style.backgroundColor = 'green';
+    this.bar.style.height = '44px';
+    this.bar.style.lineHeight = '44px';
+    this.bar.style.borderRadius = '10px';
+    this.bar.style.background = 'linear-gradient(90deg, #1b6fff, #2dd7ff)';
+    this.bar.style.boxShadow = '0 0 20px rgba(45,215,255,0.35)';
     this.bar.style.fontSize = '20px';
+    this.bar.style.fontWeight = '700';
 
     this.#update();
 
@@ -1468,9 +1754,17 @@ function setLoadingBar()
 {
   return new Promise((resolve) => {
     var element = document.getElementById('IntroScreen');
-    element.parentNode.removeChild(element); // remove introscreen div
+    var navEl = document.querySelector('.main-nav');
+    if (element) {
+      element.style.display = 'none';
+      element.style.pointerEvents = 'none';
+      if (element.parentNode)
+        element.parentNode.removeChild(element); // remove introscreen div
+    }
+    if (navEl)
+      navEl.style.display = 'none';
 
-    document.body.style.backgroundColor = 'black';
+    document.body.style.backgroundColor = '#050b17';
 
     loadingBar = new LoadingBar(1);
 
@@ -1478,21 +1772,174 @@ function setLoadingBar()
   });
 }
 
+
+function ensureTornadoLabel()
+{
+  if (tornadoLabelEl)
+    return tornadoLabelEl;
+
+  tornadoLabelEl = document.createElement('div');
+  tornadoLabelEl.style.position = 'fixed';
+  tornadoLabelEl.style.zIndex = '3';
+  tornadoLabelEl.style.pointerEvents = 'none';
+  tornadoLabelEl.style.padding = '4px 8px';
+  tornadoLabelEl.style.borderRadius = '8px';
+  tornadoLabelEl.style.border = '1px solid rgba(180,220,255,0.7)';
+  tornadoLabelEl.style.background = 'rgba(8,14,30,0.72)';
+  tornadoLabelEl.style.color = '#d8f0ff';
+  tornadoLabelEl.style.font = '12px monospace';
+  tornadoLabelEl.style.display = 'none';
+  tornadoLabelEl.innerText = '🌪 Tornado Signature';
+  document.body.appendChild(tornadoLabelEl);
+  return tornadoLabelEl;
+}
+
+function updateTornadoLabel()
+{
+  const label = ensureTornadoLabel();
+  if (!guiControls.showTornadoLabels || SETUP_MODE || guiControls.tornadoPotential < 0.15 || frameNum % 20 != 0) {
+    label.style.display = 'none';
+    return;
+  }
+
+  let best = 0.0;
+  let bestX = 0;
+  let bestY = 0;
+  const samples = 28;
+  gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_0);
+  gl.readBuffer(gl.COLOR_ATTACHMENT0);
+  const px = new Float32Array(4);
+  for (let i = 0; i < samples; i++) {
+    const sx = Math.floor((i / samples) * (sim_res_x - 1));
+    const sy = Math.floor(sim_res_y * 0.05 + (Math.sin(i * 2.73 + frameNum * 0.03) * 0.5 + 0.5) * sim_res_y * 0.28);
+    gl.readPixels(sx, sy, 1, 1, gl.RGBA, gl.FLOAT, px);
+    const vx = px[0];
+    const vy = px[1];
+    const buoy = Math.max(px[3] - 290.0, 0.0);
+    const strength = Math.abs(vx * vy) + Math.max(vy, 0.0) * 0.7 + buoy * 0.0006;
+    if (strength > best) {
+      best = strength;
+      bestX = sx;
+      bestY = sy;
+    }
+  }
+
+  if (best > 0.0035) {
+    label.style.display = 'block';
+    label.style.left = (simToScreenX(bestX) + 8) + 'px';
+    label.style.top = (simToScreenY(bestY) - 16) + 'px';
+    label.innerText = '🌪 Tornado Signature  ' + (best * 1000.0).toFixed(1);
+  } else {
+    label.style.display = 'none';
+  }
+}
+
 var soundingData;
 
 async function prepareSounding()
 {
-  const dateSel = document.getElementById('datePicker');
-  const date = new Date(dateSel.value);
+  const dateSel = getEl('datePicker');
+  const date = new Date(dateSel && dateSel.value ? dateSel.value : Date.now());
   let epochTime = Math.floor(date.getTime() / 1000);
 
-  const hourSelector = document.getElementById('hourSelector');
-  const hour = hourSelector.options[hourSelector.selectedIndex].value;
+  const hourSelector = getEl('hourSelector');
+  const hour = hourSelector && hourSelector.selectedIndex >= 0 ? hourSelector.options[hourSelector.selectedIndex].value : 0;
 
   epochTime += hour * 3600;
 
   soundingData = await loadSounding(stationSelector.options[stationSelector.selectedIndex].value, epochTime);
 }
+
+function triggerLightningEffects(lightningX, lightningY, intensity)
+{
+  let camXnorm = 1.0 - (cam.curXpos + 1.0) / 2.0;
+
+  let camDistFromSim = cellHeight * sim_res_x * 0.5 / cam.curZoom; // asuming 90° HFOV
+
+  let camHorDistFromStrike = (lightningX - camXnorm) * cellHeight * sim_res_x;
+
+  let vecStrikeToCam = new Vec2D(camDistFromSim, camHorDistFromStrike);
+  let distance = vecStrikeToCam.mag();
+
+  // shock wave travel time (same physical model as thunder)
+  let delaySec = distance / 343.0;
+  let simTimeMult = timePerIteration * guiControls.IterPerFrame * FPS * 3600.0;
+  let delayFrames = Math.max(Math.floor((delaySec / simTimeMult) * FPS), 0);
+
+  let lightningTemperature = map_range_C(intensity, 0.05, 4.5, 9000.0, 32000.0);
+
+  pendingLightningShakeEvents.push({
+    delayFrames : delayFrames,
+    horizontalSign : camHorDistFromStrike < 0.0 ? -1.0 : 1.0,
+    distance : distance,
+    intensity : Math.max(intensity, 0.01),
+    temperature : lightningTemperature,
+  });
+
+  if (pendingLightningShakeEvents.length > 64)
+    pendingLightningShakeEvents.shift();
+}
+
+function updateLightningShakePhysics()
+{
+  if (!guiControls.cameraShake) {
+    lightningShakeOffsetX = lightningShakeOffsetY = 0.0;
+    lightningShakeHFOffsetX = lightningShakeHFOffsetY = 0.0;
+    lightningShakeVelocityX = lightningShakeVelocityY = 0.0;
+    lightningShakeHFAmplitude = 0.0;
+    lightningShakePhaseX = lightningShakePhaseY = 0.0;
+    pendingLightningShakeEvents.length = 0;
+    return;
+  }
+  for (let i = pendingLightningShakeEvents.length - 1; i >= 0; i--) {
+    let event = pendingLightningShakeEvents[i];
+    event.delayFrames--;
+
+    if (event.delayFrames <= 0) {
+      let distanceMult = map_range_C(event.distance, 500.0, 30000.0, 1.0, 0.0);
+      let thermalBoost = map_range_C(event.temperature, 9000.0, 32000.0, 0.85, 1.45) * guiControls.lightningTempShakeMult;
+      let impulse = clamp(Math.pow(event.intensity, 0.60) * 0.030 * distanceMult * thermalBoost, 0.0, 0.028);
+
+      // apply shock mostly horizontal with slight random vertical jitter
+      lightningShakeVelocityX += event.horizontalSign * impulse;
+      lightningShakeVelocityY += (Math.random() - 0.5) * impulse * 0.35;
+
+      // high frequency shake burst for close/intense lightning
+      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 4.2, 0.0, 0.034);
+
+      pendingLightningShakeEvents.splice(i, 1);
+    }
+  }
+
+  // damped spring model
+  const spring = 0.18;
+  const damping = 0.80;
+
+  lightningShakeVelocityX += -lightningShakeOffsetX * spring;
+  lightningShakeVelocityY += -lightningShakeOffsetY * spring;
+
+  lightningShakeVelocityX *= damping;
+  lightningShakeVelocityY *= damping;
+
+  lightningShakeOffsetX += lightningShakeVelocityX;
+  lightningShakeOffsetY += lightningShakeVelocityY;
+
+  // high-frequency lightning jitter with configurable frequency and faster decay
+  lightningShakeHFAmplitude *= guiControls.shakeDecay;
+
+  lightningShakePhaseX += (4.8 + Math.random() * 1.8) * guiControls.shakeFrequency;
+  lightningShakePhaseY += (5.6 + Math.random() * 2.2) * guiControls.shakeFrequency;
+
+  let hfNoiseX = (Math.random() * 2.0 - 1.0) * 0.35;
+  let hfNoiseY = (Math.random() * 2.0 - 1.0) * 0.35;
+
+  lightningShakeHFOffsetX = (Math.sin(lightningShakePhaseX) + hfNoiseX) * lightningShakeHFAmplitude;
+  lightningShakeHFOffsetY = (Math.sin(lightningShakePhaseY) + hfNoiseY) * lightningShakeHFAmplitude;
+
+  lightningShakeOffsetX = clamp(lightningShakeOffsetX, -0.025, 0.025);
+  lightningShakeOffsetY = clamp(lightningShakeOffsetY, -0.020, 0.020);
+}
+
 
 async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initialRainDrops)
 {
@@ -3276,9 +3723,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       this.prevThrottle = this.throttle;
 
       if (upPressed) {
-        this.throttle += 0.01;
+        this.throttle += 0.01 * guiControls.airplaneThrottleResponse;
       } else if (downPressed) {
-        this.throttle -= 0.01;
+        this.throttle -= 0.01 * guiControls.airplaneThrottleResponse;
       }
 
       const [autopilotElevator, autopilotThrottle] = this.#autopilot.update(this.phys.angle * radToDeg, this.phys.pos.y, this.phys.vel, this.#IAS, this.calcVecToRunway(), this.#gearOnGround);
@@ -3302,7 +3749,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       } else if (gp) {
         this.elevator = -gp.axes[1];
       } else {                                                              // manual elevator control
-        this.elevator = (mouseY - canvas.height / 2) / canvas.height * 2.0; // pitch input -1.0 to +1.0
+        this.elevator = ((mouseY - canvas.height / 2) / canvas.height * 2.0) * guiControls.airplanePitchAuthority; // pitch input -1.0 to +1.0
       }
 
       // this.elevator /= 1.0 + Math.max(this.#airspeed - 80, 0.) * 0.01;          // limit elevator throw at higher airspeed
@@ -3409,9 +3856,30 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dynamicWaterTemperature'), guiControls.dynamicWaterTemperature ? 1.0 : 0.0);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'evapHeat'), guiControls.evapHeat);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterWeight'), guiControls.waterWeight);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'surfaceRunoffRate'), guiControls.surfaceRunoffRate);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'soilInfiltrationRate'), guiControls.soilInfiltrationRate);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'canopyInterception'), guiControls.canopyInterception);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'urbanHeatIslandStrength'), guiControls.urbanHeatIslandStrength);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'coastalMixing'), guiControls.coastalMixing);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterAlbedoShift'), guiControls.waterAlbedoShift);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudAutoconversionRate'), guiControls.cloudAutoconversionRate);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudLifetimeBoost'), guiControls.cloudLifetimeBoost);
     gl.useProgram(velocityProgram);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'dragMultiplier'), guiControls.dragMultiplier);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'coriolisStrength'), guiControls.coriolisStrength);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'turbulentMix'), guiControls.turbulentMix);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'jetStreamCoupling'), guiControls.jetStreamCoupling);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityWaveDrag'), guiControls.gravityWaveDrag);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'mountainWaveStrength'), guiControls.mountainWaveStrength);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'vortexStretching'), guiControls.vortexStretching);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'ageostrophicFlow'), guiControls.ageostrophicFlow);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'moistBuoyancyBoost'), guiControls.moistBuoyancyBoost);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityCurrentStrength'), guiControls.gravityCurrentStrength);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'tornadoPotential'), guiControls.tornadoPotential);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'frontogenesisStrength'), guiControls.frontogenesisStrength);
     gl.useProgram(lightingProgram);
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'greenhouseGases'), guiControls.greenhouseGases);
@@ -3435,6 +3903,21 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'spawnChanceMult'), guiControls.spawnChance);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.lightningChanceMult);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningMinInterval'), guiControls.lightningMinInterval);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'icLightningRatio'), guiControls.icLightningRatio);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ctgLightningRatio'), guiControls.ctgLightningRatio);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), guiControls.lightningFlashRate);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationEffectMult'), guiControls.precipitationEffectMult);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningGroundBias'), guiControls.lightningGroundBias);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'stormOrganization'), guiControls.stormOrganization);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'aerosolLoad'), guiControls.aerosolLoad);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'entrainmentRate'), guiControls.entrainmentRate);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'downdraftCoolingMult'), guiControls.downdraftCoolingMult);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'microburstStrength'), guiControls.microburstStrength);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningBranching'), guiControls.lightningBranching);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningAnvilDrift'), guiControls.lightningAnvilDrift);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationSizeSpectrum'), guiControls.precipitationSizeSpectrum);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'hailShatterFactor'), guiControls.hailShatterFactor);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobilePrecipBoost'), guiControls.mobilePrecipBoost);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
@@ -3442,14 +3925,59 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'freezingRate'), guiControls.freezingRate);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'meltingRate'), guiControls.meltingRate);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapRate'), guiControls.evapRate);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'entrainmentDilution'), guiControls.entrainmentDilution);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'drizzleThresholdShift'), guiControls.drizzleThresholdShift);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'graupelChargeGain'), guiControls.graupelChargeGain);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'iceCrystalChargeGain'), guiControls.iceCrystalChargeGain);
+    gl.useProgram(realisticDisplayProgram);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightIntensity'), guiControls.flashlightIntensity);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightFocus'), guiControls.flashlightFocus);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightRange'), guiControls.flashlightRange);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.radiationHaze);
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
+    updateLightningRodUniforms();
+  }
+
+  function updateLightningRodUniforms()
+  {
+    if (!precipitationProgram || !gl)
+      return;
+
+    const maxRods = 8;
+    const rodData = new Float32Array(maxRods * 2);
+    const rodCount = Math.min(lightningRods.length, maxRods);
+    for (let i = 0; i < rodCount; i++) {
+      rodData[i * 2] = lightningRods[i].x / sim_res_x;
+      rodData[i * 2 + 1] = lightningRods[i].y / sim_res_y;
+    }
+
+    const rodRadiusNorm = (guiControls.lightningRodRadiusKm * 1000.0) / Math.max(cellHeight * sim_res_x, 1.0);
+
+    gl.useProgram(precipitationProgram);
+    gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'lightningRodCount'), rodCount);
+    gl.uniform2fv(gl.getUniformLocation(precipitationProgram, 'lightningRodPos[0]'), rodData);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningRodRadiusNorm'), rodRadiusNorm);
   }
 
   function setupDatGui(strGuiControls)
   {
     datGui = new dat.GUI();
-    guiControls = JSON.parse(strGuiControls); // load settings object
+    const loadedGuiControls = JSON.parse(strGuiControls); // load settings object
+    guiControls = Object.assign({}, guiControls_default, loadedGuiControls); // backfill missing keys from older savefiles
+
+    if (window.matchMedia && window.matchMedia('(pointer:coarse)').matches)
+      guiControls.mobilePrecipBoost = Math.max(guiControls.mobilePrecipBoost, 1.35);
 
     guiControls.tool = 'TOOL_NONE';
 
@@ -3502,6 +4030,93 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
       })
       .name('Wind');
+
+    fluidParams_folder.add(guiControls, 'coriolisStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'coriolisStrength'), guiControls.coriolisStrength);
+      })
+      .name('Coriolis Strength');
+
+    fluidParams_folder.add(guiControls, 'turbulentMix', 0.1, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'turbulentMix'), guiControls.turbulentMix);
+      })
+      .name('Turbulent Mix');
+
+    fluidParams_folder.add(guiControls, 'jetStreamCoupling', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'jetStreamCoupling'), guiControls.jetStreamCoupling);
+      })
+      .name('Jet Stream Coupling');
+
+    fluidParams_folder.add(guiControls, 'gravityWaveDrag', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityWaveDrag'), guiControls.gravityWaveDrag);
+      })
+      .name('Gravity Wave Drag');
+
+    fluidParams_folder.add(guiControls, 'mountainWaveStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'mountainWaveStrength'), guiControls.mountainWaveStrength);
+      })
+      .name('Mountain Wave Strength');
+
+    fluidParams_folder.add(guiControls, 'vortexStretching', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'vortexStretching'), guiControls.vortexStretching);
+      })
+      .name('Vortex Stretching');
+
+    fluidParams_folder.add(guiControls, 'ageostrophicFlow', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'ageostrophicFlow'), guiControls.ageostrophicFlow);
+      })
+      .name('Ageostrophic Flow');
+
+    fluidParams_folder.add(guiControls, 'moistBuoyancyBoost', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'moistBuoyancyBoost'), guiControls.moistBuoyancyBoost);
+      })
+      .name('Moist Buoyancy Boost');
+
+    fluidParams_folder.add(guiControls, 'gravityCurrentStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityCurrentStrength'), guiControls.gravityCurrentStrength);
+      })
+      .name('Gravity Current Strength');
+    fluidParams_folder.add(guiControls, 'shearProduction', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
+      })
+      .name('Shear Production');
+
+    fluidParams_folder.add(guiControls, 'tornadoPotential', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'tornadoPotential'), guiControls.tornadoPotential);
+      })
+      .name('Tornado Potential');
+
+    fluidParams_folder.add(guiControls, 'frontogenesisStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'frontogenesisStrength'), guiControls.frontogenesisStrength);
+      })
+      .name('Storm Front Strength');
+
+    fluidParams_folder.add(guiControls, 'terrainRuggednessBoost', 0.5, 2.0, 0.01).name('Terrain Ruggedness');
+    fluidParams_folder.add(guiControls, 'terrainWetnessRecovery', 0.5, 2.0, 0.01).name('Terrain Wetness Recovery');
+    fluidParams_folder.add(guiControls, 'terrainRiverBias', 0.3, 2.2, 0.01).name('Terrain River Bias');
 
     fluidParams_folder.add(guiControls, 'globalDrying', 0.0, 0.0001, 0.000001)
       .onChange(function() {
@@ -3563,19 +4178,40 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         'Urban' : 'TOOL_WALL_URBAN',
         'Runway' : 'TOOL_WALL_RUNWAY',
         'Industrial' : 'TOOL_WALL_INDUSTRIAL',
+        'Skyscraper' : 'TOOL_SKYSCRAPER',
+        'Lightning Rod' : 'TOOL_LIGHTNING_ROD',
         'Fire' : 'TOOL_WALL_FIRE',
         'Smoke / Dust' : 'TOOL_SMOKE',
+        'Sand (SAN)' : 'TOOL_SAND',
         'Soil Moisture' : 'TOOL_WALL_MOIST',
         'Vegetation' : 'TOOL_VEGETATION',
         'Snow' : 'TOOL_WALL_SNOW',
         'Wind' : 'TOOL_WIND',
         'Weather Station' : 'TOOL_STATION',
+        'Weather Balloon' : 'TOOL_BALLOON',
       })
       .name('Tool')
       .listen();
     UI_folder.add(guiControls, 'brushSize', 1, 2000, 1).name('Brush Diameter').listen();
     UI_folder.add(guiControls, 'wholeWidth').name('Whole Width Brush').listen();
     UI_folder.add(guiControls, 'brushIntensity', 0.005, 0.075, 0.001).name('Brush Intensity');
+    UI_folder.add(guiControls, 'flashlightIntensity', 0.2, 3.0, 0.01).name('Flashlight Intensity').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightIntensity'), guiControls.flashlightIntensity);
+    });
+    UI_folder.add(guiControls, 'flashlightFocus', 0.4, 3.0, 0.01).name('Flashlight Focus').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightFocus'), guiControls.flashlightFocus);
+    });
+    UI_folder.add(guiControls, 'flashlightRange', 0.3, 2.5, 0.01).name('Flashlight Range').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightRange'), guiControls.flashlightRange);
+    });
+    UI_folder.add(guiControls, 'airplanePitchAuthority', 0.5, 2.2, 0.01).name('Airplane Pitch Authority');
+    UI_folder.add(guiControls, 'airplaneThrottleResponse', 0.4, 2.0, 0.01).name('Airplane Throttle Response');
+    UI_folder.add(guiControls, 'showTornadoLabels').name('Show Tornado Labels');
+    UI_folder.add(guiControls, 'showLightningRods').name('Show Lightning Rods');
+    UI_folder.add(guiControls, 'allowEditingWhenPaused').name('Edit While Paused');
     UI_folder.add(guiControls, 'allowCaves')
       .onChange(function() {
         gl.useProgram(boundaryProgram);
@@ -3626,6 +4262,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(lightingProgram, 'IR_rate'), guiControls.IR_rate);
       })*/
       .name('IR Multiplier');
+    radiation_folder.add(guiControls, 'radiationHaze', 0.2, 2.5, 0.01).name('Radiation Haze').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.radiationHaze);
+    });
 
     var water_folder = datGui.addFolder('Water');
 
@@ -3687,6 +4327,55 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Water Weight');
 
+    water_folder.add(guiControls, 'precipitationRecycling', 0.2, 2.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
+      })
+      .name('Precip Recycling');
+
+    water_folder.add(guiControls, 'surfaceRunoffRate', 0.2, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'surfaceRunoffRate'), guiControls.surfaceRunoffRate);
+      })
+      .name('Surface Runoff');
+
+    water_folder.add(guiControls, 'soilInfiltrationRate', 0.2, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'soilInfiltrationRate'), guiControls.soilInfiltrationRate);
+      })
+      .name('Soil Infiltration');
+
+    water_folder.add(guiControls, 'canopyInterception', 0.0, 2.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'canopyInterception'), guiControls.canopyInterception);
+      })
+      .name('Canopy Interception');
+
+    water_folder.add(guiControls, 'urbanHeatIslandStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'urbanHeatIslandStrength'), guiControls.urbanHeatIslandStrength);
+      })
+      .name('Urban Heat Island');
+
+    water_folder.add(guiControls, 'coastalMixing', 0.2, 2.5, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'coastalMixing'), guiControls.coastalMixing);
+      })
+      .name('Coastal Mixing');
+
+    water_folder.add(guiControls, 'waterAlbedoShift', -0.5, 0.5, 0.01)
+      .onChange(function() {
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterAlbedoShift'), guiControls.waterAlbedoShift);
+      })
+      .name('Water Albedo Shift');
+
     var precipitation_folder = datGui.addFolder('Precipitation');
 
     precipitation_folder.add(guiControls, 'aboveZeroThreshold', 0.1, 2.0, 0.001)
@@ -3710,11 +4399,18 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Spawn Rate')
       .listen();
+
+    precipitation_folder.add(guiControls, 'mobilePrecipBoost', 0.5, 2.5, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobilePrecipBoost'), guiControls.mobilePrecipBoost);
+      })
+      .name('Mobile Precip Boost');
       
     precipitation_folder.add(guiControls, 'lightningChanceMult', 0, 10, 0.1)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
-        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.LightningChanceMult);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.lightningChanceMult);
       })
       .name('Lightning Chance Multiplier');
     
@@ -3724,6 +4420,105 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningMinInterval'), guiControls.lightningMinInterval);
       })
       .name('Min iteration of lightning');
+
+    precipitation_folder.add(guiControls, 'icLightningRatio', 0.0, 1.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'icLightningRatio'), guiControls.icLightningRatio);
+      })
+      .name('IC Lightning Ratio');
+
+    precipitation_folder.add(guiControls, 'ctgLightningRatio', 0.0, 1.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ctgLightningRatio'), guiControls.ctgLightningRatio);
+      })
+      .name('CG Lightning Ratio');
+
+    precipitation_folder.add(guiControls, 'lightningFlashRate', 0.3, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), guiControls.lightningFlashRate);
+      })
+      .name('Flash Rate');
+
+    precipitation_folder.add(guiControls, 'precipitationEffectMult', 0.4, 2.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationEffectMult'), guiControls.precipitationEffectMult);
+      })
+      .name('Precip Effect Mult');
+
+    precipitation_folder.add(guiControls, 'lightningGroundBias', 0.0, 2.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningGroundBias'), guiControls.lightningGroundBias);
+      })
+      .name('Ground Strike Bias');
+
+    precipitation_folder.add(guiControls, 'stormOrganization', 0.2, 2.5, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'stormOrganization'), guiControls.stormOrganization);
+      })
+      .name('Storm Organization');
+
+    precipitation_folder.add(guiControls, 'aerosolLoad', 0.2, 2.5, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'aerosolLoad'), guiControls.aerosolLoad);
+      })
+      .name('Aerosol Load');
+
+    precipitation_folder.add(guiControls, 'entrainmentRate', 0.2, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'entrainmentRate'), guiControls.entrainmentRate);
+      })
+      .name('Entrainment Rate');
+
+    precipitation_folder.add(guiControls, 'downdraftCoolingMult', 0.2, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'downdraftCoolingMult'), guiControls.downdraftCoolingMult);
+      })
+      .name('Downdraft Cooling');
+
+    precipitation_folder.add(guiControls, 'microburstStrength', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'microburstStrength'), guiControls.microburstStrength);
+      })
+      .name('Microburst Strength');
+
+    precipitation_folder.add(guiControls, 'lightningBranching', 0.2, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningBranching'), guiControls.lightningBranching);
+      })
+      .name('Lightning Branching');
+
+    precipitation_folder.add(guiControls, 'lightningAnvilDrift', 0.0, 2.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningAnvilDrift'), guiControls.lightningAnvilDrift);
+      })
+      .name('Lightning Anvil Drift');
+
+    precipitation_folder.add(guiControls, 'precipitationSizeSpectrum', 0.2, 2.5, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationSizeSpectrum'), guiControls.precipitationSizeSpectrum);
+      })
+      .name('Size Spectrum');
+
+    precipitation_folder.add(guiControls, 'hailShatterFactor', 0.0, 2.5, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'hailShatterFactor'), guiControls.hailShatterFactor);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobilePrecipBoost'), guiControls.mobilePrecipBoost);
+      })
+      .name('Hail Shatter');
       
     precipitation_folder.add(guiControls, 'snowDensity', 0.1, 0.9, 0.01)
       .onChange(function() {
@@ -3768,7 +4563,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'meltingRate'), guiControls.meltingRate);
       })
       .name('Melting Rate');
-
     precipitation_folder.add(guiControls, 'evapRate', 0.0001, 0.005, 0.0001)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
@@ -3776,8 +4570,74 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Evaporation Rate');
 
+    precipitation_folder.add(guiControls, 'cloudAutoconversionRate', 0.3, 2.2, 0.01).name('Cloud Auto-conversion').onChange(function() {
+      gl.useProgram(boundaryProgram);
+      gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudAutoconversionRate'), guiControls.cloudAutoconversionRate);
+    });
+    precipitation_folder.add(guiControls, 'cloudLifetimeBoost', 0.5, 2.5, 0.01).name('Cloud Lifetime Boost').onChange(function() {
+      gl.useProgram(boundaryProgram);
+      gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudLifetimeBoost'), guiControls.cloudLifetimeBoost);
+    });
+    precipitation_folder.add(guiControls, 'entrainmentDilution', 0.4, 2.5, 0.01).name('Entrainment Dilution').onChange(function() {
+      gl.useProgram(precipitationProgram);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'entrainmentDilution'), guiControls.entrainmentDilution);
+    });
+    precipitation_folder.add(guiControls, 'drizzleThresholdShift', 0.6, 1.6, 0.01).name('Drizzle Threshold Shift').onChange(function() {
+      gl.useProgram(precipitationProgram);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'drizzleThresholdShift'), guiControls.drizzleThresholdShift);
+    });
+    precipitation_folder.add(guiControls, 'graupelChargeGain', 0.2, 2.5, 0.01).name('Graupel Charge Gain').onChange(function() {
+      gl.useProgram(precipitationProgram);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'graupelChargeGain'), guiControls.graupelChargeGain);
+    });
+    precipitation_folder.add(guiControls, 'iceCrystalChargeGain', 0.2, 2.5, 0.01).name('Ice Crystal Charge Gain').onChange(function() {
+      gl.useProgram(precipitationProgram);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'iceCrystalChargeGain'), guiControls.iceCrystalChargeGain);
+    });
+
     precipitation_folder.add(guiControls, 'inactiveDroplets', 0, NUM_DROPLETS).listen().name('Inactive Droplets');
 
+    var lightning_folder = datGui.addFolder('Lightning & Shake');
+
+    lightning_folder.add(guiControls, 'cameraShake').name('Camera Shake');
+    lightning_folder.add(guiControls, 'shakeFrequency', 0.5, 3.0, 0.01).name('Shake Frequency');
+    lightning_folder.add(guiControls, 'shakeDecay', 0.60, 0.92, 0.005).name('Shake Decay');
+    lightning_folder.add(guiControls, 'lightningTempShakeMult', 0.5, 2.5, 0.01).name('Temp -> Shake Mult');
+    lightning_folder.add(guiControls, 'lightningColorTempMult', 0.0, 2.0, 0.01).name('Temp -> Bolt Color').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
+    });
+    lightning_folder.add(guiControls, 'lightningFlashPersistence', 0.5, 2.5, 0.01).name('Flash Persistence').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
+    });
+    lightning_folder.add(guiControls, 'lightningTempMinK', 5000, 18000, 100).name('Min Temp (K)').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
+    });
+    lightning_folder.add(guiControls, 'lightningTempMaxK', 20000, 50000, 100).name('Max Temp (K)').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
+    });
+    lightning_folder.add(guiControls, 'electricFieldVizStrength', 0.0, 3.0, 0.01).name('Electric Field Viz').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
+    });
+    lightning_folder.add(guiControls, 'dynamicChargeSeparation', 0.0, 3.0, 0.01).name('Charge Separation').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
+    });
+    lightning_folder.add(guiControls, 'electricFieldDiffusion', 0.0, 3.0, 0.01).name('Field Diffusion').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
+    });
+    lightning_folder.add(guiControls, 'lightningRodRadiusKm', 1.0, 40.0, 0.5).name('Lightning Rod Radius (km)');
+
+    var balloon_folder = datGui.addFolder('Weather Balloons');
+    balloon_folder.add(guiControls, 'balloonRiseRate', 0.05, 0.60, 0.01).name('Rise Rate');
+    balloon_folder.add(guiControls, 'balloonDriftMult', 0.2, 2.0, 0.01).name('Drift Multiplier');
+    balloon_folder.add(guiControls, 'balloonBurstPressure', 120.0, 500.0, 1.0).name('Burst Pressure hPa');
+    balloon_folder.add(guiControls, 'balloonTelemetryDetailed').name('Detailed Telemetry');
 
     var display_folder = datGui.addFolder('Display');
 
@@ -3808,6 +4668,18 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
       })
       .name('Exposure');
+    display_folder.add(guiControls, 'precipitationVisualBoost', 0.5, 2.0, 0.01).name('Precip Lighting Boost').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
+    });
+    display_folder.add(guiControls, 'ambientScattering', 0.3, 2.5, 0.01).name('Ambient Scattering').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
+    });
+    display_folder.add(guiControls, 'lightningBloomStrength', 0.2, 2.5, 0.01).name('Lightning Bloom').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
+    });
 
     display_folder.add(guiControls, 'camSpeed', 0.001, 0.050, 0.001).name('Camera Pan Speed');
 
@@ -3827,6 +4699,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     display_folder.add(guiControls, 'showGraph').onChange(hideOrShowGraph).name('Show Sounding Graph').listen();
     display_folder.add(guiControls, 'showDrops').name('Show Droplets').listen();
+    display_folder.add(guiControls, 'showFPS').name('Show FPS Counter');
+    display_folder.add(guiControls, 'showWeatherBalloons').name('Show Weather Balloons');
     display_folder.add(guiControls, 'realDewPoint').name('Show Real Dew Point');
 
 
@@ -3892,7 +4766,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         if (soundSystem == null) {
           soundSystem = new SoundSystem();
         }
-      } else {
+      } else if (soundSystem) {
         soundSystem.mute();
       }
     });
@@ -3901,6 +4775,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     datGui.add(guiControls, 'paused').onChange(handlePause).name('Paused').listen();
     datGui.add(guiControls, 'download').name('Save Simulation to File');
+
+    // keep core controls visible when simulation starts
+    fluidParams_folder.open();
+    precipitation_folder.open();
+    lightning_folder.open();
+    display_folder.open();
 
     datGui.width = 400;
   }
@@ -3913,6 +4793,28 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   function startSimulation()
   {
     SETUP_MODE = false;
+
+    pendingLightningShakeEvents.length = 0;
+    lightningShakeOffsetX = lightningShakeOffsetY = 0.0;
+    lightningShakeVelocityX = lightningShakeVelocityY = 0.0;
+    lightningShakeHFOffsetX = lightningShakeHFOffsetY = 0.0;
+    lightningShakeHFAmplitude = 0.0;
+    lightningShakePhaseX = lightningShakePhaseY = 0.0;
+    gl.useProgram(realisticDisplayProgram);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightIntensity'), guiControls.flashlightIntensity);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightFocus'), guiControls.flashlightFocus);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightRange'), guiControls.flashlightRange);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.radiationHaze);
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
     datGui.show(); // unhide
@@ -3927,6 +4829,22 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     clockEl.style.color = 'white';
 
     simDateTime = new Date(2000, Math.floor(guiControls.month) - 1, (guiControls.month % 1) * 30.417);
+
+    if (!fpsCounterEl) {
+      fpsCounterEl = document.createElement('div');
+      document.body.appendChild(fpsCounterEl);
+      fpsCounterEl.style.position = 'fixed';
+      fpsCounterEl.style.right = '14px';
+      fpsCounterEl.style.top = '14px';
+      fpsCounterEl.style.zIndex = '3';
+      fpsCounterEl.style.padding = '6px 10px';
+      fpsCounterEl.style.background = 'rgba(0,0,0,0.45)';
+      fpsCounterEl.style.border = '1px solid rgba(255,255,255,0.25)';
+      fpsCounterEl.style.borderRadius = '8px';
+      fpsCounterEl.style.fontFamily = 'Monospace';
+      fpsCounterEl.style.fontSize = '14px';
+      fpsCounterEl.style.color = 'white';
+    }
 
     // initialize time and solar angle
     if (guiControls.dayNightCycle) {
@@ -4398,6 +5316,21 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     }
   }
 
+  function nearestLightningRod(simXpos, simYpos)
+  {
+    let bestIdx = -1;
+    let bestDist = 1e9;
+    for (let i = 0; i < lightningRods.length; i++) {
+      const rod = lightningRods[i];
+      const dxRaw = Math.abs(simXpos - rod.x);
+      const dx = Math.min(dxRaw, sim_res_x - dxRaw);
+      const dy = simYpos - rod.y;
+      const d = Math.hypot(dx, dy);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    return {idx : bestIdx, dist : bestDist};
+  }
+
   function mouseDownEvent(e)
   {
     // event.preventDefault(); // caused problems with dat.gui
@@ -4412,6 +5345,26 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
         if (simXpos >= 0 && simXpos < sim_res_x)
           weatherStations.push(new Weatherstation(simXpos, simYpos)); // add weather station
+      } else if (guiControls.tool == 'TOOL_BALLOON') {
+        let simXpos = Math.floor(mouseXinSim * sim_res_x);
+        let simYpos = findSimYposAboveSurfaceAtMouseX();
+
+        if (simXpos >= 0 && simXpos < sim_res_x)
+          weatherBalloons.push(new WeatherBalloon(simXpos, simYpos));
+      } else if (guiControls.tool == 'TOOL_LIGHTNING_ROD') {
+        let simXpos = Math.floor(mouseXinSim * sim_res_x);
+        let simYpos = findSimYposAboveSurfaceAtMouseX();
+        if (simXpos >= 0 && simXpos < sim_res_x) {
+          if (ctrlPressed) {
+            const nearest = nearestLightningRod(simXpos, simYpos);
+            if (nearest.idx >= 0 && nearest.dist < guiControls.brushSize * 0.5)
+              lightningRods.splice(nearest.idx, 1);
+          } else {
+            lightningRods.push({x : simXpos, y : simYpos});
+            if (lightningRods.length > 8)
+              lightningRods.shift();
+          }
+        }
       }
     } else if (e.button == 1) {
       // middle mouse button
@@ -5540,7 +6493,16 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.useProgram(velocityProgram);
   gl.uniform1i(gl.getUniformLocation(velocityProgram, 'baseTex'), 0);
   gl.uniform1i(gl.getUniformLocation(velocityProgram, 'wallTex'), 1);
+  gl.uniform1i(gl.getUniformLocation(velocityProgram, 'waterTex'), 2);
   gl.uniform2f(gl.getUniformLocation(velocityProgram, 'texelSize'), texelSizeX, texelSizeY);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'coriolisStrength'), guiControls.coriolisStrength);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'turbulentMix'), guiControls.turbulentMix);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'jetStreamCoupling'), guiControls.jetStreamCoupling);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'moistBuoyancyBoost'), guiControls.moistBuoyancyBoost);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gravityCurrentStrength'), guiControls.gravityCurrentStrength);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'tornadoPotential'), guiControls.tornadoPotential);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'frontogenesisStrength'), guiControls.frontogenesisStrength);
 
   // gl.uniform1fv(gl.getUniformLocation(velocityProgram, 'initial_T'), initial_T);
   gl.uniform4fv(gl.getUniformLocation(velocityProgram, 'initial_Tv'), initial_T);
@@ -5557,6 +6519,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'lightTex'), 4);
   gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'precipFeedbackTex'), 5);
   gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'precipDepositionTex'), 6);
+  gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'lightningDataTex'), 7);
   gl.uniform2f(gl.getUniformLocation(boundaryProgram, 'resolution'), sim_res_x, sim_res_y);
   gl.uniform2f(gl.getUniformLocation(boundaryProgram, 'texelSize'), texelSizeX, texelSizeY);
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vorticity'),
@@ -5564,6 +6527,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterTemperature'),
                CtoK(guiControls.waterTemperature)); // can be changed by GUI input
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dryLapse'), dryLapse);
+  gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
+  gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'coastalMixing'), guiControls.coastalMixing);
+  gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterAlbedoShift'), guiControls.waterAlbedoShift);
+  gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudAutoconversionRate'), guiControls.cloudAutoconversionRate);
+  gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudLifetimeBoost'), guiControls.cloudLifetimeBoost);
   // gl.uniform1fv(gl.getUniformLocation(boundaryProgram, 'initial_T'), initial_T);
   gl.uniform4fv(gl.getUniformLocation(boundaryProgram, 'initial_Tv'), initial_T);
   gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'allowCaves'), guiControls.allowCaves ? 1 : 0);
@@ -5639,6 +6607,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'ambientLightTex'), 9);
   gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dryLapse'), dryLapse);
   gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cellHeight'), cellHeight);
+  gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
 
   gl.useProgram(precipitationProgram);
   gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'baseTex'), 0);
@@ -5669,6 +6641,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   // console.time('Set uniforms');
   setGuiUniforms(); // all uniforms changed by gui
+  updateLightningRodUniforms();
   // console.timeEnd('Set uniforms')
 
   gl.bindVertexArray(fluidVao);
@@ -5764,6 +6737,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.useProgram(setupProgram);
       gl.uniform1f(gl.getUniformLocation(setupProgram, 'seed'), mouseXinSim);
       gl.uniform1f(gl.getUniformLocation(setupProgram, 'heightMult'), ((canvas.height - mouseY) / canvas.height) * 2.0);
+      gl.uniform1f(gl.getUniformLocation(setupProgram, 'terrainRuggednessBoost'), guiControls.terrainRuggednessBoost);
+      gl.uniform1f(gl.getUniformLocation(setupProgram, 'terrainWetnessRecovery'), guiControls.terrainWetnessRecovery);
+      gl.uniform1f(gl.getUniformLocation(setupProgram, 'terrainRiverBias'), guiControls.terrainRiverBias);
       // Render to both framebuffers
       gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_0);
       gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
@@ -5789,6 +6765,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = 2;
         else if (guiControls.tool == 'TOOL_SMOKE')
           inputType = 3;
+        else if (guiControls.tool == 'TOOL_SAND')
+          inputType = 23;
         else if (guiControls.tool == 'TOOL_WIND')
           inputType = 4;
         else if (guiControls.tool == 'TOOL_WALL')
@@ -5805,6 +6783,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = 15;
         else if (guiControls.tool == 'TOOL_WALL_INDUSTRIAL')
           inputType = 16;
+        else if (guiControls.tool == 'TOOL_SKYSCRAPER')
+          inputType = 24;
+        else if (guiControls.tool == 'TOOL_LIGHTNING_ROD')
+          inputType = -1;
 
         // Surface environment modifiers
         else if (guiControls.tool == 'TOOL_WALL_MOIST')
@@ -5815,6 +6797,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = 22;
 
         var intensity = guiControls.brushIntensity;
+        if (guiControls.tool == 'TOOL_SAND')
+          intensity *= 1.8;
 
         if (ctrlPressed) {
           intensity *= -1;
@@ -5838,16 +6822,17 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally);
       }
       gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
-
+      updateLightningRodUniforms();
 
       // guiControls.IterPerFrame = 1.0 / timePerIteration * 3600 / 60.0;
 
 
-      if (!guiControls.paused) { // Simulation part
+      const allowPausedEditStep = guiControls.paused && guiControls.allowEditingWhenPaused && leftMousePressed && inputType > 0;
+      if (!guiControls.paused || allowPausedEditStep) { // Simulation part
 
         let nightAccelerationActive = !airplaneMode && guiControls.dayNightCycle && guiControls.accelerateNight && guiControls.sunAngle < 0.;
 
-        if (guiControls.dayNightCycle) {
+        if (guiControls.dayNightCycle && !guiControls.paused) {
           if (airplaneMode) {
             updateSunlight(1.0 / 3600.0 / 60);                                                                    // increase solar time at real speed: 1/60 seconds per frame
           } else {
@@ -5862,7 +6847,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.clearColor(0.0, 0.0, 0.0, 0.0);
 
         if (!airplaneMode || airplane.hasCrashed() || frameNum % 17 == 0) { // update every 17 frames because 60 * 0.288 secs per iteration = 17.28
-          let numIterations = guiControls.IterPerFrame;
+          let numIterations = allowPausedEditStep ? 1 : guiControls.IterPerFrame;
           if (airplaneMode)
             numIterations = 1;
           for (var i = 0; i < numIterations; i++) { // Simulation loop
@@ -5872,6 +6857,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             gl.bindTexture(gl.TEXTURE_2D, baseTexture_0);
             gl.activeTexture(gl.TEXTURE1);
             gl.bindTexture(gl.TEXTURE_2D, wallTexture_0);
+            gl.activeTexture(gl.TEXTURE2);
+            gl.bindTexture(gl.TEXTURE_2D, waterTexture_0);
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.NONE, gl.COLOR_ATTACHMENT2 ]);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -5909,7 +6896,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
             gl.activeTexture(gl.TEXTURE6);
             gl.bindTexture(gl.TEXTURE_2D, precipitationDepositionTexture);
-
+            gl.activeTexture(gl.TEXTURE7);
+            gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
 
             gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_0);
             gl.drawBuffers([ gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2 ]);
@@ -6020,21 +7008,29 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
               gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
               gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-              if (guiControls.sound) {
-                gl.readBuffer(gl.COLOR_ATTACHMENT0);
-                var lightningDataValues = new Float32Array(4);
-                gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, lightningDataValues);
-                // console.log('lightningDataValues: ', lightningDataValues[0], lightningDataValues[1], lightningDataValues[2], iterNum, lightningDataValues[3]);
+              gl.readBuffer(gl.COLOR_ATTACHMENT0);
+              var lightningDataValues = new Float32Array(4);
+              gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, lightningDataValues);
+              // console.log('lightningDataValues: ', lightningDataValues[0], lightningDataValues[1], lightningDataValues[2], iterNum, lightningDataValues[3]);
 
-                if (Math.round(lightningDataValues[2]) == iterNum) {
-                  soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], Math.pow(lightningDataValues[3], 2.0));
-                }
+              if (Math.round(lightningDataValues[2]) == iterNum) {
+                const lightningIntensity = Math.pow(lightningDataValues[3], 2.0);
+
+                triggerLightningEffects(lightningDataValues[0], lightningDataValues[1], lightningIntensity);
+
+                if (guiControls.sound)
+                  soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], lightningIntensity);
               }
             }
 
             if (displayWeatherStations && iterNum % 208 == 0) { // ~every 60 in game seconds:  0.00008 *3600 * 208 = 59.9
               for (i = 0; i < weatherStations.length; i++) {
                 weatherStations[i].measure();
+              }
+              for (i = weatherBalloons.length - 1; i >= 0; i--) {
+                weatherBalloons[i].measure();
+                if (weatherBalloons[i].destroyed)
+                  weatherBalloons.splice(i, 1);
               }
             }
             if (!airplaneMode) {
@@ -6061,7 +7057,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     let cursorType = 1.0; // normal circular brush
     if (guiControls.wholeWidth) {
       cursorType = 2.0;   // cursor whole width brush
-    } else if (SETUP_MODE || (inputType <= 0 && !bPressed && (guiControls.tool == 'TOOL_NONE' || guiControls.tool == 'TOOL_STATION'))) {
+    } else if (SETUP_MODE || (inputType <= 0 && !bPressed && (guiControls.tool == 'TOOL_NONE' || guiControls.tool == 'TOOL_STATION' || guiControls.tool == 'TOOL_BALLOON' || guiControls.tool == 'TOOL_LIGHTNING_ROD'))) {
       cursorType = 0;     // cursor off sig
     }
 
@@ -6121,6 +7117,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
 
+    guiControls.displayMode = sanitizeDisplayMode(guiControls.displayMode);
     if (guiControls.displayMode == 'DISP_REAL') {
 
       { //  Abient Light Calculation
@@ -6207,6 +7204,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
 
 
+      updateLightningShakePhysics();
+
+      const shakenViewX = cam.curXpos + lightningShakeOffsetX + lightningShakeHFOffsetX;
+      const shakenViewY = cam.curYpos + lightningShakeOffsetY + lightningShakeHFOffsetY;
+
       // draw background
       gl.activeTexture(gl.TEXTURE8);
       gl.bindTexture(gl.TEXTURE_2D, airplane.directionIsLeft ? A380Texture : A380_R_Texture); // A380Texture
@@ -6217,7 +7219,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
       gl.useProgram(skyBackgroundDisplayProgram);
       gl.uniform2f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-      gl.uniform3f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+      gl.uniform3f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
       gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'Xmult'), horizontalDisplayMult);
       gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'iterNum'), iterNum);
 
@@ -6232,10 +7234,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       // draw clouds and terrain
       gl.useProgram(realisticDisplayProgram);
       gl.uniform2f(gl.getUniformLocation(realisticDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-      gl.uniform3f(gl.getUniformLocation(realisticDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+      gl.uniform3f(gl.getUniformLocation(realisticDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
       gl.uniform4f(gl.getUniformLocation(realisticDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'Xmult'), horizontalDisplayMult);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'iterNum'), iterNum);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
 
       // Don't display vectors when zoomed out because you would just see noise
       if (cam.curZoom / sim_res_x > 0.003) {
@@ -6357,7 +7363,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         // draw precipitation
         gl.useProgram(precipDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(precipDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(precipDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(precipDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.bindVertexArray(destVAO);
         gl.drawArrays(gl.POINTS, 0, NUM_DROPLETS);
         gl.bindVertexArray(fluidVao); // set screenfilling rect again
@@ -6372,7 +7378,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       if (guiControls.displayMode == 'DISP_TEMPERATURE') {
         gl.useProgram(temperatureDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(temperatureDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(temperatureDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(temperatureDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.uniform4f(gl.getUniformLocation(temperatureDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
         gl.uniform1f(gl.getUniformLocation(temperatureDisplayProgram, 'Xmult'), horizontalDisplayMult);
 
@@ -6388,14 +7394,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       } else if (guiControls.displayMode == 'DISP_AIRQUALITY') {
         gl.useProgram(airQualityDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(airQualityDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(airQualityDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(airQualityDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.uniform4f(gl.getUniformLocation(airQualityDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
         gl.uniform1f(gl.getUniformLocation(airQualityDisplayProgram, 'Xmult'), horizontalDisplayMult);
 
       } else if (guiControls.displayMode == 'DISP_IRDOWNTEMP') {
         gl.useProgram(IRtempDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(IRtempDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(IRtempDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.uniform4f(gl.getUniformLocation(IRtempDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
         gl.uniform1i(gl.getUniformLocation(IRtempDisplayProgram, 'upOrDown'), 0);
         gl.uniform1f(gl.getUniformLocation(IRtempDisplayProgram, 'Xmult'), horizontalDisplayMult);
@@ -6405,7 +7411,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       } else if (guiControls.displayMode == 'DISP_IRUPTEMP') {
         gl.useProgram(IRtempDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(IRtempDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(IRtempDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.uniform4f(gl.getUniformLocation(IRtempDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
         gl.uniform1i(gl.getUniformLocation(IRtempDisplayProgram, 'upOrDown'), 1);
         gl.uniform1f(gl.getUniformLocation(IRtempDisplayProgram, 'Xmult'), horizontalDisplayMult);
@@ -6415,7 +7421,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       } else {
         gl.useProgram(universalDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(universalDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
-        gl.uniform3f(gl.getUniformLocation(universalDisplayProgram, 'view'), cam.curXpos, cam.curYpos, cam.curZoom);
+        gl.uniform3f(gl.getUniformLocation(universalDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
         gl.uniform4f(gl.getUniformLocation(universalDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
         gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'Xmult'), horizontalDisplayMult);
 
@@ -6491,6 +7497,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     if (displayWeatherStations) {
       for (i = 0; i < weatherStations.length; i++) {
         weatherStations[i].updateCanvas(); // update weather stations
+      }
+      updateTornadoLabel();
+      if (guiControls.showWeatherBalloons) {
+        for (i = 0; i < weatherBalloons.length; i++) {
+          weatherBalloons[i].updateCanvas();
+        }
       }
     }
 
@@ -6759,6 +7771,15 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       FPS = frameNum - lastFrameNum;
       lastFrameNum = frameNum;
 
+
+      if (fpsCounterEl) {
+        if (guiControls.showFPS) {
+          fpsCounterEl.style.display = 'block';
+          fpsCounterEl.textContent = FPS + ' FPS';
+        } else {
+          fpsCounterEl.style.display = 'none';
+        }
+      }
 
       if (!guiControls.paused) {
         console.log(FPS + ' FPS   ' + guiControls.IterPerFrame + ' Iterations / frame      ' + FPS * guiControls.IterPerFrame + ' Iterations / second');

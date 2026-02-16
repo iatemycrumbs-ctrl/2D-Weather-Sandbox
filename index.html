@@ -12,19 +12,26 @@
     <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
     <style>
         :root {
-            --text-color: #ffffff;
-            --accent-color: #4a90e2;
-            --hover-color: #007bff;
-            --border-radius: 12px;
+            --text-color: #d9ecff;
+            --accent-color: #33d6ff;
+            --hover-color: #65f3ff;
+            --border-radius: 14px;
             --transition-speed: 0.3s;
-            --shadow: 0 4px 6px rgba(15, 5, 5, 0.1);
-            --soft-gradient: linear-gradient(135deg, rgba(74, 144, 226, 0.1), rgba(0, 123, 255, 0.1));
+            --shadow: 0 12px 30px rgba(0, 18, 36, 0.45);
+            --soft-gradient: linear-gradient(135deg, rgba(51, 214, 255, 0.12), rgba(99, 92, 255, 0.10));
+            --panel-bg: rgba(8, 16, 34, 0.62);
+            --panel-border: rgba(80, 218, 255, 0.30);
+            --grid-glow: rgba(71, 195, 255, 0.20);
         }
 
         body {
             margin: 0;
-            font-family: 'Arial', sans-serif;
-            background: url('resources/img/background.png') bottom left no-repeat;
+            font-family: 'Segoe UI', 'Inter', 'Arial', sans-serif;
+            background:
+                radial-gradient(circle at 12% 15%, rgba(58, 221, 255, 0.22), transparent 40%),
+                radial-gradient(circle at 88% 8%, rgba(123, 102, 255, 0.18), transparent 35%),
+                linear-gradient(165deg, rgba(6, 11, 23, 0.98), rgba(3, 8, 20, 0.95)),
+                url('resources/img/background.png') bottom left no-repeat;
             background-size: cover;
             background-attachment: fixed;
             color: var(--text-color);
@@ -42,17 +49,18 @@
             justify-content: space-between;
             align-items: center;
             padding: 0rem 2rem 0rem 2rem;
-            background: rgba(0, 0, 0, 0.13);
+            background: rgba(6, 18, 36, 0.66);
             backdrop-filter: blur(10px);
             z-index: 0;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35), inset 0 -1px 0 rgba(88, 220, 255, 0.25);
         }
 
         .nav-title h1 {
             margin: 0;
             font-size: 2.0rem;
-            color: var(--text-color);
-            font-weight: 600;
+            color: #e9f7ff;
+            text-shadow: 0 0 12px rgba(93, 227, 255, 0.35);
+            font-weight: 700;
             letter-spacing: 0.5px;
         }
 
@@ -79,8 +87,9 @@
             margin-top: 4rem;
             max-width: 1200px;
             padding: 1rem 2rem;
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--panel-bg);
             border-radius: var(--border-radius);
+            border: 1px solid var(--panel-border);
 
         }
 
@@ -96,6 +105,7 @@
             max-width: 1200px;
             margin: 20px;
             border-radius: var(--border-radius);
+            border: 1px solid var(--panel-border);
             animation: fadeIn 1s ease-in-out;
         }
 
@@ -118,11 +128,12 @@
         }
 
         input[type="button"] {
-            background: #007bff;
-            border: none;
+            background: linear-gradient(120deg, #155dff, #29d8ff);
+            border: 1px solid rgba(114, 245, 255, 0.55);
             padding: 12px 24px;
             color: var(--text-color);
             border-radius: var(--border-radius);
+            border: 1px solid var(--panel-border);
             cursor: pointer;
             font-size: 1rem;
             transition: transform var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
@@ -132,7 +143,7 @@
         input[type="button"]:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-            background-color: #004a9a;
+            background: linear-gradient(120deg, #1d7fff, #61f0ff);
             transition: var(--transition-speed);
         }
 
@@ -141,6 +152,7 @@
             padding: 20px;
             background: var(--soft-gradient);
             border-radius: var(--border-radius);
+            border: 1px solid var(--panel-border);
             box-shadow: var(--shadow);
             animation: fadeIn 1s ease-in-out;
         }
@@ -150,16 +162,18 @@
         .example-files {
             margin: 20px 0;
             padding: 15px;
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--panel-bg);
             border-radius: var(--border-radius);
+            border: 1px solid var(--panel-border);
             box-shadow: var(--shadow);
         }
 
         .support {
             margin: 20px 0;
             padding: 15px;
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--panel-bg);
             border-radius: var(--border-radius);
+            border: 1px solid var(--panel-border);
             box-shadow: var(--shadow);
             text-align: center;
         }
@@ -261,6 +275,287 @@
             fill: #ffffff;
             text-anchor: middle
         }
+    
+        /* Intro redesign */
+        .main-nav {
+            z-index: 5;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            background: linear-gradient(90deg, rgba(10, 16, 30, 0.85), rgba(10, 24, 40, 0.65));
+        }
+
+        #IntroScreen {
+            margin: 96px auto 20px auto;
+            max-width: 1240px;
+            padding: 24px;
+            background: rgba(8, 14, 26, 0.62);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 24px 50px rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(8px);
+        }
+
+        .intro-hero {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 20px;
+            margin-bottom: 22px;
+        }
+
+        .intro-hero-card,
+        .intro-panel {
+            background: linear-gradient(155deg, rgba(74, 144, 226, 0.18), rgba(5, 15, 36, 0.55));
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 14px;
+            padding: 16px;
+        }
+
+        .intro-hero h2 {
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+            line-height: 1.15;
+        }
+
+        .intro-hero p {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .intro-top {
+            width: 100%;
+            min-height: 500px;
+            display: grid;
+            grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.4fr);
+            gap: 24px;
+            margin: 18px 0 8px 0;
+        }
+
+        .intro-sounding-controls {
+            background: rgba(0, 0, 0, 0.28);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 14px;
+            padding: 16px;
+        }
+
+        #soundingPreview {
+            width: 100%;
+            height: 500px;
+            object-fit: contain;
+            background: rgba(0, 0, 0, 0.30);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 14px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        #startBtn,
+        .example-files,
+        #help,
+        .controls,
+        .support {
+            background: rgba(6, 14, 28, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            padding: 16px;
+        }
+
+        #startBtn table,
+        .controls table {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        #startBtn input[type="button"] {
+            font-weight: 700;
+            letter-spacing: 0.2px;
+            background: linear-gradient(120deg, #1e8bff, #2f6df8);
+        }
+
+        #startBtn input[type="button"]:hover {
+            background: linear-gradient(120deg, #2c96ff, #4f84ff);
+        }
+
+        .resolution-warning {
+            margin-top: 0;
+        }
+
+
+        .controls-workspace {
+            display: grid;
+            grid-template-columns: 1.3fr 1fr;
+            gap: 20px;
+            margin-top: 18px;
+        }
+
+        .controls-stack {
+            display: grid;
+            gap: 16px;
+        }
+
+        .control-card {
+            background: linear-gradient(155deg, rgba(22, 35, 62, 0.72), rgba(6, 14, 28, 0.70));
+            border: 1px solid rgba(122, 177, 255, 0.35);
+            border-radius: 14px;
+            padding: 16px;
+        }
+
+        .control-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.1rem;
+            letter-spacing: 0.4px;
+        }
+
+        .control-label {
+            font-size: 0.92rem;
+            color: rgba(255, 255, 255, 0.82);
+            margin-bottom: 8px;
+        }
+
+        #presetSelect,
+        #stationSelect,
+        #datePicker,
+        #hourSelector,
+        #fileInput {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            color: #fff;
+            padding: 8px 10px;
+            margin: 6px 6px 6px 0;
+        }
+
+        .resolution-table td:first-child {
+            width: 220px;
+        }
+
+        .launch-note {
+            display: block;
+            margin-top: 10px;
+            color: rgba(255, 255, 255, 0.82);
+        }
+
+        .examples-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 14px;
+        }
+
+        .examples-grid a {
+            color: #dbe8ff;
+            text-decoration: none;
+            border-bottom: 1px dashed rgba(219, 232, 255, 0.5);
+        }
+
+        .examples-grid a:hover {
+            color: #fff;
+            border-bottom-color: rgba(255, 255, 255, 0.9);
+        }
+
+        
+        .sounding-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 8px 0 12px 0;
+        }
+
+        .chip {
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: rgba(74, 144, 226, 0.25);
+            border: 1px solid rgba(122, 177, 255, 0.45);
+            color: #e9f2ff;
+            font-size: 0.82rem;
+        }
+
+        .intro-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 14px;
+        }
+
+        .intro-kpi {
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(8, 22, 40, 0.78);
+            border: 1px solid rgba(105, 198, 255, 0.35);
+        }
+
+        .intro-kpi b {
+            display: block;
+            font-size: 1.1rem;
+            color: #9de8ff;
+            margin-bottom: 2px;
+        }
+
+        .intro-kpi span {
+            font-size: 0.82rem;
+            color: rgba(228, 244, 255, 0.85);
+        }
+
+        .launch-pipeline {
+            margin-top: 14px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            border: 1px solid rgba(119, 195, 255, 0.30);
+            background: rgba(5, 18, 33, 0.65);
+            display: grid;
+            gap: 8px;
+        }
+
+        .launch-pipeline .step {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 0.9rem;
+            color: rgba(230, 241, 255, 0.88);
+        }
+
+        .launch-pipeline .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #6be6ff;
+            box-shadow: 0 0 8px rgba(104, 231, 255, 0.85);
+            flex: 0 0 auto;
+        }
+
+        .control-card, .intro-panel, .intro-hero-card {
+            animation: introFloat 8s ease-in-out infinite;
+        }
+
+        .control-card:hover, .intro-panel:hover, .intro-hero-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 36px rgba(0,0,0,0.35), 0 0 22px rgba(90,205,255,0.20);
+            transition: transform 220ms ease, box-shadow 220ms ease;
+        }
+
+        @keyframes introFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-2px); }
+        }
+
+        @media (max-width: 1050px) {
+            .intro-hero,
+            .intro-top,
+            .controls-workspace,
+            .intro-kpi-grid {
+                grid-template-columns: 1fr;
+            }
+
+            #soundingPreview {
+                height: 360px;
+            }
+        }
+
     </style>
 </head>
 
@@ -287,107 +582,143 @@
 
     <div id="IntroScreen">
 
-        <p style="margin-top: 50px;"></p>
-
-        <div style="width: 100%; height: 500px;">
-            <div style="float: left; margin-right: 100px;">
-                <div>
-                    Preset:<select id="presetSelect" style="margin: 10px;"></select>
+        <div class="intro-hero">
+            <div class="intro-hero-card">
+                <h2>Atmospheric Command Deck</h2>
+                <p>Import real soundings, configure a large-domain mesoscale sandbox, and launch a high-fidelity weather run with live terrain + microphysics preview.</p>
+                <div class="intro-kpi-grid">
+                    <div class="intro-kpi"><b>GPU Solver</b><span>Multiphase fluids + lightning</span></div>
+                    <div class="intro-kpi"><b>Live Tools</b><span>Stations, balloons, thermal forcing</span></div>
+                    <div class="intro-kpi"><b>Scale</b><span>From local cell to synoptic setup</span></div>
                 </div>
-                <div>
-                    <select id="stationSelect"></select>
-                    <input type="date" id="datePicker" value="2025-06-15" min="2010-01-01"
-                        onchange="prepareSounding();" />
+            </div>
+            <div class="intro-panel">
+                <b>Launch Pipeline</b>
+                <div class="launch-pipeline">
+                    <div class="step"><span class="dot"></span>Pick preset or station sounding</div>
+                    <div class="step"><span class="dot"></span>Set domain resolution and height</div>
+                    <div class="step"><span class="dot"></span>Inspect sounding + terrain seed</div>
+                    <div class="step"><span class="dot"></span>Start simulation and open controls panel</div>
+                </div>
+            </div>
+        </div>
 
+        <div class="intro-top">
+            <div class="intro-sounding-controls">
+                <div class="sounding-row">
+                    <label for="presetSelect"><b>Preset:</b></label>
+                    <select id="presetSelect"></select>
+                </div>
+
+                <div class="chip-row">
+                    <span class="chip">Real sounding forcing</span>
+                    <span class="chip">Terrain preview before launch</span>
+                    <span class="chip">GPU-heavy at high resolutions</span>
+                </div>
+
+                <div class="sounding-row">
+                    <label for="stationSelect"><b>Station:</b></label>
+                    <select id="stationSelect"></select>
+                </div>
+
+                <div class="sounding-row">
+                    <label for="datePicker"><b>Date:</b></label>
+                    <input type="date" id="datePicker" value="2025-06-15" min="2010-01-01" onchange="prepareSounding();" />
+
+                    <label for="hourSelector"><b>Hour:</b></label>
                     <select id="hourSelector" onchange="prepareSounding();">
                         <option value="0">00H</option>
                         <option value="6">06H</option>
                         <option value="12" selected>12H</option>
                         <option value="18">18H</option>
                     </select>
-                    <p>Select a real world sounding to use as forcing in the simulation</p>
                 </div>
+                <p>Select a real world sounding to use as forcing in the simulation.</p>
             </div>
-            <img style="float: left; height: 500px;" id="soundingPreview"
+            <img id="soundingPreview"
                 alt="Sounding not available, Please select a different time.">
         </div>
 
-        <form id="startBtn" oninput="updateSetupSliders();">
-            <div class="resolution-warning">
-                <p>Choose a resolution - Higher resolutions provide more detail but significantly impact performance
-                </p>
+        <div class="controls-workspace">
+            <div class="controls-stack">
+                <form id="startBtn" class="control-card" oninput="updateSetupSliders();">
+                    <h3>Simulation Setup Matrix</h3>
+                    <div class="resolution-warning">
+                        <p>Choose domain resolution and altitude. Higher values increase model fidelity, complexity, and GPU cost.</p>
+                    </div>
+
+                    <table class="resolution-table">
+                        <tr>
+                            <td><b>Horizontal resolution</b></td>
+                            <td style="width: 30%">
+                                <input type="range" min="100" max="16000" value="3000" step="100" id="simResSelX" />
+                                <output id="simResShowX"></output>
+                            </td>
+                            <td id="simWorldProperties" style="color:rgb(255, 255, 255); width: 50%"> Cellheight: 40m Sim
+                                width:
+                                40 km</td>
+                        </tr>
+                        <tr>
+                            <td><b>Vertical resolution</b></td>
+                            <td>
+                                <input type="range" min="100" max="500" value="300" step="10" id="simResSelY" />
+                                <output id="simResShowY"></output>
+                            </td>
+                            <td><i id="simResYWarning" style="color:rgb(255, 61, 61); display: none;">Vertical resolutions
+                                    other than 300 are not optimized and may be buggy!</i></td>
+                        </tr>
+                        <tr>
+                            <td><b>Simulation height</b></td>
+                            <td>
+                                <input type="range" min="4000" max="22000" value="12000" step="100" id="simHeightSel" />
+                                <output id="simHeightShow"></output>
+                            </td>
+                            <td><i id="simHeightWarning" style="color:rgb(255, 61, 61); display: none;">Extreme heights may reduce stability/performance on some GPUs.</i></td>
+                        </tr>
+                    </table>
+                    <input type="button" value="Create New Simulation" onclick="loadData ()" />
+                    <i class="launch-note">Move the mouse until you see a terrain you like, then click to start.</i>
+                </form>
+
+                <div class="control-card">
+                    <h3>Load Save File</h3>
+                    <div class="control-label">Continue from an existing .weathersandbox file.</div>
+                    <label for="fileInput">Select file:</label>
+                    <input type="file" id="fileInput" name="fileInput" accept=".weathersandbox " onchange="loadData()" />
+                </div>
+
+
+                <div class="control-card">
+                    <h3>Advanced Panel</h3>
+                    <div class="control-label">High-end experimental systems are available after launch in the GUI:</div>
+                    <ul>
+                        <li>Tornado diagnostics + storm-front controls</li>
+                        <li>Dynamic charge-separation electric field visualization</li>
+                        <li>Skyscraper tool + SAN (sand) interaction forcing</li>
+                        <li>Mobile precipitation + full-bolt lightning safety tuning</li>
+                    </ul>
+                </div>
             </div>
 
-            <table>
-                <tr>
-                    <td><b>Horizontal resolution</b></td>
-                    <td style="width: 30%">
-                        <input type="range" min="100" max="16000" value="3000" step="100" id="simResSelX" />
-                        <output id="simResShowX"></output>
-                    </td>
-                    <td id="simWorldProperties" style="color:rgb(255, 255, 255); width: 50%"> Cellheight: 40m Sim
-                        width:
-                        40 km</td>
-                </tr>
-                <tr>
-                    <td><b>Vertical resolution</b></td>
-                    <td>
-                        <input type="range" min="100" max="500" value="300" step="10" id="simResSelY" />
-                        <output id="simResShowY"></output>
-                    </td>
-                    <td><i id="simResYWarning" style="color:rgb(255, 61, 61); display: none;">Vertical resolutions
-                            other
-                            than 300 are not optimized and may be buggy!</i></td>
-                </tr>
-                <tr>
-                    <td><b>Simulation height</b></td>
-                    <td>
-                        <input type="range" min="5000" max="15000" value="12000" step="100" id="simHeightSel" />
-                        <output id="simHeightShow"></output>
-                    </td>
-                    <td><i id="simHeightWarning" style="color:rgb(255, 61, 61); display: none;">Sim heights other
-                            than
-                            12000 m are not optimized and may be buggy!</i></td>
-                </tr>
-            </table>
-            <input type="button" value="Create New Simulation" onclick="loadData ()" />
-            <i>Move the mouse until you see a terrain you like, then just click to start.</i>
-        </form>
-
-
-        <p style="margin-top: 70px;">
-            <label for="fileInput">Load Save File:</label>
-            <input type="file" id="fileInput" name="fileInput" accept=".weathersandbox " onchange="loadData()" />
-        </p>
-
-        <div class="example-files">
-            <h3>Example Save Files</h3>
-            <p><a style="color: white" href="./saves/Background image.weathersandbox">Background image</a></p>
-            <p><a style="color: white" href="./saves/Hotlake Valley.weathersandbox">Hotlake Valley</a></p>
-            <p><a style="color: white" href="./saves/Mountain uplift cell.weathersandbox">Mountain Uplift Cell at
-                    sunset</a></p>
-            <p><a style="color: white" href="./saves/480 km map with strong derecho.weathersandbox">480 km map with
-                    strong Derecho</a></p>
-            <p><a style="color: white" href="./saves/Three Nice Cells.weathersandbox">Three Nice Cells</a></p>
-            <p><a style="color: white" href="./saves/Mountain Snow Storm.weathersandbox">Mountain Snow Storm</a></p>
-            <p><a style="color: white" href="./saves/Powerful & Longlasting Cell.weathersandbox">Powerful &
-                    Longlasting
-                    Cell</a></p>
-            <p><a style="color: white" href="./saves/Rain Sucked Up.weathersandbox">Powerful updraft sucking up rain
-                    and
-                    turning it into hail.</a></p>
-            <p><a style="color: white" href="./saves/Powerful Hail and Snow Cells.weathersandbox">Powerful Hail and
-                    Snow
-                    Cells</a></p>
-            <p><a style="color: white" href="./saves/Very nice cell over coastal mountain.weathersandbox">Very nice
-                    cell
-                    over coastal mountain</a></p>
-            <p><a style="color: white" href="./saves/Awesome Convergence Cell.weathersandbox">Awesome Convergence
-                    Cell</a></p>
-            <p><a style="color: white" href="./saves/Two nice cells in lake valley.weathersandbox">Two nice cells in
-                    lake valley</a></p>
-            <p><a style="color: white" href="./saves/Insane CAPE.weathersandbox">Insane CAPE</a></p>
-            <p><a style="color: white" href="./saves/100 X 100 Test.weathersandbox">100 X 100 Test</a></p>
+            <div class="control-card example-files">
+                <h3>Example Save Files</h3>
+                <div class="examples-grid">
+                    <a href="./saves/Background image.weathersandbox">Background image</a>
+                    <a href="./saves/Hotlake Valley.weathersandbox">Hotlake Valley</a>
+                    <a href="./saves/Mountain uplift cell.weathersandbox">Mountain Uplift Cell at sunset</a>
+                    <a href="./saves/480 km map with strong derecho.weathersandbox">480 km strong Derecho</a>
+                    <a href="./saves/Three Nice Cells.weathersandbox">Three Nice Cells</a>
+                    <a href="./saves/Mountain Snow Storm.weathersandbox">Mountain Snow Storm</a>
+                    <a href="./saves/Powerful & Longlasting Cell.weathersandbox">Powerful & Longlasting Cell</a>
+                    <a href="./saves/Rain Sucked Up.weathersandbox">Rain Sucked Up</a>
+                    <a href="./saves/Powerful Hail and Snow Cells.weathersandbox">Powerful Hail and Snow Cells</a>
+                    <a href="./saves/Very nice cell over coastal mountain.weathersandbox">Coastal Mountain Cell</a>
+                    <a href="./saves/Awesome Convergence Cell.weathersandbox">Awesome Convergence Cell</a>
+                    <a href="./saves/Two nice cells in lake valley.weathersandbox">Two Cells in Lake Valley</a>
+                    <a href="./saves/Insane CAPE.weathersandbox">Insane CAPE</a>
+                    <a href="./saves/100 X 100 Test.weathersandbox">100 X 100 Test</a>
+                </div>
+            </div>
         </div>
 
         <div id="help" class="tips">
@@ -552,8 +883,6 @@
             <br />
             <i>By Niels Daemen</i>
         </div>
-    </div>
-
     </div>
 
     <canvas id="graphCanvas"></canvas>
