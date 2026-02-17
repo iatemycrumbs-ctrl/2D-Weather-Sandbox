@@ -203,8 +203,9 @@ void main()
           feedback[MASS] += newMass[WATER] * (0.05 * precipitationEffectMult);
         }
 
-        feedback[VAPOR] -= baseSpawnMass * 1.25;
-        feedback[MASS] += baseSpawnMass * 0.08; // immediate cloud-to-precip sink imprint
+        float spawnSinkScale = clamp(precipitationEffectMult, 0.25, 2.5);
+        feedback[VAPOR] -= baseSpawnMass * (0.82 * spawnSinkScale);
+        feedback[MASS] += baseSpawnMass * (0.05 * spawnSinkScale); // immediate cloud-to-precip sink imprint
       }
     }
 
@@ -277,12 +278,25 @@ void main()
 
       float supersat = max(water[TOTAL] - maxWater(realTemp), 0.0);
       float cloudAccess = max(water[CLOUD], 0.0);
-      float growth = (cloudAccess * 0.72 + supersat * 0.55) * growthRate * surfaceArea;
+      float phaseThreshold = realTemp > CtoK(0.0) ? aboveZeroThreshold : subZeroThreshold;
+      float cloudExcess = max(cloudAccess - phaseThreshold, 0.0);
+      float thresholdSoftness = 0.22 + 0.06 * clamp(precipitationEffectMult, 0.3, 2.5);
+      float cloudLimiter = smoothstep(phaseThreshold - thresholdSoftness, phaseThreshold + thresholdSoftness, cloudAccess);
+      float supersatLimiter = smoothstep(0.0, 0.45, supersat);
+      float growthEfficiency = clamp(mix(0.30 + supersatLimiter * 0.25, 1.0, cloudLimiter), 0.20, 1.0);
+      float effectScale = clamp(precipitationEffectMult, 0.25, 2.5);
+
+      float condensationalGrowth = (cloudAccess * 0.72 + supersat * 0.55) * growthRate * surfaceArea * growthEfficiency * effectScale;
+      float rimingGrowth = 0.0;
 
       // Hail growth enhancement:
       if (realTemp < CtoK(0.0) && water[CLOUD] > 0.0 && newDensity >= 1.0) { // below freezing
-        growth += surfaceArea * (water[PRECIPITATION] * 0.0030 + supersat * 0.0015);            // rain/supersat accretion onto hail
+        rimingGrowth += surfaceArea * (water[PRECIPITATION] * 0.0030 + supersat * 0.0015) * growthEfficiency * effectScale; // rain/supersat accretion onto hail
       }
+
+      float maxExtract = (cloudExcess * 0.65 + supersat * 0.90) * growthRate * surfaceArea;
+      maxExtract *= (0.22 + 0.78 * effectScale);
+      float growth = min(condensationalGrowth + rimingGrowth, max(maxExtract, 0.0));
 
       feedback[VAPOR] -= growth * 1.0; // takes water from the air
 
