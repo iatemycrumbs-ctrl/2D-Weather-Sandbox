@@ -1541,6 +1541,7 @@ function applyIntroShaderSettings()
 
 async function loadData()
 {
+  applyIntroShaderSettings();
   let file = document.getElementById('fileInput').files[0];
 
   if (file) {                                                    // load data from save file
@@ -1645,7 +1646,6 @@ async function loadData()
     sim_height = Math.round(readNumericInput('simHeightSel', 12000));
     sim_height = clamp(sim_height, 4000, 22000);
 
-    applyIntroShaderSettings();
     NUM_DROPLETS = computeNumDroplets(sim_res_x, sim_res_y);
     SETUP_MODE = true;
 
@@ -7703,7 +7703,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     let solarElevation = Math.max(Math.sin((180.0 - guiControls.sunAngle) * degToRad), 0.0);
     let diurnalLag = clamp(guiControls.diurnalThermalLag, 0.2, 3.0);
     let clearSkyAttenuation = mixGeneric(0.82, 1.22, Math.pow(solarElevation, 0.6 / diurnalLag));
-    let seasonalAttenuation = map_rangeC(Math.cos((guiControls.month - 6.5) * 0.52), -1.0, 1.0, 0.90, 1.08);
+    let seasonalAttenuation = map_range_C(Math.cos((guiControls.month - 6.5) * 0.52), -1.0, 1.0, 0.90, 1.08);
     let sunIntensity = guiControls.sunIntensity * clearSkyAttenuation * seasonalAttenuation * 1250.0;
     // console.log('sunIntensity: ', sunIntensity);
 
