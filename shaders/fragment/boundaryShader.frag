@@ -119,9 +119,11 @@ void main()
     float autoConv = clamp(cloudAutoconversionRate, 0.2, 3.0);
     float cloudLife = clamp(cloudLifetimeBoost, 0.4, 3.0);
 
-    // tuned depletion: slower cloud death while still coupling to precipitation production
-    water[CLOUD] -= (precipCoalescence * 0.30 * autoConv + precipMassSink * 0.14 * autoConv) / cloudLife;
-    water[TOTAL] -= (precipCoalescence * 0.18 * autoConv + precipMassSink * 0.05 * autoConv) / cloudLife;
+    // tuned depletion: preserve cloud longevity and avoid runaway cloud collapse from local downpours
+    float cloudReservoir = clamp(water[CLOUD] / max(water[TOTAL] + 0.0001, 0.0001), 0.15, 1.0);
+    float depletionScale = autoConv / max(cloudLife * (0.75 + cloudReservoir * 0.6), 0.25);
+    water[CLOUD] -= (precipCoalescence * 0.18 + precipMassSink * 0.07) * depletionScale;
+    water[TOTAL] -= (precipCoalescence * 0.10 + precipMassSink * 0.030) * depletionScale;
 
     float precipEvaporation = max(precipFeedback[VAPOR], 0.);
 

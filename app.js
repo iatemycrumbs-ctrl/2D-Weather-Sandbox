@@ -598,8 +598,9 @@ function computeNumDroplets(resX, resY)
     mobileFactor *= 0.85;
 
   const rawDroplets = Math.floor(resX * resY * NUM_DROPLET_MULTIPLIER * mobileFactor);
-  const maxDroplets = mobileFactor < 1.0 ? 220000 : 700000;
-  return clamp(rawDroplets, 24000, maxDroplets);
+
+  // Unlimited droplet ceiling: keep only a minimum floor so low-resolution runs still show precipitation.
+  return Math.max(rawDroplets, 24000);
 }
 
 let hdrFBO;

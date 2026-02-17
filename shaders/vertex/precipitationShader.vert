@@ -142,7 +142,8 @@ void main()
       spawnChance /= (inactiveDroplets * spawnLimiter + 24.0);
       float organizationBoost = map_rangeC(stormOrganization, 0.2, 2.5, 0.65, 1.9);
       float aerosolSpawnFactor = map_rangeC(aerosolLoad, 0.2, 2.5, 1.15, 0.72);
-      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.35, 1.8) * moistureSupport * orographicBoost * downdraftEnhancement * precipitationEffectMult * organizationBoost * aerosolSpawnFactor * mobilePrecipBoost;
+      float smokeSuppression = map_rangeC(water[SMOKE], 0.0, 0.9, 1.0, 0.12);
+      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.35, 1.8) * moistureSupport * orographicBoost * downdraftEnhancement * precipitationEffectMult * organizationBoost * aerosolSpawnFactor * mobilePrecipBoost * smokeSuppression;
       float spawnFloor = clamp(1.0 / max(numDroplets, 1.0), 0.000001, 0.0015) * precipitationEffectMult * mobilePrecipBoost;
       spawnChance = clamp(spawnChance, spawnFloor, 0.96);
 
@@ -177,6 +178,7 @@ void main()
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
           lightningSpawnChance *= (0.18 + electricPotential * 1.9);
           lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.50);
+          lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.18);
 
           float icWeight = max(icLightningRatio, 0.0);
           float ctgWeight = max(ctgLightningRatio, 0.0);
@@ -209,16 +211,21 @@ void main()
           lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.58);
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
-          if (lightningData[START_ITERNUM] < iterNum - lightningMinInterval && strikeRand < lightningSpawnChance) {
+          float previousLightningAge = iterNum - lightningData[START_ITERNUM];
+          float currentFlashHold = max(lightningMinInterval, 5.0 + abs(lightningData[INTENSITY]) * 2.3);
+          bool lightningChannelFree = lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
+          if (lightningChannelFree && strikeRand < lightningSpawnChance) {
             lightningSpawned = true;
             isActive = false;
             gl_PointSize = 1.0;
 
             bool forceCG = rodAttraction > 0.04;
-            bool canBeIC = texCoord.y > 0.22 && water[CLOUD] > threshold * 1.35;
-            bool isIC = !forceCG && canBeIC && random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity)) < icProb;
+            float chargeStratification = map_rangeC(water[CLOUD], threshold * 1.3, threshold * 4.8, 0.0, 1.0);
+            bool canBeIC = texCoord.y > 0.26 && water[CLOUD] > threshold * 1.40 && chargeStratification > 0.18;
+            float icModeBoost = map_rangeC(chargeStratification * max(base[VY], 0.0), 0.0, 0.04, 1.0, 1.35);
+            bool isIC = !forceCG && canBeIC && random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity)) < clamp(icProb * icModeBoost, 0.0, 0.95);
 
-            float icYOffset = map_rangeC(random2d(spawnSeed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.06, 0.20);
+            float icYOffset = map_rangeC(random2d(spawnSeed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.08, 0.22);
             float anvilShift = (random2d(spawnSeed * 5.11 + vec2(iterNum * 0.004)) - 0.5) * texelSize.x * 120.0 * lightningAnvilDrift;
             float shiftedX = mod(texCoord.x + anvilShift + 1.0, 1.0);
 
@@ -236,8 +243,11 @@ void main()
             flashIntensity *= map_rangeC(lightningFlashRate, 0.3, 3.0, 0.75, 1.45);
             flashIntensity *= map_rangeC(stormOrganization * aerosolLoad, 0.04, 6.25, 0.85, 1.35);
             flashIntensity *= mix(1.0, 1.30, rodAttraction);
+            float cgGroundBoost = map_rangeC(1.0 - texCoord.y, 0.0, 1.0, 0.9, 1.3);
+            float icChannelBoost = map_rangeC(texCoord.y, 0.22, 0.95, 0.95, 1.25);
+            flashIntensity *= isIC ? icChannelBoost : cgGroundBoost;
             flashIntensity = clamp(flashIntensity, 0.08, 6.2);
-            feedback[INTENSITY] = isIC ? -flashIntensity * 0.8 : flashIntensity;
+            feedback[INTENSITY] = isIC ? -flashIntensity * 0.72 : flashIntensity * 1.08;
             gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
           }
         } else {
