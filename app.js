@@ -465,6 +465,10 @@ const guiControls_default = {
   waterGreenHouseEffect : 0.0015,
   IR_rate : 1.0,
   radiationHaze : 1.0,
+  introShaderQuality : 1.0,
+  introLightningVisualStrength : 1.0,
+  introPrecipVisualStrength : 1.0,
+  diurnalThermalLag : 1.0,
   tool : 'TOOL_NONE',
   brushSize : 20,
   wholeWidth : false,
@@ -585,6 +589,7 @@ const timePerIteration = 0.00008; // in hours (0.00008 = 0.288 sec, at 40m cell 
 
 var NUM_DROPLETS;
 const NUM_DROPLET_MULTIPLIER = 1.25;
+let filteredInactiveDroplets = 0.0;
 
 function computeNumDroplets(resX, resY)
 {
@@ -1248,7 +1253,9 @@ class Weatherstation
     let T = potentialToRealT(baseTextureValues[1 * 4 + 3], this.#y); // temperature in kelvin
 
     this.#temperature = KtoC(T);
-    this.#velocity = rawVelocityTo_ms(Math.sqrt(Math.pow(baseTextureValues[2 * 4 + 0], 2) + Math.pow(baseTextureValues[4 + 1], 2)));
+    const horizWind = Math.sqrt(Math.pow(baseTextureValues[2 * 4 + 0], 2) + Math.pow(baseTextureValues[4 + 1], 2));
+    const vertWind = Math.abs(baseTextureValues[1 * 4 + 1]) * 0.65;
+    this.#velocity = rawVelocityTo_ms(horizWind + vertWind);
 
     let altitudeM = this.#y * cellHeight;
     let hydrostaticPressure = 1013.25 * Math.exp(-altitudeM / 8400.0);
@@ -1477,9 +1484,11 @@ class WeatherBalloon
     this.pressure_hPa = hydrostaticPressure + baseValues[2] * 120.0;
     this.verticalWind = baseValues[1] * 100.0;
 
+    const precipDrag = clamp(waterValues[2] * 0.08 + waterValues[3] * 0.03, 0.0, 0.35);
+    const turbulenceKick = (Math.random() - 0.5) * (0.02 + Math.abs(baseValues[1]) * 0.04);
     let driftScale = 0.5 * (sim_res_x / 900.0);
-    this.x += baseValues[0] * driftScale * guiControls.balloonDriftMult;
-    this.ascentRate = guiControls.balloonRiseRate + Math.max(baseValues[1], 0.0) * 3.5;
+    this.x += (baseValues[0] + turbulenceKick) * driftScale * guiControls.balloonDriftMult * (1.0 - precipDrag * 0.55);
+    this.ascentRate = (guiControls.balloonRiseRate + Math.max(baseValues[1], 0.0) * 3.5) * (1.0 - precipDrag);
     this.y += this.ascentRate;
     this.age++;
 
@@ -1518,6 +1527,17 @@ let weatherBalloons = [];
 let lightningRods = [];
 
 
+
+
+function applyIntroShaderSettings()
+{
+  guiControls_default.lightningBloomStrength = readNumericInput('introLightningFxSel', guiControls_default.lightningBloomStrength ?? 1.0);
+  guiControls_default.precipitationVisualBoost = readNumericInput('introPrecipFxSel', guiControls_default.precipitationVisualBoost ?? 1.0);
+  guiControls_default.radiationHaze = readNumericInput('introShaderQualitySel', guiControls_default.radiationHaze ?? 1.0);
+  guiControls_default.introShaderQuality = guiControls_default.radiationHaze;
+  guiControls_default.introLightningVisualStrength = guiControls_default.lightningBloomStrength;
+  guiControls_default.introPrecipVisualStrength = guiControls_default.precipitationVisualBoost;
+}
 
 async function loadData()
 {
@@ -1625,6 +1645,7 @@ async function loadData()
     sim_height = Math.round(readNumericInput('simHeightSel', 12000));
     sim_height = clamp(sim_height, 4000, 22000);
 
+    applyIntroShaderSettings();
     NUM_DROPLETS = computeNumDroplets(sim_res_x, sim_res_y);
     SETUP_MODE = true;
 
@@ -3850,6 +3871,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   function setGuiUniforms()
   { // set all uniforms to new values
+    if (!sunIsUp)
+      sunIntensity *= 0.04;
+
     gl.useProgram(boundaryProgram);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vorticity'), guiControls.vorticity);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'landEvaporation'), guiControls.landEvaporation);
@@ -4013,7 +4037,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     fluidParams_folder.add(guiControls, 'vorticity', 0.0, 0.010, 0.001)
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vorticity'), guiControls.vorticity);
       })
       .name('Vorticity');
@@ -4241,6 +4268,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .listen();
 
     radiation_folder.add(guiControls, 'sunIntensity', 0.0, 2.0, 0.01).onChange(function() { updateSunlight('MANUAL_ANGLE'); }).name('Sun Intensity');
+    radiation_folder.add(guiControls, 'diurnalThermalLag', 0.2, 3.0, 0.01).onChange(function() { updateSunlight('MANUAL_ANGLE'); }).name('Diurnal Thermal Lag');
 
     radiation_folder.add(guiControls, 'greenhouseGases', 0.0, 0.01, 0.0001)
       .onChange(function() {
@@ -4280,19 +4308,28 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Lake / Sea Temperature (°C)');
 
     water_folder.add(guiControls, 'dynamicWaterTemperature').name('Dynamic Water Temperature').onChange(function() {
-      gl.useProgram(boundaryProgram);
+      if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
       gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dynamicWaterTemperature'), guiControls.dynamicWaterTemperature ? 1.0 : 0.0);
     });
 
     water_folder.add(guiControls, 'landEvaporation', 0.0, 0.0002, 0.00001)
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'landEvaporation'), guiControls.landEvaporation);
       })
       .name('Land Evaporation');
     water_folder.add(guiControls, 'waterEvaporation', 0.0, 0.0004, 0.00001)
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterEvaporation'), guiControls.waterEvaporation);
       })
       .name('Lake / Sea Evaporation');
@@ -4302,7 +4339,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(advectionProgram, 'evapHeat'), guiControls.evapHeat);
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapHeat'), guiControls.evapHeat);
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'evapHeat'), guiControls.evapHeat);
       })
       .name('Evaporation Heat');
@@ -4323,56 +4363,80 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Condensation Rate');
     water_folder.add(guiControls, 'waterWeight', 0.0, 2.0, 0.01)
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterWeight'), guiControls.waterWeight);
       })
       .name('Water Weight');
 
     water_folder.add(guiControls, 'precipitationRecycling', 0.2, 2.0, 0.01)
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
       })
       .name('Precip Recycling');
 
     water_folder.add(guiControls, 'surfaceRunoffRate', 0.2, 3.0, 0.01)
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'surfaceRunoffRate'), guiControls.surfaceRunoffRate);
       })
       .name('Surface Runoff');
 
     water_folder.add(guiControls, 'soilInfiltrationRate', 0.2, 3.0, 0.01)
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'soilInfiltrationRate'), guiControls.soilInfiltrationRate);
       })
       .name('Soil Infiltration');
 
     water_folder.add(guiControls, 'canopyInterception', 0.0, 2.0, 0.01)
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'canopyInterception'), guiControls.canopyInterception);
       })
       .name('Canopy Interception');
 
     water_folder.add(guiControls, 'urbanHeatIslandStrength', 0.0, 3.0, 0.01)
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'urbanHeatIslandStrength'), guiControls.urbanHeatIslandStrength);
       })
       .name('Urban Heat Island');
 
     water_folder.add(guiControls, 'coastalMixing', 0.2, 2.5, 0.01)
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'coastalMixing'), guiControls.coastalMixing);
       })
       .name('Coastal Mixing');
 
     water_folder.add(guiControls, 'waterAlbedoShift', -0.5, 0.5, 0.01)
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterAlbedoShift'), guiControls.waterAlbedoShift);
       })
       .name('Water Albedo Shift');
@@ -4572,11 +4636,17 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Evaporation Rate');
 
     precipitation_folder.add(guiControls, 'cloudAutoconversionRate', 0.3, 2.2, 0.01).name('Cloud Auto-conversion').onChange(function() {
-      gl.useProgram(boundaryProgram);
+      if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
       gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudAutoconversionRate'), guiControls.cloudAutoconversionRate);
     });
     precipitation_folder.add(guiControls, 'cloudLifetimeBoost', 0.5, 2.5, 0.01).name('Cloud Lifetime Boost').onChange(function() {
-      gl.useProgram(boundaryProgram);
+      if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
       gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudLifetimeBoost'), guiControls.cloudLifetimeBoost);
     });
     precipitation_folder.add(guiControls, 'entrainmentDilution', 0.4, 2.5, 0.01).name('Entrainment Dilution').onChange(function() {
@@ -5344,14 +5414,42 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         let simXpos = Math.floor(mouseXinSim * sim_res_x);
         let simYpos = findSimYposAboveSurfaceAtMouseX();
 
-        if (simXpos >= 0 && simXpos < sim_res_x)
-          weatherStations.push(new Weatherstation(simXpos, simYpos)); // add weather station
+        if (simXpos >= 0 && simXpos < sim_res_x) {
+          if (ctrlPressed && weatherStations.length > 0) {
+            let best = -1;
+            let bestD = 1e9;
+            for (let i = 0; i < weatherStations.length; i++) {
+              let dx = Math.abs(weatherStations[i].getXpos() - simXpos);
+              dx = Math.min(dx, sim_res_x - dx);
+              let dy = weatherStations[i].getYpos() - simYpos;
+              let d = Math.hypot(dx, dy);
+              if (d < bestD) { bestD = d; best = i; }
+            }
+            if (best >= 0 && bestD <= Math.max(guiControls.brushSize * 0.5, 8.0))
+              weatherStations[best].destroy();
+          } else
+            weatherStations.push(new Weatherstation(simXpos, simYpos)); // add weather station
+        }
       } else if (guiControls.tool == 'TOOL_BALLOON') {
         let simXpos = Math.floor(mouseXinSim * sim_res_x);
         let simYpos = findSimYposAboveSurfaceAtMouseX();
 
-        if (simXpos >= 0 && simXpos < sim_res_x)
-          weatherBalloons.push(new WeatherBalloon(simXpos, simYpos));
+        if (simXpos >= 0 && simXpos < sim_res_x) {
+          if (ctrlPressed && weatherBalloons.length > 0) {
+            let best = -1;
+            let bestD = 1e9;
+            for (let i = 0; i < weatherBalloons.length; i++) {
+              let dx = Math.abs(weatherBalloons[i].x - simXpos);
+              dx = Math.min(dx, sim_res_x - dx);
+              let dy = weatherBalloons[i].y - simYpos;
+              let d = Math.hypot(dx, dy);
+              if (d < bestD) { bestD = d; best = i; }
+            }
+            if (best >= 0 && bestD <= Math.max(guiControls.brushSize * 0.75, 10.0))
+              weatherBalloons[best].destroy();
+          } else
+            weatherBalloons.push(new WeatherBalloon(simXpos, simYpos));
+        }
       } else if (guiControls.tool == 'TOOL_LIGHTNING_ROD') {
         let simXpos = Math.floor(mouseXinSim * sim_res_x);
         let simYpos = findSimYposAboveSurfaceAtMouseX();
@@ -6881,7 +6979,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
             // apply vorticity, boundary conditions and user input
-            gl.useProgram(boundaryProgram);
+            if (!sunIsUp)
+      sunIntensity *= 0.04;
+
+    gl.useProgram(boundaryProgram);
             gl.uniform1f(uniformLocation_boundaryProgram_iterNum, iterNum);
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, baseTexture_1);
@@ -6988,9 +7089,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
                 gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, sampleValues);
                 // console.timeEnd('cnt')         // 1 - 100 ms huge variation
                 // console.log(sampleValues[0]);  // number of inactive droplets
-                guiControls.inactiveDroplets = sampleValues[0];
+                filteredInactiveDroplets = (filteredInactiveDroplets == 0.0) ? sampleValues[0] : mix(filteredInactiveDroplets, sampleValues[0], 0.32);
+                guiControls.inactiveDroplets = filteredInactiveDroplets;
                 // gl.useProgram(precipitationProgram); // already set
-                gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'inactiveDroplets'), sampleValues[0]);
+                gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'inactiveDroplets'), filteredInactiveDroplets);
               }
 
               gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
@@ -7598,12 +7700,19 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     //	let sunIntensity = guiControls.sunIntensity *
     // Math.pow(Math.max(Math.sin((90.0 - Math.abs(guiControls.sunAngle)) *
     // degToRad) - 0.1, 0.0) * 1.111, 0.4);
-    let sunIntensity = guiControls.sunIntensity * Math.pow(Math.max(Math.sin((180.0 - guiControls.sunAngle) * degToRad), 0.0), 0.1) * 1300.0; // max 1300 w/m2 at 12 km
+    let solarElevation = Math.max(Math.sin((180.0 - guiControls.sunAngle) * degToRad), 0.0);
+    let diurnalLag = clamp(guiControls.diurnalThermalLag, 0.2, 3.0);
+    let clearSkyAttenuation = mix(0.82, 1.22, Math.pow(solarElevation, 0.6 / diurnalLag));
+    let seasonalAttenuation = map_rangeC(Math.cos((guiControls.month - 6.5) * 0.52), -1.0, 1.0, 0.90, 1.08);
+    let sunIntensity = guiControls.sunIntensity * clearSkyAttenuation * seasonalAttenuation * 1250.0;
     // console.log('sunIntensity: ', sunIntensity);
 
     // minShadowLight = clamp(((90 + 10) - Math.abs(solarZenithAngleDeg)) * 0.006, 0.005, 0.040); // decrease until the sun goes 10 deg below the horizon
 
     minShadowLight = map_range_C(Math.abs(solarZenithAngleDeg), 100.0, 85.0, 0.005, 0.040); // decrease until the sun goes 10 deg below the horizon
+
+    if (!sunIsUp)
+      sunIntensity *= 0.04;
 
     gl.useProgram(boundaryProgram);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'sunAngle'), solarZenithAngle);

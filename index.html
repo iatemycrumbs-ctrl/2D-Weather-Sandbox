@@ -675,6 +675,30 @@
                             </td>
                             <td><i id="simHeightWarning" style="color:rgb(255, 61, 61); display: none;">Extreme heights may reduce stability/performance on some GPUs.</i></td>
                         </tr>
+                        <tr>
+                            <td><b>Shader quality</b></td>
+                            <td>
+                                <input type="range" min="0.60" max="2.00" value="1.00" step="0.05" id="introShaderQualitySel" oninput="document.getElementById('introShaderQualityShow').value=this.value + 'x'" />
+                                <output id="introShaderQualityShow">1.00x</output>
+                            </td>
+                            <td>Controls startup haze/scattering shader intensity presets.</td>
+                        </tr>
+                        <tr>
+                            <td><b>Lightning shader FX</b></td>
+                            <td>
+                                <input type="range" min="0.50" max="2.50" value="1.00" step="0.05" id="introLightningFxSel" oninput="document.getElementById('introLightningFxShow').value=this.value + 'x'" />
+                                <output id="introLightningFxShow">1.00x</output>
+                            </td>
+                            <td>Sets initial lightning bloom/flash visual strength.</td>
+                        </tr>
+                        <tr>
+                            <td><b>Precipitation shader FX</b></td>
+                            <td>
+                                <input type="range" min="0.50" max="2.50" value="1.00" step="0.05" id="introPrecipFxSel" oninput="document.getElementById('introPrecipFxShow').value=this.value + 'x'" />
+                                <output id="introPrecipFxShow">1.00x</output>
+                            </td>
+                            <td>Sets initial precipitation visual intensity presets.</td>
+                        </tr>
                     </table>
                     <input type="button" value="Create New Simulation" onclick="loadData ()" />
                     <i class="launch-note">Move the mouse until you see a terrain you like, then click to start.</i>

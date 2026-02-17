@@ -218,11 +218,13 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
   float thermalColorMix = map_rangeC(lightningTemp, lightningTempMinK, lightningTempMaxK, 0.0, 1.0) * lightningColorTempMult;
 
-  vec3 coolLightningCol = strikeTypeSign < 0.0 ? vec3(0.62, 0.70, 1.0) : vec3(0.62, 0.56, 1.0);
-  vec3 hotLightningCol = strikeTypeSign < 0.0 ? vec3(0.90, 0.95, 1.00) : vec3(1.00, 0.96, 0.86);
+  vec3 coolLightningCol = strikeTypeSign < 0.0 ? vec3(0.52, 0.66, 1.0) : vec3(0.70, 0.60, 1.0);
+  vec3 hotLightningCol = strikeTypeSign < 0.0 ? vec3(0.82, 0.93, 1.00) : vec3(1.00, 0.93, 0.78);
   vec3 lightningCol = mix(coolLightningCol, hotLightningCol, clamp(thermalColorMix, 0.0, 1.0));
 
-  vec3 outputColor = max(pixVal * lightningCol, vec3(0));
+  // Visual separation: IC = diffuse cloud-sheet glow, CG = high-contrast return-stroke core.
+  float strikeContrast = strikeTypeSign < 0.0 ? 0.78 : 1.15;
+  vec3 outputColor = max(pixVal * lightningCol * strikeContrast, vec3(0));
 
   return outputColor;
 }
@@ -670,8 +672,10 @@ void main()
     vec2 vecFromMouse = cursor.xy - texCoord;
     vecFromMouse.x *= texelSize.y / texelSize.x;                             // aspect ratio correction to make it a circle
     float rangeScaledDist = length(vecFromMouse) * (5.0 / max(flashlightRange, 0.2));
-    float focusedCone = pow(max(cos(min(rangeScaledDist, 2.6)), 0.0), max(flashlightFocus * 1.5, 0.25));
+    float focusedCone = pow(max(cos(min(rangeScaledDist, 2.6)), 0.0), max(flashlightFocus * 1.8, 0.25));
+    float volumetricScatter = exp(-rangeScaledDist * 1.35) * (0.10 + water[SMOKE] * 0.04 + water[PRECIPITATION] * 0.06);
     shadowLight += focusedCone * flashlightIntensity;
+    onLight += vec3(0.58, 0.68, 0.95) * volumetricScatter * flashlightIntensity * 0.85;
   }
 
   vec3 ambientLight = texture(ambientLightTex, texCoord).rgb;

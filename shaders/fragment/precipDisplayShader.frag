@@ -34,19 +34,24 @@ void main()
   float centerFade = mix(radialFade, streakFade, 0.52);
   float iceFrac = mass_out[ICE] / max(totalMass, 0.0001);
   float rainFrac = mass_out[WATER] / max(totalMass, 0.0001);
-  float opacity = clamp(totalMass * (0.10 + 0.06 * density_out), 0.04, 1.0) * centerFade;
 
-  vec3 rainCol = mix(vec3(0.22, 0.62, 1.0), vec3(0.62, 0.88, 1.0), clamp(rainFrac * 1.2, 0.0, 1.0));
-  vec3 snowCol = vec3(0.94, 0.98, 1.0);
-  vec3 graupelCol = vec3(0.55, 0.76, 1.0);
-  vec3 hailCol = vec3(0.30, 0.50, 1.0);
+  // More physically readable optical response: rain = cooler deep blues, frozen hydrometeors = bright icy whites/cyans.
+  float terminalSpeedHint = mix(0.6, 1.25, clamp(density_out, 0.0, 1.5));
+  float streakBoost = mix(0.75, 1.35, terminalSpeedHint * rainFrac);
+  float opacity = clamp(totalMass * (0.12 + 0.07 * density_out), 0.05, 1.0) * centerFade * streakBoost;
+
+  vec3 rainCol = mix(vec3(0.10, 0.44, 0.96), vec3(0.28, 0.70, 1.00), clamp(rainFrac * 1.3, 0.0, 1.0));
+  vec3 snowCol = vec3(0.95, 0.98, 1.00);
+  vec3 graupelCol = vec3(0.78, 0.90, 1.00);
+  vec3 hailCol = vec3(0.58, 0.82, 1.00);
 
   vec3 iceCol = density_out >= 1.08 ? hailCol : mix(snowCol, graupelCol, smoothstep(0.20, 1.08, density_out));
-  vec3 phaseCol = mix(rainCol, iceCol, clamp(iceFrac, 0.0, 1.0));
+  vec3 phaseCol = (rainFrac >= iceFrac) ? mix(iceCol, rainCol, clamp((rainFrac - iceFrac) * 1.6 + 0.5, 0.0, 1.0))
+                                         : mix(rainCol, iceCol, clamp((iceFrac - rainFrac) * 1.6 + 0.5, 0.0, 1.0));
 
   // subtle charge tint: graupel/hail blue-negative, crystals/snow warm-positive
-  vec3 chargeTint = density_out >= 1.0 ? vec3(0.12, 0.22, 0.38) : vec3(0.16, 0.06, 0.06);
-  phaseCol += chargeTint * clamp(iceFrac * 0.35, 0.0, 0.30);
+  vec3 chargeTint = density_out >= 1.0 ? vec3(0.10, 0.20, 0.34) : vec3(0.12, 0.05, 0.05);
+  phaseCol += chargeTint * clamp(iceFrac * 0.30, 0.0, 0.24);
 
   fragmentColor = vec4(clamp(phaseCol, 0.0, 1.0), opacity);
 

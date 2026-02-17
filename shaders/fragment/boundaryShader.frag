@@ -513,10 +513,11 @@ void main()
           float moistureSuitability = map_rangeC(water[SOIL_MOISTURE], 3.0, 40.0, 0.0, 1.0);
           float snowSuppression = map_rangeC(water[SNOW], 0.0, 120.0, 1.0, 0.25);
           float climateCapacity = clamp(tempSuitability * moistureSuitability * snowSuppression, 0.0, 1.0) * 127.0;
+          float treeMassFactor = map_rangeC(float(wall[VEGETATION]), 0.0, 127.0, 0.65, 1.55);
 
-          int vegetationGrowthRate = int(climateCapacity * 0.05 + sqrt(max(lightAboveSurface[SUNLIGHT], 0.0)) * 2.5);
+          int vegetationGrowthRate = int(climateCapacity * 0.045 / treeMassFactor + sqrt(max(lightAboveSurface[SUNLIGHT], 0.0)) * 2.2);
 
-          if (vegetationGrowthRate > 0 && int(iterNum) % ((100 / vegetationGrowthRate) * 100) == 0) {      // growth interval
+          if (vegetationGrowthRate > 0 && int(iterNum) % ((100 / max(vegetationGrowthRate, 1)) * 100) == 0) {      // growth interval
             if (int(climateCapacity) > wall[VEGETATION])
               wall[VEGETATION] += 1;
           }

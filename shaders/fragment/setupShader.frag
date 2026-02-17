@@ -165,16 +165,22 @@ void main()
       float flatlandFactor = 1.0 - smoothstep(0.06, 0.24, slopeProbe);
       float urbanSuitability = lowlandFactor * flatlandFactor * smoothstep(0.45, 0.92, urbanNoise);
 
+      float sandBiomeNoise = noise2(vec2(x * 0.78 + seedA * 0.77, seedB * 0.49));
+      float desertBasin = smoothstep(0.46, 0.90, sandBiomeNoise) * smoothstep(0.0, 0.30, lowlandFactor);
+
       float soilMoisture = mix(38.0, 14.0, smoothstep(0.0, 0.20, slopeProbe));
       soilMoisture *= mix(0.70, 1.20, fertileBand);
       soilMoisture *= mix(0.88, 1.18, aridNoise);
       soilMoisture *= mix(1.0, 0.72, urbanSuitability);
+      soilMoisture *= mix(1.0, 0.22, desertBasin);
       soilMoisture *= terrainWetnessRecovery;
-      water[SOIL_MOISTURE] = clamp(soilMoisture, 4.0, 60.0);
+      water[SOIL_MOISTURE] = clamp(soilMoisture, 1.5, 60.0);
 
-      float vegetation = 18.0 + fertileBand * 110.0 - slopeProbe * 55.0;
-      vegetation += (noise2(vec2(x * 2.4 + seedB, seedA * 0.43)) - 0.5) * 30.0;
+      // Physical tree proxy: higher values represent denser/taller canopy stands, not just simple sprite count.
+      float vegetation = 14.0 + fertileBand * 108.0 - slopeProbe * 46.0;
+      vegetation += (noise2(vec2(x * 2.4 + seedB, seedA * 0.43)) - 0.5) * 28.0;
       vegetation *= mix(1.0, 0.38, urbanSuitability);
+      vegetation *= mix(1.0, 0.10, desertBasin);
       wall[VEGETATION] = int(clamp(vegetation, 0.0, 127.0));
 
       if (urbanSuitability > 0.48) {
