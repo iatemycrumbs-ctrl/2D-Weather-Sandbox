@@ -287,13 +287,19 @@ vec4 getAirColor(vec2 fragCoordIn)
 
 
   float smokeOpacity = clamp(1. - (1. / (water[SMOKE] + 1.)), 0.0, 1.0);
-  float fireIntensity = clamp((smokeOpacity - 0.8) * 25., 0.0, 1.0);
+  float fireCore = clamp((smokeOpacity - 0.76) * 18., 0.0, 1.0);
+  float emberBand = clamp((smokeOpacity - 0.58) * 4.2, 0.0, 1.0) * (1.0 - fireCore * 0.75);
+  float fireIntensity = clamp(fireCore + emberBand * 0.55, 0.0, 1.0);
 
-  vec3 fireCol = hsv2rgb(vec3(fireIntensity * 0.008, 0.98, 5.0)) * 1.0; // 1.0, 0.7, 0.0
+  vec3 fireCoreCol = vec3(1.00, 0.88, 0.62);
+  vec3 emberCol = vec3(1.00, 0.38, 0.08);
+  vec3 sootGlow = vec3(0.52, 0.14, 0.03);
+  vec3 fireCol = mix(emberCol, fireCoreCol, fireCore);
+  fireCol = mix(sootGlow, fireCol, clamp(fireIntensity * 1.2, 0.0, 1.0));
 
   vec3 smokeOrFireCol = mix(mix(smokeThinCol, smokeThickCol, smokeOpacity), fireCol, fireIntensity);
 
-  shadowLight += fireIntensity * 2.5;                                                                                 // 1.5
+  shadowLight += fireIntensity * 3.1 + emberBand * 0.8;
 
   float opacity = 1. - (1. - smokeOpacity) * (1. - cloudOpacity);                                                     // alpha blending
   vec3 color = (smokeOrFireCol * smokeOpacity / opacity) + (cloudCol * cloudOpacity * (1. - smokeOpacity) / opacity); // color blending
@@ -331,20 +337,23 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   onLight += vec3(lightningOnLight) + coronaColor * (electricFieldGlow * electricFieldVizStrength + fieldDiffused * 0.018);
 
-  // Reworked physically-inspired rainbow: appears opposite the sun in rain-rich air.
-  float rainRich = clamp(water[PRECIPITATION] * 2.2 + cloudOpacity * 0.6, 0.0, 1.0);
-  float sunElevNorm = clamp((sunAngle + 0.15) * 1.4, 0.0, 1.0);
-  vec2 rainbowCenter = vec2(0.5, 0.16 + sunElevNorm * 0.22);
+  // Reworked rainbow: primary + faint secondary arc opposite the sun with horizon and rain gating.
+  float rainRich = clamp(water[PRECIPITATION] * 2.4 + cloudOpacity * 0.5, 0.0, 1.0);
+  float sunElevNorm = clamp((sunAngle + 0.22) * 1.15, 0.0, 1.0);
+  vec2 rainbowCenter = vec2(0.5, 0.12 + sunElevNorm * 0.26);
   vec2 toPix = vec2((texCoord.x - rainbowCenter.x) * aspectRatios[0], texCoord.y - rainbowCenter.y);
   float r = length(toPix);
-  float ring = exp(-pow((r - 0.52) / 0.020, 2.0));
-  float ring2 = exp(-pow((r - 0.565) / 0.028, 2.0)) * 0.35;
-  float spectralW = map_rangeC(r, 0.49, 0.57, 700.0, 410.0);
-  vec3 rainbowCol = spectral_zucconi(spectralW);
-  float rainbowMask = ring + ring2;
-  rainbowMask *= rainRich * clamp(lightIntensity * 2.0, 0.0, 1.0);
-  rainbowMask *= smoothstep(0.02, 0.30, texCoord.y); // keep arc above horizon band
-  onLight += rainbowCol * rainbowMask * (1.1 * sqrt(ambientScattering));
+  float primaryArc = exp(-pow((r - 0.515) / 0.017, 2.0));
+  float secondaryArc = exp(-pow((r - 0.565) / 0.024, 2.0)) * 0.42;
+
+  float primaryW = map_rangeC(r, 0.495, 0.535, 700.0, 410.0);
+  float secondaryW = map_rangeC(r, 0.545, 0.585, 410.0, 700.0);
+  vec3 rainbowPrimaryCol = spectral_zucconi(primaryW);
+  vec3 rainbowSecondaryCol = spectral_zucconi(secondaryW) * 0.65;
+
+  float rainbowMask = (primaryArc + secondaryArc) * rainRich * clamp(lightIntensity * 2.3, 0.0, 1.0);
+  rainbowMask *= smoothstep(0.03, 0.32, texCoord.y);
+  onLight += (rainbowPrimaryCol * primaryArc + rainbowSecondaryCol * secondaryArc) * rainbowMask * (1.15 * sqrt(ambientScattering));
 
   return vec4(color, opacity);
 }
@@ -508,10 +517,10 @@ void main()
 
     float rainSnowFactor = map_rangeC(KtoC(realTemp), 0.0, 5.0, 0.0, 1.0); // only rain if above freezing
 
-    vec3 rainbowCol = spectral_zucconi(waveLength) * min(pow(lightIntensity, 2.0) * 1.9, 1.0) * min(water[PRECIPITATION] * 3.0, 1.0) * rainSnowFactor * 0.7;
+    vec3 rainbowCol = spectral_zucconi(waveLength) * min(pow(lightIntensity, 2.0) * 1.6, 1.0) * min(water[PRECIPITATION] * 2.1, 1.0) * rainSnowFactor * 0.32;
 
     emittedLight += rainbowCol;
-    opacity = max(opacity - length(rainbowCol), 0.); // remove some white rain to prevent overbrightening and increase color saturation
+    opacity = max(opacity - length(rainbowCol) * 0.45, 0.);
 
 
     if (wall[VERT_DISTANCE] >= 0 && wall[VERT_DISTANCE] < 10) { // near surface

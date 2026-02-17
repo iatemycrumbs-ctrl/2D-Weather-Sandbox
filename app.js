@@ -7089,7 +7089,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
                 gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, sampleValues);
                 // console.timeEnd('cnt')         // 1 - 100 ms huge variation
                 // console.log(sampleValues[0]);  // number of inactive droplets
-                filteredInactiveDroplets = (filteredInactiveDroplets == 0.0) ? sampleValues[0] : mix(filteredInactiveDroplets, sampleValues[0], 0.32);
+                filteredInactiveDroplets = (filteredInactiveDroplets == 0.0) ? sampleValues[0] : mixGeneric(filteredInactiveDroplets, sampleValues[0], 0.32);
                 guiControls.inactiveDroplets = filteredInactiveDroplets;
                 // gl.useProgram(precipitationProgram); // already set
                 gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'inactiveDroplets'), filteredInactiveDroplets);
@@ -7702,7 +7702,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     // degToRad) - 0.1, 0.0) * 1.111, 0.4);
     let solarElevation = Math.max(Math.sin((180.0 - guiControls.sunAngle) * degToRad), 0.0);
     let diurnalLag = clamp(guiControls.diurnalThermalLag, 0.2, 3.0);
-    let clearSkyAttenuation = mix(0.82, 1.22, Math.pow(solarElevation, 0.6 / diurnalLag));
+    let clearSkyAttenuation = mixGeneric(0.82, 1.22, Math.pow(solarElevation, 0.6 / diurnalLag));
     let seasonalAttenuation = map_rangeC(Math.cos((guiControls.month - 6.5) * 0.52), -1.0, 1.0, 0.90, 1.08);
     let sunIntensity = guiControls.sunIntensity * clearSkyAttenuation * seasonalAttenuation * 1250.0;
     // console.log('sunIntensity: ', sunIntensity);
