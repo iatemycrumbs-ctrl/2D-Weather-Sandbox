@@ -414,6 +414,7 @@ const guiControls_default = {
   cloudAutoconversionRate : 1.0,
   cloudLifetimeBoost : 1.0,
   lightningRodRadiusKm : 25.0,
+  airplaneLightningAttractor : 0.0,
   showLightningRods : true,
   allowEditingWhenPaused : true,
   entrainmentDilution : 1.0,
@@ -3804,6 +3805,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.uniform3f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'planePos'), normXpos, normYpos, this.directionIsLeft ? this.phys.angle : -this.phys.angle);
       gl.useProgram(advectionProgram);
       gl.uniform4f(gl.getUniformLocation(advectionProgram, 'airplaneValues'), normXpos, normYpos, this.throttle, this.#framesSinceCrash > 0 ? 1.0 : (zPressed ? -1.0 : 0.0));
+      gl.useProgram(precipitationProgram);
+      gl.uniform2f(gl.getUniformLocation(precipitationProgram, 'airplanePosNorm'), mod(normXpos + 1.0, 1.0), clamp(normYpos, 0.0, 1.0));
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'airplaneLightningAttractor'), guiControls.airplaneLightningAttractor);
       gl.useProgram(skyBackgroundDisplayProgram);
 
       if (this.#camFollow) {
@@ -3954,6 +3958,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'drizzleThresholdShift'), guiControls.drizzleThresholdShift);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'graupelChargeGain'), guiControls.graupelChargeGain);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'iceCrystalChargeGain'), guiControls.iceCrystalChargeGain);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'airplaneLightningAttractor'), guiControls.airplaneLightningAttractor);
     gl.useProgram(realisticDisplayProgram);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
@@ -3993,6 +3998,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'lightningRodCount'), rodCount);
     gl.uniform2fv(gl.getUniformLocation(precipitationProgram, 'lightningRodPos[0]'), rodData);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningRodRadiusNorm'), rodRadiusNorm);
+    gl.uniform2f(gl.getUniformLocation(precipitationProgram, 'airplanePosNorm'), -2.0, -2.0);
+
+    gl.useProgram(realisticDisplayProgram);
+    gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningRodCount'), rodCount);
+    gl.uniform2fv(gl.getUniformLocation(realisticDisplayProgram, 'lightningRodPos[0]'), rodData);
   }
 
   function setupDatGui(strGuiControls)
@@ -4664,6 +4674,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     precipitation_folder.add(guiControls, 'iceCrystalChargeGain', 0.2, 2.5, 0.01).name('Ice Crystal Charge Gain').onChange(function() {
       gl.useProgram(precipitationProgram);
       gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'iceCrystalChargeGain'), guiControls.iceCrystalChargeGain);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'airplaneLightningAttractor'), guiControls.airplaneLightningAttractor);
     });
 
     precipitation_folder.add(guiControls, 'inactiveDroplets', 0, NUM_DROPLETS).listen().name('Inactive Droplets');
@@ -4703,6 +4714,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
     });
     lightning_folder.add(guiControls, 'lightningRodRadiusKm', 1.0, 40.0, 0.5).name('Lightning Rod Radius (km)');
+    lightning_folder.add(guiControls, 'airplaneLightningAttractor', 0.0, 2.0, 0.01).name('Airplane Lightning Attractor');
 
     var balloon_folder = datGui.addFolder('Weather Balloons');
     balloon_folder.add(guiControls, 'balloonRiseRate', 0.05, 0.60, 0.01).name('Rise Rate');
@@ -6921,6 +6933,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally);
       }
       gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
+      if (!airplaneMode) {
+        gl.useProgram(precipitationProgram);
+        gl.uniform2f(gl.getUniformLocation(precipitationProgram, 'airplanePosNorm'), -2.0, -2.0);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'airplaneLightningAttractor'), 0.0);
+        gl.useProgram(advectionProgram);
+      }
       updateLightningRodUniforms();
 
       // guiControls.IterPerFrame = 1.0 / timePerIteration * 3600 / 60.0;

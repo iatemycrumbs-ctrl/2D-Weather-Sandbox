@@ -70,6 +70,8 @@ uniform float iceCrystalChargeGain;
 uniform int lightningRodCount;
 uniform vec2 lightningRodPos[8];
 uniform float lightningRodRadiusNorm;
+uniform vec2 airplanePosNorm;
+uniform float airplaneLightningAttractor;
 
 #include "common.glsl"
 
@@ -208,11 +210,17 @@ void main()
           }
 
           lightningSpawnChance *= mix(1.0, 1.8, rodAttraction);
+
+          float planeDx = wrappedDistX(texCoord.x, airplanePosNorm.x);
+          float planeDy = max(texCoord.y - airplanePosNorm.y, 0.0);
+          float planeDist = length(vec2(planeDx, planeDy));
+          float airplaneAttraction = smoothstep(0.30, 0.0, planeDist) * airplaneLightningAttractor;
+          lightningSpawnChance *= mix(1.0, 1.55, airplaneAttraction);
           lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.58);
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
-          float currentFlashHold = max(lightningMinInterval, 5.0 + abs(lightningData[INTENSITY]) * 2.3);
+          float currentFlashHold = max(lightningMinInterval, 9.0 + abs(lightningData[INTENSITY]) * 3.6);
           bool lightningChannelFree = lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
           if (lightningChannelFree && strikeRand < lightningSpawnChance) {
             lightningSpawned = true;
@@ -233,8 +241,12 @@ void main()
               feedback.xy = vec2(shiftedX, clamp(texCoord.y + icYOffset, 0.30, 0.96));
             } else {
               float rodX = nearestRod.x;
-              float targetX = mix(shiftedX, rodX, rodAttraction);
-              feedback.xy = vec2(targetX, mix(texCoord.y, nearestRod.y + texelSize.y * 2.0, rodAttraction));
+              float rodTargetX = mix(shiftedX, rodX, rodAttraction);
+              float planeTargetX = mix(shiftedX, airplanePosNorm.x, airplaneAttraction);
+              float targetX = mix(rodTargetX, planeTargetX, clamp(airplaneAttraction, 0.0, 1.0));
+              float targetY = mix(texCoord.y, nearestRod.y + texelSize.y * 2.0, rodAttraction);
+              targetY = mix(targetY, airplanePosNorm.y, clamp(airplaneAttraction * 0.65, 0.0, 1.0));
+              feedback.xy = vec2(targetX, targetY);
             }
 
             feedback[START_ITERNUM] = iterNum;

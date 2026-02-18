@@ -157,9 +157,11 @@ void main()
     // Radiative cooling and heating effects
 
     if (texCoord.y > globalEffectsStartAlt && texCoord.y < globalEffectsEndAlt) {
-      water[TOTAL] -= clamp(globalDrying, 0., max(water[TOTAL] - maxWater(max(realTemp - 20.0, CtoK(-80.))), 0.)); // only dry down to a dew point 20 C below the temperature
+      float dryGate = map_rangeC(water[CLOUD], 0.0, 1.0, 1.0, 0.55);
+      water[TOTAL] -= clamp(globalDrying * dryGate, 0., max(water[TOTAL] - maxWater(max(realTemp - 20.0, CtoK(-80.))), 0.)); // only dry down to a dew point 20 C below the temperature
 
-      base[TEMPERATURE] += globalHeating;
+      float heatGate = map_rangeC(water[CLOUD], 0.0, 1.2, 1.0, 0.65);
+      base[TEMPERATURE] += globalHeating * heatGate;
 
 
       // apply real sounding

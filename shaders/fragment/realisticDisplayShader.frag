@@ -57,6 +57,8 @@ uniform float radiationHaze;
 uniform float electricFieldVizStrength;
 uniform float dynamicChargeSeparation;
 uniform float electricFieldDiffusion;
+uniform int lightningRodCount;
+uniform vec2 lightningRodPos[8];
 
 uniform vec3 view;   // Xpos  Ypos    Zoom
 uniform vec4 cursor; // Xpos   Ypos  Size   type
@@ -143,16 +145,19 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 {
   float T0 = Tin - 1.0;
 
-  float repeatPeriod = map_range(random2d(lightningPos), 0.0, 1.0, 0.55, 1.6) / max(lightningFlashPersistence, 0.3);
-  float numFlashes = floor(map_range(random2d(lightningPos * 2.737250), 0.0, 1.0, 1.0, max(intensity - 0.2, 0.0) * 4.2));
+  bool isIC = intensity < 0.0;
+  float absIntensity = abs(intensity);
+  float T = max(T0, 0.0);
 
-  float minT = max(T0 - (repeatPeriod * numFlashes), 0.0);
-  float T = max(mod(T0, repeatPeriod), minT);
+  float peak = exp(-pow(T * (isIC ? 3.1 : 4.8), 2.0)) * (isIC ? 2.1 : 3.3);
+  float tail = max((1.0 / (0.05 + pow(T * (isIC ? 1.55 : 2.6), 3.0))) - 0.01, 0.0);
 
-  float peak = exp(-pow(T * 4.3, 2.0)) * 3.0;
-  float tail = max((1.0 / (0.04 + pow(T * 2.2, 3.0))) - 0.01, 0.0);
+  // IC keeps mild internal pulsing; CG stays mostly single-strike to avoid flicker.
+  float pulse = 1.0;
+  if (isIC)
+    pulse = 0.75 + 0.25 * sin(T * 18.0 + random2d(lightningPos * 9.17) * 6.2831);
 
-  return (peak + tail) * pow(intensity, 1.65);
+  return (peak + tail) * pulse * pow(absIntensity, 1.55);
 }
 
 vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningIntensity)
@@ -168,6 +173,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   float anchorY = strikeTypeSign < 0.0 ? max(pos.y + 0.18, 0.25) : max(pos.y, 0.05);
   float scaleMult = 1. / anchorY; // stronger clamp for mobile precision so full bolt remains visible
+  if (strikeTypeSign < 0.0)
+    scaleMult *= 0.72; // IC spreads more horizontally
 
   lightningTexCoord.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
   lightningTexCoord.y *= -scaleMult;
@@ -177,6 +184,10 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68) // prevent edge effect when mipmapping
     return vec3(0);
 
+  float branchWarp = sin(lightningTexCoord.y * 42.0 + lightningTime * 3.7 + random2d(pos * 17.1) * 6.2831) * 0.010;
+  branchWarp += sin(lightningTexCoord.y * 91.0 + random2d(pos * 7.3) * 6.2831) * 0.004;
+  lightningTexCoord.x += branchWarp * (strikeTypeSign < 0.0 ? 1.4 : 0.9);
+
   float pixVal = texture(lightningTex, lightningTexCoord).r;
   vec2 px = vec2(1.0 / lightningTexRes.x, 1.0 / lightningTexRes.y);
   float neighborMax = max(max(texture(lightningTex, lightningTexCoord + vec2(px.x, 0.0)).r,
@@ -185,7 +196,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
                               texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r));
   neighborMax = max(neighborMax, max(texture(lightningTex, lightningTexCoord + vec2(px.x, px.y)).r,
                                       texture(lightningTex, lightningTexCoord + vec2(-px.x, px.y)).r));
-  pixVal = max(pixVal, neighborMax * (0.78 * lightningBloomStrength));
+  pixVal = max(pixVal, neighborMax * (0.52 * lightningBloomStrength));
 
   if (strikeTypeSign < 0.0) {
     // IC lightning remains embedded within cloud volume.
@@ -223,7 +234,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   vec3 lightningCol = mix(coolLightningCol, hotLightningCol, clamp(thermalColorMix, 0.0, 1.0));
 
   // Visual separation: IC = diffuse cloud-sheet glow, CG = high-contrast return-stroke core.
-  float strikeContrast = strikeTypeSign < 0.0 ? 0.78 : 1.15;
+  float strikeContrast = strikeTypeSign < 0.0 ? 0.78 : 1.05;
   vec3 outputColor = max(pixVal * lightningCol * strikeContrast, vec3(0));
 
   return outputColor;
@@ -316,7 +327,7 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   if (abs(lightningData[INTENSITY]) > 0.18) { // show full bolt even for weaker mobile-sampled strikes
     emittedLight += displayLightning(lightningPos, lightningTime, currentLightningIntensity);
-    emittedLight /= 1. + cloudDensity * (95.0 / max(lightningBloomStrength, 0.2));
+    emittedLight /= 1. + cloudDensity * (125.0 / max(lightningBloomStrength, 0.25));
   }
 
 #define lightningOnLightBrightness 0.004 // 0.002
@@ -695,6 +706,28 @@ void main()
   onLight += vec3(0.42, 0.53, 0.75) * twilightScatter * 0.22 * ambientScattering;
 
   finalLight += vec3(shadowLight) + onLight;
+
+  // Render lightning rods as tall metallic masts near surface.
+  for (int r = 0; r < 8; r++) {
+    if (r >= lightningRodCount)
+      break;
+    vec2 rod = lightningRodPos[r];
+    float dx = abs(texCoord.x - rod.x);
+    dx = min(dx, 1.0 - dx) * aspectRatios[0];
+    float mastHeight = 0.16;
+    float mastTop = rod.y + mastHeight;
+    if (dx < 0.0018 && texCoord.y >= rod.y && texCoord.y <= mastTop) {
+      vec3 metal = vec3(0.72, 0.78, 0.84);
+      color = mix(color, metal, 0.88);
+      shadowLight += 0.22;
+      opacity = 1.0;
+    }
+    if (distance(vec2(dx, texCoord.y - mastTop), vec2(0.0)) < 0.0035) {
+      color = mix(color, vec3(0.86, 0.90, 0.94), 0.92);
+      onLight += vec3(0.08, 0.12, 0.16);
+      opacity = 1.0;
+    }
+  }
 
   opacity += length(emittedLight);
   opacity = clamp(opacity, 0.0, 1.0);

@@ -123,13 +123,13 @@ void main()
     float cloudReservoir = clamp(water[CLOUD] / max(water[TOTAL] + 0.0001, 0.0001), 0.15, 1.0);
     float resilience = 0.82 + clamp(water[CLOUD], 0.0, 2.5) * 0.18;
     float depletionScale = autoConv / max(cloudLife * (0.92 + cloudReservoir * 0.95) * resilience, 0.35);
-    water[CLOUD] -= (precipCoalescence * 0.115 + precipMassSink * 0.045) * depletionScale;
-    water[TOTAL] -= (precipCoalescence * 0.072 + precipMassSink * 0.020) * depletionScale;
+    water[CLOUD] -= (precipCoalescence * 0.090 + precipMassSink * 0.032) * depletionScale;
+    water[TOTAL] -= (precipCoalescence * 0.050 + precipMassSink * 0.014) * depletionScale;
 
     float precipEvaporation = max(precipFeedback[VAPOR], 0.);
 
     water[TOTAL] += precipEvaporation; // evaporating rain adds water vapor to air
-    water[CLOUD] += precipEvaporation * 0.040 * precipitationRecycling;
+    water[CLOUD] += precipEvaporation * 0.055 * precipitationRecycling;
 
 
     //  0.004 for rain visualisation
@@ -192,6 +192,14 @@ void main()
       snowCover = waterX0Ym[SNOW];
       soilMoisture = waterX0Ym[SOIL_MOISTURE];
       wall[VERT_DISTANCE] = 1; // directly above ground
+
+      // Local heating system: water-adjacent air warms quicker than land-adjacent air.
+      float solarProxy = clamp(cos(sunAngle), 0.0, 1.0);
+      float localHeat = solarProxy * 0.000030;
+      if (wallX0Ym[TYPE] == WALLTYPE_WATER)
+        base[TEMPERATURE] += localHeat * 1.35;
+      else
+        base[TEMPERATURE] += localHeat * 0.62;
     }
 
     if (wallXmY0[DISTANCE] == 0) {            // left is wall

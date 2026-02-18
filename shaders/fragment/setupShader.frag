@@ -110,14 +110,15 @@ void main()
   float mountainMix = smoothstep(0.35, 0.95, continent) * terrainRuggednessBoost;
   mountainMix = clamp(mountainMix, 0.0, 1.0);
   float riverValley = smoothstep(0.18, 0.95, abs(fbm(pw * vec2(1.65, 1.0) + vec2(seedB * 0.27, seedA * 0.14), 2.0, 0.5, 4))) * terrainRiverBias;
-  float elevation = mix(hills * 0.55 + 0.10, ridges * 0.95, mountainMix) - riverValley * 0.08;
+  float elevation = mix(hills * 0.52 + 0.11, ridges * 0.82, mountainMix) - riverValley * 0.07;
 
   // heightMult now controls water coverage + overall relief.
   float waterCoverage = map_rangeC(heightMult, 0.0, 2.0, 0.78, 0.25);
-  float relief = map_rangeC(heightMult, 0.0, 2.0, 0.02, 0.55) * mix(0.75, 1.35, clamp(terrainRuggednessBoost - 0.5, 0.0, 1.5) / 1.5);
+  float relief = map_rangeC(heightMult, 0.0, 2.0, 0.03, 0.42) * mix(0.82, 1.18, clamp(terrainRuggednessBoost - 0.5, 0.0, 1.5) / 1.5);
 
   float height = continent * elevation * relief - waterCoverage * 0.12;
   float terrainHeightNorm = clamp(height + 0.04, 0.0, 0.95); // 0..1 of simulation height
+  terrainHeightNorm = mix(terrainHeightNorm, smoothstep(0.0, 1.0, terrainHeightNorm), 0.35);
 
   // Estimate slope from neighboring x samples instead of screen-space derivatives.
   float xStep = texelSize.x * 6.0;
@@ -141,7 +142,7 @@ void main()
   float terrainHeightNormR = clamp(continentR * elevationR * relief - waterCoverage * 0.12 + 0.04, 0.0, 0.95);
 
   float terrainHeightM = terrainHeightNorm * simHeight;
-  float slopeProbe = abs(terrainHeightNormR - terrainHeightNormL) * resolution.x * 0.5;
+  float slopeProbe = abs(terrainHeightNormR - terrainHeightNormL) * resolution.x * 0.38;
 
   if (texCoord.y < texelSize.y || texCoord.y < terrainHeightNorm) {
     wall[DISTANCE] = 0;
@@ -163,7 +164,7 @@ void main()
       float industrialNoise = noise2(vec2(x * 1.10 + seedB * 0.63, seedA * 0.39));
       float lowlandFactor = 1.0 - smoothstep(700.0, 1700.0, terrainHeightM);
       float flatlandFactor = 1.0 - smoothstep(0.06, 0.24, slopeProbe);
-      float urbanSuitability = lowlandFactor * flatlandFactor * smoothstep(0.45, 0.92, urbanNoise);
+      float urbanSuitability = lowlandFactor * flatlandFactor * smoothstep(0.40, 0.90, urbanNoise);
 
       float sandBiomeNoise = noise2(vec2(x * 0.78 + seedA * 0.77, seedB * 0.49));
       float desertBasin = smoothstep(0.46, 0.90, sandBiomeNoise) * smoothstep(0.0, 0.30, lowlandFactor);
@@ -183,11 +184,11 @@ void main()
       vegetation *= mix(1.0, 0.10, desertBasin);
       wall[VEGETATION] = int(clamp(vegetation, 0.0, 127.0));
 
-      if (urbanSuitability > 0.48) {
+      if (urbanSuitability > 0.44) {
         wall[TYPE] = WALLTYPE_URBAN;
         wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 6.0, 72.0));
 
-        if (industrialNoise > 0.72) {
+        if (industrialNoise > 0.64) {
           wall[TYPE] = WALLTYPE_INDUSTRIAL;
           wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 0.0, 18.0));
         }
