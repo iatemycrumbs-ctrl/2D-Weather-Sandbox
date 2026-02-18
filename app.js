@@ -405,6 +405,10 @@ const guiControls_default = {
   shearProduction : 1.0,
   tornadoPotential : 1.0,
   frontogenesisStrength : 1.0,
+  gradientRichardsonMix : 1.0,
+  turbulentPrandtl : 0.85,
+  pblDepthMeters : 1800.0,
+  entrainmentFluxBoost : 1.0,
   airplanePitchAuthority : 1.0,
   airplaneThrottleResponse : 1.0,
   showTornadoLabels : true,
@@ -418,6 +422,8 @@ const guiControls_default = {
   showLightningRods : true,
   allowEditingWhenPaused : true,
   entrainmentDilution : 1.0,
+  kesslerAutoconversion : 1.0,
+  ventilationEvapEnhancement : 1.0,
   drizzleThresholdShift : 1.0,
   graupelChargeGain : 1.0,
   iceCrystalChargeGain : 1.0,
@@ -3909,6 +3915,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'tornadoPotential'), guiControls.tornadoPotential);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'frontogenesisStrength'), guiControls.frontogenesisStrength);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gradientRichardsonMix'), guiControls.gradientRichardsonMix);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'turbulentPrandtl'), guiControls.turbulentPrandtl);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'pblDepthMeters'), guiControls.pblDepthMeters);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'entrainmentFluxBoost'), guiControls.entrainmentFluxBoost);
     gl.useProgram(lightingProgram);
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
     gl.uniform1f(gl.getUniformLocation(lightingProgram, 'greenhouseGases'), guiControls.greenhouseGases);
@@ -3955,6 +3965,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'meltingRate'), guiControls.meltingRate);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapRate'), guiControls.evapRate);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'entrainmentDilution'), guiControls.entrainmentDilution);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'kesslerAutoconversion'), guiControls.kesslerAutoconversion);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ventilationEvapEnhancement'), guiControls.ventilationEvapEnhancement);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'drizzleThresholdShift'), guiControls.drizzleThresholdShift);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'graupelChargeGain'), guiControls.graupelChargeGain);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'iceCrystalChargeGain'), guiControls.iceCrystalChargeGain);
@@ -4151,6 +4163,34 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'frontogenesisStrength'), guiControls.frontogenesisStrength);
       })
       .name('Storm Front Strength');
+
+    fluidParams_folder.add(guiControls, 'gradientRichardsonMix', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gradientRichardsonMix'), guiControls.gradientRichardsonMix);
+      })
+      .name('Richardson Stability Mix');
+
+    fluidParams_folder.add(guiControls, 'turbulentPrandtl', 0.2, 2.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'turbulentPrandtl'), guiControls.turbulentPrandtl);
+      })
+      .name('Turbulent Prandtl');
+
+    fluidParams_folder.add(guiControls, 'pblDepthMeters', 300.0, 5000.0, 10.0)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'pblDepthMeters'), guiControls.pblDepthMeters);
+      })
+      .name('PBL Depth (m)');
+
+    fluidParams_folder.add(guiControls, 'entrainmentFluxBoost', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'entrainmentFluxBoost'), guiControls.entrainmentFluxBoost);
+      })
+      .name('Entrainment Flux Boost');
 
     fluidParams_folder.add(guiControls, 'terrainRuggednessBoost', 0.5, 2.0, 0.01).name('Terrain Ruggedness');
     fluidParams_folder.add(guiControls, 'terrainWetnessRecovery', 0.5, 2.0, 0.01).name('Terrain Wetness Recovery');
@@ -4662,6 +4702,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     precipitation_folder.add(guiControls, 'entrainmentDilution', 0.4, 2.5, 0.01).name('Entrainment Dilution').onChange(function() {
       gl.useProgram(precipitationProgram);
       gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'entrainmentDilution'), guiControls.entrainmentDilution);
+    });
+    precipitation_folder.add(guiControls, 'kesslerAutoconversion', 0.3, 2.5, 0.01).name('Kessler Autoconversion').onChange(function() {
+      gl.useProgram(precipitationProgram);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'kesslerAutoconversion'), guiControls.kesslerAutoconversion);
+    });
+    precipitation_folder.add(guiControls, 'ventilationEvapEnhancement', 0.3, 2.5, 0.01).name('Ventilation Evap').onChange(function() {
+      gl.useProgram(precipitationProgram);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ventilationEvapEnhancement'), guiControls.ventilationEvapEnhancement);
     });
     precipitation_folder.add(guiControls, 'drizzleThresholdShift', 0.6, 1.6, 0.01).name('Drizzle Threshold Shift').onChange(function() {
       gl.useProgram(precipitationProgram);

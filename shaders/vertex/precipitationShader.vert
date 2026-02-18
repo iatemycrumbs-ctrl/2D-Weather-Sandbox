@@ -67,6 +67,8 @@ uniform float entrainmentDilution;
 uniform float drizzleThresholdShift;
 uniform float graupelChargeGain;
 uniform float iceCrystalChargeGain;
+uniform float kesslerAutoconversion;
+uniform float ventilationEvapEnhancement;
 uniform int lightningRodCount;
 uniform vec2 lightningRodPos[8];
 uniform float lightningRodRadiusNorm;
@@ -124,7 +126,7 @@ void main()
     realTemp = potentialToRealT(base[TEMPERATURE]); // in Kelvin
 
     const float nominalSpawnMass = 0.12;
-    float threshold = (realTemp > CtoK(0.0) ? aboveZeroThreshold : subZeroThreshold) * drizzleThresholdShift;
+    float threshold = (realTemp > CtoK(0.0) ? aboveZeroThreshold : subZeroThreshold) * drizzleThresholdShift * map_rangeC(kesslerAutoconversion, 0.3, 2.5, 1.22, 0.72);
 
     float cloudExcess = max(water[CLOUD] - threshold, 0.0);
     float instability = map_rangeC(-base[PRESSURE], -0.05, 0.15, 0.6, 1.35);
@@ -343,7 +345,7 @@ void main()
 
       float supersat = max(water[TOTAL] - maxWater(realTemp), 0.0);
       float cloudAccess = max(water[CLOUD], 0.0);
-      float growth = (cloudAccess * 0.72 + supersat * 0.55) * growthRate * surfaceArea;
+      float growth = (cloudAccess * 0.72 + supersat * 0.55) * growthRate * surfaceArea * map_rangeC(kesslerAutoconversion, 0.3, 2.5, 0.65, 1.55);
 
       // Hail growth enhancement:
       if (realTemp < CtoK(0.0) && water[CLOUD] > 0.0 && newDensity >= 1.0) { // below freezing
@@ -386,7 +388,8 @@ void main()
         dropletTemp = min(dropletTemp, CtoK(0.0));                                                   // temp can not be more than 0 C
 
       float dryDeficit = max((maxWater(dropletTemp) - water[TOTAL]), 0.0);
-      float evapAndSubli = max(dryDeficit * surfaceArea * evapRate * map_rangeC(newDensity, 0.2, 1.3, 1.0, 0.78), 0.); // evaporation/sublimation
+      float ventFactor = (1.0 + min(length(base.xy) * 30.0, 1.8)) * map_rangeC(ventilationEvapEnhancement, 0.3, 2.5, 0.60, 1.90);
+      float evapAndSubli = max(dryDeficit * surfaceArea * evapRate * map_rangeC(newDensity, 0.2, 1.3, 1.0, 0.78) * ventFactor, 0.); // evaporation/sublimation
 
       // evapAndSubli = 0.0000;                                                                         // remove quickly for DEBUG
 

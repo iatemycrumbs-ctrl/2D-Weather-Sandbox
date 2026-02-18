@@ -27,6 +27,10 @@ uniform float gravityCurrentStrength;
 uniform float shearProduction;
 uniform float tornadoPotential;
 uniform float frontogenesisStrength;
+uniform float gradientRichardsonMix;
+uniform float turbulentPrandtl;
+uniform float pblDepthMeters;
+uniform float entrainmentFluxBoost;
 
 uniform vec2 texelSize;
 // uniform vec2 resolution;
@@ -91,8 +95,18 @@ void main()
     vec2 laplacianV = vec2(baseXpY0[VX] + baseXmY0[VX] + baseX0Yp[VX] + baseX0Ym[VX] - 4.0 * base[VX],
                            baseXpY0[VY] + baseXmY0[VY] + baseX0Yp[VY] + baseX0Ym[VY] - 4.0 * base[VY]);
     float stratification = clamp((base[TEMPERATURE] - getInitialT(int(fragCoord.y))) * 0.08 + 0.5, 0.05, 1.9);
-    float mixCoeff = 0.018 * turbulentMix * stratification;
-    base.xy += laplacianV * mixCoeff;
+
+    float dThetaDz = (baseX0Yp[TEMPERATURE] - baseX0Ym[TEMPERATURE]) / max(texelSize.y * 2.0, 1e-6);
+    float dUdz = (baseX0Yp[VX] - baseX0Ym[VX]) / max(texelSize.y * 2.0, 1e-6);
+    float dVdz = (baseX0Yp[VY] - baseX0Ym[VY]) / max(texelSize.y * 2.0, 1e-6);
+    float shear2 = dUdz * dUdz + dVdz * dVdz + 1e-7;
+    float Ri = clamp((9.81 / max(airTemp, 150.0)) * dThetaDz / shear2, -3.0, 3.0);
+    float riMix = map_rangeC(Ri, -0.2, 0.25, 1.40, 0.35) * gradientRichardsonMix;
+
+    float pblNorm = clamp((pblDepthMeters / 12000.0), 0.02, 1.0);
+    float pblWeight = 1.0 - smoothstep(pblNorm * 0.7, pblNorm * 1.4, texCoord.y);
+    float mixCoeff = 0.014 * turbulentMix * stratification * riMix;
+    base.xy += laplacianV * mixCoeff * (0.55 + 0.45 * pblWeight);
 
     float dTdx = (baseXpY0[TEMPERATURE] - baseXmY0[TEMPERATURE]);
     float dTdy = (baseX0Yp[TEMPERATURE] - baseX0Ym[TEMPERATURE]);
@@ -122,7 +136,11 @@ void main()
 
     float verticalShear = abs(baseX0Yp[VX] - baseX0Ym[VX]) + abs(baseXpY0[VY] - baseXmY0[VY]);
     float shearMixing = min(verticalShear * 0.06, 2.0) * shearProduction;
-    base.xy += laplacianV * (0.0045 * shearMixing);
+    float prandtlLimiter = map_rangeC(turbulentPrandtl, 0.2, 2.0, 1.45, 0.60);
+    base.xy += laplacianV * (0.0045 * shearMixing * prandtlLimiter);
+
+    float entrainSignal = max(baseX0Yp[VY] - base[VY], 0.0) + max(base[VX] - baseXmY0[VX], 0.0);
+    base[VY] += entrainSignal * 0.000035 * entrainmentFluxBoost * (0.35 + pblWeight);
 
     // Tornado proxy: low-level stretch + buoyancy + vorticity focus
     float lowLevel = 1.0 - smoothstep(0.10, 0.42, texCoord.y);
