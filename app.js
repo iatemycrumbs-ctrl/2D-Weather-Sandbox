@@ -3934,6 +3934,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(advectionProgram, 'globalEffectsStartAlt'), guiControls.globalEffectsStartAlt / guiControls.simHeight);
     gl.uniform1f(gl.getUniformLocation(advectionProgram, 'globalEffectsEndAlt'), guiControls.globalEffectsEndAlt / guiControls.simHeight);
     gl.uniform1f(gl.getUniformLocation(advectionProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
+    const mobileLightningVisibility = Math.max(1.0, guiControls.mobilePrecipBoost) * ((window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ? 1.25 : 1.0);
     gl.useProgram(precipitationProgram);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapHeat'), guiControls.evapHeat);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'meltingHeat'), guiControls.meltingHeat);
@@ -3957,6 +3958,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationSizeSpectrum'), guiControls.precipitationSizeSpectrum);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'hailShatterFactor'), guiControls.hailShatterFactor);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobilePrecipBoost'), guiControls.mobilePrecipBoost);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
@@ -3976,6 +3978,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
@@ -4517,8 +4520,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     precipitation_folder.add(guiControls, 'mobilePrecipBoost', 0.5, 2.5, 0.01)
       .onChange(function() {
+        const mobileLightningVisibility = Math.max(1.0, guiControls.mobilePrecipBoost) * ((window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ? 1.25 : 1.0);
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobilePrecipBoost'), guiControls.mobilePrecipBoost);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
+        gl.useProgram(realisticDisplayProgram);
+        gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
       })
       .name('Mobile Precip Boost');
       
@@ -4632,6 +4639,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'hailShatterFactor'), guiControls.hailShatterFactor);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobilePrecipBoost'), guiControls.mobilePrecipBoost);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
       })
       .name('Hail Shatter');
       
@@ -4760,6 +4768,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     lightning_folder.add(guiControls, 'electricFieldDiffusion', 0.0, 3.0, 0.01).name('Field Diffusion').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
     });
     lightning_folder.add(guiControls, 'lightningRodRadiusKm', 1.0, 40.0, 0.5).name('Lightning Rod Radius (km)');
     lightning_folder.add(guiControls, 'airplaneLightningAttractor', 0.0, 2.0, 0.01).name('Airplane Lightning Attractor');
@@ -4936,6 +4945,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
@@ -6770,6 +6780,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
 
   gl.useProgram(precipitationProgram);
   gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'baseTex'), 0);
@@ -7411,6 +7422,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
 
       // Don't display vectors when zoomed out because you would just see noise
       if (cam.curZoom / sim_res_x > 0.003) {

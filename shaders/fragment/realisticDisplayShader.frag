@@ -57,6 +57,7 @@ uniform float radiationHaze;
 uniform float electricFieldVizStrength;
 uniform float dynamicChargeSeparation;
 uniform float electricFieldDiffusion;
+uniform float mobileLightningVisibility;
 uniform int lightningRodCount;
 uniform vec2 lightningRodPos[8];
 
@@ -196,7 +197,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
                               texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r));
   neighborMax = max(neighborMax, max(texture(lightningTex, lightningTexCoord + vec2(px.x, px.y)).r,
                                       texture(lightningTex, lightningTexCoord + vec2(-px.x, px.y)).r));
-  pixVal = max(pixVal, neighborMax * (0.52 * lightningBloomStrength));
+  float mobileBloomPad = mix(0.52, 0.78, clamp((mobileLightningVisibility - 1.0) * 0.9, 0.0, 1.0));
+  pixVal = max(pixVal, neighborMax * (mobileBloomPad * lightningBloomStrength));
 
   if (strikeTypeSign < 0.0) {
     // IC lightning remains embedded within cloud volume.
@@ -325,7 +327,8 @@ vec4 getAirColor(vec2 fragCoordIn)
   float currentLightningIntensity = lightningIntensityOverTime(lightningTime, lightningPos, abs(lightningData[INTENSITY])) * lightningSign;
 
 
-  if (abs(lightningData[INTENSITY]) > 0.18) { // show full bolt even for weaker mobile-sampled strikes
+  float lightningVisThreshold = mix(0.18, 0.08, clamp((mobileLightningVisibility - 1.0) * 0.85, 0.0, 1.0));
+  if (abs(lightningData[INTENSITY]) > lightningVisThreshold) { // show full bolt even for weaker mobile-sampled strikes
     emittedLight += displayLightning(lightningPos, lightningTime, currentLightningIntensity);
     emittedLight /= 1. + cloudDensity * (125.0 / max(lightningBloomStrength, 0.25));
   }

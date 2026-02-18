@@ -56,6 +56,7 @@ uniform float lightningAnvilDrift;
 uniform float precipitationSizeSpectrum;
 uniform float hailShatterFactor;
 uniform float mobilePrecipBoost;
+uniform float mobileLightningVisibility;
 uniform float snowDensity;        // 0.2 - 0.5
 uniform float fallSpeed;          // 0.0003
 uniform float growthRate0C;       // 0.0005
@@ -218,7 +219,8 @@ void main()
           float planeDist = length(vec2(planeDx, planeDy));
           float airplaneAttraction = smoothstep(0.30, 0.0, planeDist) * airplaneLightningAttractor;
           lightningSpawnChance *= mix(1.0, 1.55, airplaneAttraction);
-          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.58);
+          lightningSpawnChance *= map_rangeC(mobileLightningVisibility, 0.8, 2.2, 0.92, 1.28);
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.70);
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
@@ -256,6 +258,7 @@ void main()
             float flashIntensity = cloudPlusPrecipDensity * 0.24 + electricPotential * 1.55 + random2d(texCoord * 31.7) * 0.30;
             flashIntensity *= map_rangeC(lightningFlashRate, 0.3, 3.0, 0.75, 1.45);
             flashIntensity *= map_rangeC(stormOrganization * aerosolLoad, 0.04, 6.25, 0.85, 1.35);
+            flashIntensity *= map_rangeC(mobileLightningVisibility, 0.8, 2.2, 0.9, 1.35);
             flashIntensity *= mix(1.0, 1.30, rodAttraction);
             float cgGroundBoost = map_rangeC(1.0 - texCoord.y, 0.0, 1.0, 0.9, 1.3);
             float icChannelBoost = map_rangeC(texCoord.y, 0.22, 0.95, 0.95, 1.25);
@@ -426,17 +429,17 @@ void main()
 
     }               // update
 
-#define pntSize 12. // 16.
-    const float pntSurface = pntSize * pntSize;
+    float pointSize = 12.0 * map_rangeC(mobilePrecipBoost, 0.5, 2.5, 0.90, 1.65);
+    float pntSurface = pointSize * pointSize;
     // devide by suface area to keep total amount constant
     feedback[MASS] /= pntSurface;
     feedback[HEAT] /= pntSurface;
     feedback[VAPOR] /= pntSurface;
 
-    deposition[RAIN_DEPOSITION] /= pntSize; // only width matters because it's only applied at surface layer
-    deposition[SNOW_DEPOSITION] /= pntSize; // only width matters because it's only applied at surface layer
+    deposition[RAIN_DEPOSITION] /= pointSize; // only width matters because it's only applied at surface layer
+    deposition[SNOW_DEPOSITION] /= pointSize; // only width matters because it's only applied at surface layer
 
-    gl_PointSize = pntSize;
+    gl_PointSize = pointSize;
 
     gl_Position = vec4(newPos, 0.0, 1.0);
   } // active
