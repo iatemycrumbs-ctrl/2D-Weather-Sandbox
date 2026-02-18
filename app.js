@@ -500,6 +500,8 @@ const guiControls_default = {
   lightningTempMinK : 9000.0,
   lightningTempMaxK : 33000.0,
   precipitationVisualBoost : 1.0,
+  renderScale : 1.0,
+  graphicsPreset : 'High',
   ambientScattering : 1.0,
   precipitationEffectMult : 1.0,
   lightningGroundBias : 1.0,
@@ -613,6 +615,13 @@ function computeNumDroplets(resX, resY)
 
   // Unlimited droplet ceiling: keep only a minimum floor so low-resolution runs still show precipitation.
   return Math.max(rawDroplets, 24000);
+}
+
+
+function getMobileLightningVisibility()
+{
+  const coarse = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
+  return Math.max(1.0, guiControls?.mobilePrecipBoost ?? guiControls_default.mobilePrecipBoost) * (coarse ? 1.25 : 1.0);
 }
 
 let hdrFBO;
@@ -3833,7 +3842,22 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   document.body.style.overflow = 'hidden'; // prevent scrolling bar from apearing
 
-  canvas = document.getElementById('mainCanvas');
+  canvas = getEl('mainCanvas');
+  if (!canvas)
+    throw ' Error: mainCanvas element not found';
+
+  function resizeCanvasAndPostFx()
+  {
+    const scale = clamp(guiControls?.renderScale ?? 1.0, 0.5, 1.5);
+    canvas.width = Math.max(1, Math.floor(window.innerWidth * scale));
+    canvas.height = Math.max(1, Math.floor(window.innerHeight * scale));
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    if (typeof createBloomFBOs === 'function')
+      createBloomFBOs();
+    if (typeof createHdrFBO === 'function')
+      createHdrFBO();
+  }
 
   var contextAttributes = {
     alpha : false,
@@ -3934,7 +3958,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(advectionProgram, 'globalEffectsStartAlt'), guiControls.globalEffectsStartAlt / guiControls.simHeight);
     gl.uniform1f(gl.getUniformLocation(advectionProgram, 'globalEffectsEndAlt'), guiControls.globalEffectsEndAlt / guiControls.simHeight);
     gl.uniform1f(gl.getUniformLocation(advectionProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
-    const mobileLightningVisibility = Math.max(1.0, guiControls.mobilePrecipBoost) * ((window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ? 1.25 : 1.0);
+    const mobileLightningVisibility = getMobileLightningVisibility();
     gl.useProgram(precipitationProgram);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapHeat'), guiControls.evapHeat);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'meltingHeat'), guiControls.meltingHeat);
@@ -3958,7 +3982,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationSizeSpectrum'), guiControls.precipitationSizeSpectrum);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'hailShatterFactor'), guiControls.hailShatterFactor);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobilePrecipBoost'), guiControls.mobilePrecipBoost);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
@@ -3978,7 +4002,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
@@ -4520,12 +4544,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     precipitation_folder.add(guiControls, 'mobilePrecipBoost', 0.5, 2.5, 0.01)
       .onChange(function() {
-        const mobileLightningVisibility = Math.max(1.0, guiControls.mobilePrecipBoost) * ((window.matchMedia && window.matchMedia('(pointer:coarse)').matches) ? 1.25 : 1.0);
+        const mobileLightningVisibility = getMobileLightningVisibility();
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobilePrecipBoost'), guiControls.mobilePrecipBoost);
-        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
         gl.useProgram(realisticDisplayProgram);
-        gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
+        gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
       })
       .name('Mobile Precip Boost');
       
@@ -4639,7 +4663,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'hailShatterFactor'), guiControls.hailShatterFactor);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobilePrecipBoost'), guiControls.mobilePrecipBoost);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
       })
       .name('Hail Shatter');
       
@@ -4768,7 +4792,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     lightning_folder.add(guiControls, 'electricFieldDiffusion', 0.0, 3.0, 0.01).name('Field Diffusion').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
     });
     lightning_folder.add(guiControls, 'lightningRodRadiusKm', 1.0, 40.0, 0.5).name('Lightning Rod Radius (km)');
     lightning_folder.add(guiControls, 'airplaneLightningAttractor', 0.0, 2.0, 0.01).name('Airplane Lightning Attractor');
@@ -4778,6 +4802,35 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     balloon_folder.add(guiControls, 'balloonDriftMult', 0.2, 2.0, 0.01).name('Drift Multiplier');
     balloon_folder.add(guiControls, 'balloonBurstPressure', 120.0, 500.0, 1.0).name('Burst Pressure hPa');
     balloon_folder.add(guiControls, 'balloonTelemetryDetailed').name('Detailed Telemetry');
+
+
+    var graphics_folder = datGui.addFolder('Graphics');
+    graphics_folder.add(guiControls, 'graphicsPreset', ['Low', 'Medium', 'High', 'Ultra']).name('Preset').onChange(function() {
+      if (guiControls.graphicsPreset == 'Low') {
+        guiControls.renderScale = 0.75;
+        guiControls.lightningBloomStrength = 0.70;
+        guiControls.precipitationVisualBoost = 0.85;
+      } else if (guiControls.graphicsPreset == 'Medium') {
+        guiControls.renderScale = 0.90;
+        guiControls.lightningBloomStrength = 0.90;
+        guiControls.precipitationVisualBoost = 1.0;
+      } else if (guiControls.graphicsPreset == 'High') {
+        guiControls.renderScale = 1.0;
+        guiControls.lightningBloomStrength = 1.0;
+        guiControls.precipitationVisualBoost = 1.0;
+      } else {
+        guiControls.renderScale = 1.15;
+        guiControls.lightningBloomStrength = 1.15;
+        guiControls.precipitationVisualBoost = 1.15;
+      }
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
+      resizeCanvasAndPostFx();
+    });
+    graphics_folder.add(guiControls, 'renderScale', 0.5, 1.5, 0.01).name('Render Scale').onChange(function() {
+      resizeCanvasAndPostFx();
+    });
 
     var display_folder = datGui.addFolder('Display');
 
@@ -4945,7 +4998,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
@@ -5000,7 +5053,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     graphCanvas : null,
     ctx : null,
     init : function() {
-      this.graphCanvas = document.getElementById('graphCanvas');
+      this.graphCanvas = getEl('graphCanvas');
+      if (!this.graphCanvas)
+        return;
       this.graphCanvas.height = window.innerHeight;
       this.graphCanvas.width = this.graphCanvas.height;
       this.ctx = this.graphCanvas.getContext('2d');
@@ -5013,6 +5068,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     draw : function(simXpos, simYpos) {
       // draw graph
       // mouse positions in sim coordinates
+      if (!this.graphCanvas || !this.ctx)
+        return;
+      const graphCanvas = this.graphCanvas;
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_1);
       gl.readBuffer(gl.COLOR_ATTACHMENT0);
@@ -5238,7 +5296,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       {
         // temperature to horizontal position
         var normX = T * 0.0115 + 1.18 - (y / graphBottem) * 0.8; // -30 to 50
-        return normX * this.graphCanvas.width;                   // T * 7.5 + 780.0 - 600.0 * (y / graphBottem);
+        return normX * graphCanvas.width;                   // T * 7.5 + 780.0 - 600.0 * (y / graphBottem);
       }
 
       function drawIsotherms()
@@ -5275,8 +5333,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   var canvas_aspect;
 
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  resizeCanvasAndPostFx();
   canvas.style.display = 'block';
   canvas_aspect = canvas.width / canvas.height;
 
@@ -5284,16 +5341,13 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   var prevMouseXinSim, prevMouseYinSim;
 
   window.addEventListener('resize', function() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    resizeCanvasAndPostFx();
     canvas_aspect = canvas.width / canvas.height;
 
-    soundingGraph.graphCanvas.height = window.innerHeight;
-    soundingGraph.graphCanvas.width = window.innerHeight;
-
-    // Render output framebuffers need to match canvas resolution
-    createBloomFBOs(); // recreate bloom framebuffers
-    createHdrFBO();    // recreate hdr framebuffer
+    if (soundingGraph.graphCanvas) {
+      soundingGraph.graphCanvas.height = window.innerHeight;
+      soundingGraph.graphCanvas.width = window.innerHeight;
+    }
   });
 
   function logSample()
@@ -5431,7 +5485,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   });
 
   canvas.addEventListener('mousedown', function(e) { mouseDownEvent(e); });
-  graphCanvas.addEventListener('mousedown', function(e) { mouseDownEvent(e); });
+  if (soundingGraph.graphCanvas)
+    soundingGraph.graphCanvas.addEventListener('mousedown', function(e) { mouseDownEvent(e); });
 
 
   function findSimYposAboveSurfaceAtMouseX() // find the lowest location that is not underground
@@ -6161,8 +6216,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   {
     if (dropletFollowID >= 0) { // disable follow droplet
       dropletFollowID = -1;
-      let dropletInfoCanvas = document.getElementById('dropletInfoCanvas');
-      dropletInfoCanvas.style.display = 'none';
+      let dropletInfoCanvas = getEl('dropletInfoCanvas');
+      if (dropletInfoCanvas)
+        dropletInfoCanvas.style.display = 'none';
       return;
     }
 
@@ -6780,7 +6836,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
 
   gl.useProgram(precipitationProgram);
   gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'baseTex'), 0);
@@ -7261,7 +7317,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       let dropletInfo = readDropletData(dropletFollowID);
       cam.setPosition(-dropletInfo[0] * 2.0 + 1.0, -dropletInfo[1] * 2.0 * (sim_res_y / sim_res_x) + (sim_res_y / sim_res_x));
 
-      let dropletInfoCanvas = document.getElementById('dropletInfoCanvas');
+      let dropletInfoCanvas = getEl('dropletInfoCanvas');
+      if (!dropletInfoCanvas)
+        return;
       let ctx = dropletInfoCanvas.getContext('2d');
 
       ctx.clearRect(0, 0, dropletInfoCanvas.width, dropletInfoCanvas.height);
@@ -7422,7 +7480,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), mobileLightningVisibility);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
 
       // Don't display vectors when zoomed out because you would just see noise
       if (cam.curZoom / sim_res_x > 0.003) {
@@ -7695,6 +7753,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   function hideOrShowGraph()
   {
+    if (!soundingGraph.graphCanvas)
+      return;
     if (guiControls.showGraph) {
       soundingGraph.graphCanvas.style.display = 'block';
     } else {
