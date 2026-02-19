@@ -226,18 +226,19 @@ void main()
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
-          float currentFlashHold = max(lightningMinInterval, 6.0 + abs(lightningData[INTENSITY]) * (2.2 + multiStrokeLightning * 2.3));
+          float currentFlashHold = max(lightningMinInterval, 11.0 + abs(lightningData[INTENSITY]) * (3.6 + multiStrokeLightning * 3.0));
           bool lightningChannelFree = lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
           if (lightningChannelFree && strikeRand < lightningSpawnChance) {
             lightningSpawned = true;
             isActive = false;
             gl_PointSize = 1.0;
 
-            bool forceCG = rodAttraction > 0.04;
+            bool forceCG = rodAttraction > 0.04 || airplaneAttraction > 0.06;
             float chargeStratification = map_rangeC(water[CLOUD], threshold * 1.3, threshold * 4.8, 0.0, 1.0);
             bool canBeIC = texCoord.y > 0.26 && water[CLOUD] > threshold * 1.40 && chargeStratification > 0.18;
             float icModeBoost = map_rangeC(chargeStratification * max(base[VY], 0.0), 0.0, 0.04, 1.0, 1.35);
-            bool isIC = !forceCG && canBeIC && random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity)) < clamp(icProb * icModeBoost, 0.0, 0.95);
+            float icProbability = clamp(icProb * icModeBoost, 0.05, 0.95);
+            bool isIC = !forceCG && canBeIC && random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity)) < icProbability;
 
             float icYOffset = map_rangeC(random2d(spawnSeed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.08, 0.22);
             float anvilShift = (random2d(spawnSeed * 5.11 + vec2(iterNum * 0.004)) - 0.5) * texelSize.x * (120.0 + lightningComplexity * 80.0) * lightningAnvilDrift;
@@ -252,9 +253,11 @@ void main()
               float rodTargetX = mix(shiftedX, rodX, rodAttraction);
               float planeTargetX = mix(shiftedX, airplanePosNorm.x, airplaneAttraction);
               float targetX = mix(rodTargetX, planeTargetX, clamp(airplaneAttraction, 0.0, 1.0));
-              float targetY = mix(texCoord.y, nearestRod.y + texelSize.y * 2.0, rodAttraction);
+              float groundTargetY = texelSize.y * (1.5 + random2d(spawnSeed * 6.61) * 2.0);
+              float targetY = mix(texCoord.y, groundTargetY, clamp(0.70 + ctgWeight * 0.55, 0.0, 1.0));
+              targetY = mix(targetY, nearestRod.y + texelSize.y * 2.0, rodAttraction);
               targetY = mix(targetY, airplanePosNorm.y, clamp(airplaneAttraction * 0.65, 0.0, 1.0));
-              vec2 cgTarget = vec2(targetX, targetY);
+              vec2 cgTarget = vec2(targetX, clamp(targetY, texelSize.y, 0.98));
               cgTarget.x = mod(cgTarget.x + (random2d(spawnSeed * 8.27) - 0.5) * texelSize.x * 18.0 * lightningComplexity + 1.0, 1.0);
               feedback.xy = cgTarget;
             }

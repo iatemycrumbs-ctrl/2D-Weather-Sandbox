@@ -158,7 +158,9 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
   // IC keeps mild internal pulsing; CG stays mostly single-strike to avoid flicker.
   float pulse = 1.0;
   if (isIC)
-    pulse = 0.75 + 0.25 * sin(T * 18.0 + random2d(lightningPos * 9.17) * 6.2831);
+    pulse = 0.82 + 0.18 * sin(T * 7.5 + random2d(lightningPos * 9.17) * 6.2831);
+  else
+    pulse = 0.96 + 0.04 * sin(T * 3.4 + random2d(lightningPos * 5.37) * 6.2831);
 
   return (peak + tail) * pulse * pow(absIntensity, 1.55);
 }
@@ -713,7 +715,8 @@ void main()
   float twilightScatter = clamp(map_range(abs(sunAngle), 60. * deg2rad, 92. * deg2rad, 0.0, 1.0), 0.0, 1.0);
   onLight += vec3(0.42, 0.53, 0.75) * twilightScatter * 0.22 * ambientScattering;
 
-  float cloudShadowRay = clamp(cloudLayerComplexity * 0.18 * (1.0 - cloudOpacity), 0.0, 0.22);
+  float sceneCloudOpacity = clamp(1.0 - (1.0 / (1.0 + max(water[CLOUD], 0.0) * (6.0 + cloudLayerComplexity * 4.0) + water[PRECIPITATION] * 0.8)), 0.0, 1.0);
+  float cloudShadowRay = clamp(cloudLayerComplexity * 0.18 * (1.0 - sceneCloudOpacity), 0.0, 0.22);
   finalLight += vec3(shadowLight + cloudShadowRay) + onLight;
 
   // Render lightning rods as tall metallic masts near surface (optional visual only).
