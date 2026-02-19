@@ -49,6 +49,7 @@ uniform float lightningTempMinK;
 uniform float lightningTempMaxK;
 uniform float precipitationVisualBoost;
 uniform float ambientScattering;
+uniform float cloudLayerComplexity;
 uniform float lightningBloomStrength;
 uniform float flashlightIntensity;
 uniform float flashlightFocus;
@@ -288,7 +289,10 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   vec3 cloudCol = vec3(1.0 / (cloudwater * 0.005 + 1.0)); // 0.10 white to black
 
-  float cloudDensity = max(cloudwater * 13.6, 0.0);
+  float cloudDensity = max(cloudwater * (11.0 + cloudLayerComplexity * 5.6), 0.0);
+  float cloudLayerA = smoothstep(0.18, 0.52, texCoord.y) * cloudLayerComplexity;
+  float cloudLayerB = smoothstep(0.48, 0.86, texCoord.y) * (0.65 + 0.35 * cloudLayerComplexity);
+  cloudDensity *= (0.85 + cloudLayerA * 0.35 + cloudLayerB * 0.30);
 
   float totalDensity = cloudDensity + water[PRECIPITATION] * (0.8 * precipitationVisualBoost); // visualize precipitation
 
@@ -709,7 +713,8 @@ void main()
   float twilightScatter = clamp(map_range(abs(sunAngle), 60. * deg2rad, 92. * deg2rad, 0.0, 1.0), 0.0, 1.0);
   onLight += vec3(0.42, 0.53, 0.75) * twilightScatter * 0.22 * ambientScattering;
 
-  finalLight += vec3(shadowLight) + onLight;
+  float cloudShadowRay = clamp(cloudLayerComplexity * 0.18 * (1.0 - cloudOpacity), 0.0, 0.22);
+  finalLight += vec3(shadowLight + cloudShadowRay) + onLight;
 
   // Render lightning rods as tall metallic masts near surface (optional visual only).
   if (showLightningRods == 1)

@@ -738,6 +738,14 @@
                             </td>
                             <td>Sets initial precipitation visual intensity presets.</td>
                         </tr>
+                        <tr>
+                            <td><b>Cloud Layer Complexity</b></td>
+                            <td>
+                                <input type="range" min="0.50" max="2.50" value="1.00" step="0.05" id="introCloudLayerSel" oninput="document.getElementById('introCloudLayerShow').value=this.value + 'x'" />
+                                <output id="introCloudLayerShow">1.00x</output>
+                            </td>
+                            <td>Controls layered cloud-depth rendering and shadow richness.</td>
+                        </tr>
 
                         <tr>
                             <td><b>Graphics preset</b></td>
@@ -784,6 +792,7 @@
                     <div class="control-label">High-end experimental systems are available after launch in the GUI:</div>
                     <ul>
                         <li>Tornado diagnostics + storm-front controls</li>
+                        <li>Mobile-only airplane touch controls auto-enable in airplane mode</li>
                         <li>Dynamic charge-separation electric field visualization</li>
                         <li>Skyscraper tool + SAN (sand) interaction forcing</li>
                         <li>Mobile precipitation + full-bolt lightning safety tuning</li>

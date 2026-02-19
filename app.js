@@ -415,8 +415,7 @@ const guiControls_default = {
   electricFieldVizStrength : 1.0,
   dynamicChargeSeparation : 1.0,
   electricFieldDiffusion : 1.0,
-  cloudAutoconversionRate : 1.0,
-  cloudLifetimeBoost : 1.0,
+  cloudLifetimeBoost : 1.35,
   lightningRodRadiusKm : 25.0,
   airplaneLightningAttractor : 0.0,
   showLightningRods : false,
@@ -496,6 +495,8 @@ const guiControls_default = {
   icLightningRatio : 0.62,
   ctgLightningRatio : 0.38,
   lightningFlashRate : 1.35,
+  lightningComplexity : 1.0,
+  multiStrokeLightning : 1.0,
   lightningFlashPersistence : 1.0,
   lightningTempMinK : 9000.0,
   lightningTempMaxK : 33000.0,
@@ -504,6 +505,7 @@ const guiControls_default = {
   graphicsPreset : 'High',
   simulationProfile : 'Balanced',
   ambientScattering : 1.0,
+  cloudLayerComplexity : 1.0,
   precipitationEffectMult : 1.0,
   lightningGroundBias : 1.0,
   lightningBloomStrength : 1.0,
@@ -523,7 +525,7 @@ const guiControls_default = {
   urbanHeatIslandStrength : 1.0,
   coastalMixing : 1.0,
   waterAlbedoShift : 0.0,
-  mobilePrecipBoost : 1.0,
+  mobilePrecipBoost : 1.25,
   balloonBurstPressure : 250.0,
   balloonTelemetryDetailed : false,
   showFPS : true,
@@ -553,6 +555,7 @@ var displayWeatherStations = true;
 var sunIsUp = true;
 
 var airplaneMode = false;
+var mobileFlightUi = null;
 
 var dropletFollowID = -1;
 
@@ -598,7 +601,7 @@ var dryLapse;
 const timePerIteration = 0.00008; // in hours (0.00008 = 0.288 sec, at 40m cell size that means the speed of light & sound = 138.88 m/s = 500 km/h)
 
 var NUM_DROPLETS;
-const NUM_DROPLET_MULTIPLIER = 1.25;
+const NUM_DROPLET_MULTIPLIER = 12.5;
 let filteredInactiveDroplets = 0.0;
 
 function computeNumDroplets(resX, resY)
@@ -1562,7 +1565,12 @@ function applyIntroShaderSettings()
   guiControls_default.introShaderQuality = guiControls_default.radiationHaze;
   guiControls_default.introLightningVisualStrength = guiControls_default.lightningBloomStrength;
   guiControls_default.introPrecipVisualStrength = guiControls_default.precipitationVisualBoost;
+
+  const introCloudLayerSel = getEl('introCloudLayerSel');
+  if (introCloudLayerSel && introCloudLayerSel.value)
+    guiControls_default.cloudLayerComplexity = parseFloat(introCloudLayerSel.value);
 }
+
 
 async function loadData()
 {
@@ -3938,7 +3946,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'urbanHeatIslandStrength'), guiControls.urbanHeatIslandStrength);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'coastalMixing'), guiControls.coastalMixing);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterAlbedoShift'), guiControls.waterAlbedoShift);
-    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudAutoconversionRate'), guiControls.cloudAutoconversionRate);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudLifetimeBoost'), guiControls.cloudLifetimeBoost);
     gl.useProgram(velocityProgram);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'dragMultiplier'), guiControls.dragMultiplier);
@@ -3986,6 +3993,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'icLightningRatio'), guiControls.icLightningRatio);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ctgLightningRatio'), guiControls.ctgLightningRatio);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), guiControls.lightningFlashRate);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningComplexity'), guiControls.lightningComplexity);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'multiStrokeLightning'), guiControls.multiStrokeLightning);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationEffectMult'), guiControls.precipitationEffectMult);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningGroundBias'), guiControls.lightningGroundBias);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'stormOrganization'), guiControls.stormOrganization);
@@ -4025,6 +4034,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightIntensity'), guiControls.flashlightIntensity);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightFocus'), guiControls.flashlightFocus);
@@ -4663,6 +4673,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), guiControls.lightningFlashRate);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningComplexity'), guiControls.lightningComplexity);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'multiStrokeLightning'), guiControls.multiStrokeLightning);
       })
       .name('Flash Rate');
 
@@ -4794,14 +4806,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapRate'), guiControls.evapRate);
       })
       .name('Evaporation Rate');
-
-    precipitation_folder.add(guiControls, 'cloudAutoconversionRate', 0.3, 2.2, 0.01).name('Cloud Auto-conversion').onChange(function() {
-      if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    gl.useProgram(boundaryProgram);
-      gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudAutoconversionRate'), guiControls.cloudAutoconversionRate);
-    });
     precipitation_folder.add(guiControls, 'cloudLifetimeBoost', 0.5, 2.5, 0.01).name('Cloud Lifetime Boost').onChange(function() {
       if (!sunIsUp)
       sunIntensity *= 0.04;
@@ -4843,6 +4847,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     lightning_folder.add(guiControls, 'shakeFrequency', 0.5, 3.0, 0.01).name('Shake Frequency');
     lightning_folder.add(guiControls, 'shakeDecay', 0.60, 0.92, 0.005).name('Shake Decay');
     lightning_folder.add(guiControls, 'lightningTempShakeMult', 0.5, 2.5, 0.01).name('Temp -> Shake Mult');
+    lightning_folder.add(guiControls, 'lightningComplexity', 0.4, 2.6, 0.01).name('Lightning Complexity').onChange(function() {
+      gl.useProgram(precipitationProgram);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningComplexity'), guiControls.lightningComplexity);
+    });
+    lightning_folder.add(guiControls, 'multiStrokeLightning', 0.0, 2.0, 0.01).name('Multi-Stroke').onChange(function() {
+      gl.useProgram(precipitationProgram);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'multiStrokeLightning'), guiControls.multiStrokeLightning);
+    });
     lightning_folder.add(guiControls, 'lightningColorTempMult', 0.0, 2.0, 0.01).name('Temp -> Bolt Color').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
@@ -4890,6 +4902,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
       resizeCanvasAndPostFx();
     });
     graphics_folder.add(guiControls, 'renderScale', 0.5, 1.5, 0.01).name('Render Scale').onChange(function() {
@@ -4900,6 +4913,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     });
 
     var display_folder = datGui.addFolder('Display');
+
+    display_folder.add(guiControls, 'cloudLayerComplexity', 0.5, 2.5, 0.01).name('Cloud Layer Complexity').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
+    });
 
     display_folder
       .add(guiControls, 'displayMode', {
@@ -4935,6 +4953,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     display_folder.add(guiControls, 'ambientScattering', 0.3, 2.5, 0.01).name('Ambient Scattering').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
     });
     display_folder.add(guiControls, 'lightningBloomStrength', 0.2, 2.5, 0.01).name('Lightning Bloom').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
@@ -5050,6 +5069,45 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   await loadingBar.set(3, 'Initializing Sounding Graph');
   // END OF GUI
 
+
+  function ensureMobileFlightControls()
+  {
+    const isMobile = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
+    if (!isMobile)
+      return;
+    if (!mobileFlightUi) {
+      mobileFlightUi = document.createElement('div');
+      mobileFlightUi.id = 'mobileFlightControls';
+      mobileFlightUi.style.position = 'absolute';
+      mobileFlightUi.style.right = '12px';
+      mobileFlightUi.style.bottom = '12px';
+      mobileFlightUi.style.zIndex = '40';
+      mobileFlightUi.style.display = 'none';
+      mobileFlightUi.style.gap = '8px';
+      mobileFlightUi.style.flexDirection = 'column';
+      mobileFlightUi.style.pointerEvents = 'auto';
+      mobileFlightUi.style.userSelect = 'none';
+      const mkBtn=(txt,onDown,onUp)=>{
+        const b=document.createElement('button');
+        b.textContent=txt;
+        b.style.padding='10px 12px';
+        b.style.background='rgba(10,16,32,0.78)';
+        b.style.color='#d8ecff';
+        b.style.border='1px solid #4d6b93';
+        b.style.borderRadius='8px';
+        b.addEventListener('touchstart',e=>{e.preventDefault();onDown();},{passive:false});
+        b.addEventListener('touchend',e=>{e.preventDefault();onUp();},{passive:false});
+        return b;
+      };
+      mobileFlightUi.appendChild(mkBtn('Elevator +', ()=>{zPressed = 1;}, ()=>{zPressed = 0;}));
+      mobileFlightUi.appendChild(mkBtn('Elevator -', ()=>{zPressed = -1;}, ()=>{zPressed = 0;}));
+      mobileFlightUi.appendChild(mkBtn('Throttle +', ()=>{airplane.throttle = clamp(airplane.throttle + 0.06,0,1);}, ()=>{}));
+      mobileFlightUi.appendChild(mkBtn('Throttle -', ()=>{airplane.throttle = clamp(airplane.throttle - 0.06,0,1);}, ()=>{}));
+      document.body.appendChild(mobileFlightUi);
+    }
+    mobileFlightUi.style.display = airplaneMode ? 'flex' : 'none';
+  }
+
   function startSimulation()
   {
     SETUP_MODE = false;
@@ -5072,6 +5130,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightIntensity'), guiControls.flashlightIntensity);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightFocus'), guiControls.flashlightFocus);
@@ -6823,7 +6882,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'coastalMixing'), guiControls.coastalMixing);
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterAlbedoShift'), guiControls.waterAlbedoShift);
-  gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudAutoconversionRate'), guiControls.cloudAutoconversionRate);
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudLifetimeBoost'), guiControls.cloudLifetimeBoost);
   // gl.uniform1fv(gl.getUniformLocation(boundaryProgram, 'initial_T'), initial_T);
   gl.uniform4fv(gl.getUniformLocation(boundaryProgram, 'initial_Tv'), initial_T);
@@ -7814,6 +7872,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         }
       }
     }
+
+    ensureMobileFlightControls();
 
     frameNum++;
     requestAnimationFrame(draw);

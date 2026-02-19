@@ -44,6 +44,8 @@ uniform float lightningMinInterval;
 uniform float icLightningRatio;
 uniform float ctgLightningRatio;
 uniform float lightningFlashRate;
+uniform float lightningComplexity;
+uniform float multiStrokeLightning;
 uniform float precipitationEffectMult;
 uniform float lightningGroundBias;
 uniform float stormOrganization;
@@ -194,7 +196,7 @@ void main()
           float organizationElectric = map_rangeC(stormOrganization, 0.2, 2.5, 0.65, 1.8);
           float aerosolElectric = map_rangeC(aerosolLoad, 0.2, 2.5, 0.7, 1.25);
           lightningSpawnChance *= cgBoost * organizationElectric * aerosolElectric;
-          lightningSpawnChance *= map_rangeC(lightningBranching, 0.2, 3.0, 0.70, 1.65);
+          lightningSpawnChance *= map_rangeC(lightningBranching * lightningComplexity, 0.2, 4.0, 0.68, 1.95);
 
           float rodAttraction = 0.0;
           vec2 nearestRod = vec2(0.0);
@@ -224,7 +226,7 @@ void main()
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
-          float currentFlashHold = max(lightningMinInterval, 9.0 + abs(lightningData[INTENSITY]) * 3.6);
+          float currentFlashHold = max(lightningMinInterval, 6.0 + abs(lightningData[INTENSITY]) * (2.2 + multiStrokeLightning * 2.3));
           bool lightningChannelFree = lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
           if (lightningChannelFree && strikeRand < lightningSpawnChance) {
             lightningSpawned = true;
@@ -238,11 +240,13 @@ void main()
             bool isIC = !forceCG && canBeIC && random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity)) < clamp(icProb * icModeBoost, 0.0, 0.95);
 
             float icYOffset = map_rangeC(random2d(spawnSeed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.08, 0.22);
-            float anvilShift = (random2d(spawnSeed * 5.11 + vec2(iterNum * 0.004)) - 0.5) * texelSize.x * 120.0 * lightningAnvilDrift;
+            float anvilShift = (random2d(spawnSeed * 5.11 + vec2(iterNum * 0.004)) - 0.5) * texelSize.x * (120.0 + lightningComplexity * 80.0) * lightningAnvilDrift;
             float shiftedX = mod(texCoord.x + anvilShift + 1.0, 1.0);
 
             if (isIC) {
-              feedback.xy = vec2(shiftedX, clamp(texCoord.y + icYOffset, 0.30, 0.96));
+              vec2 icTarget = vec2(shiftedX, clamp(texCoord.y + icYOffset, 0.30, 0.96));
+              icTarget.x = mod(icTarget.x + (random2d(spawnSeed * 4.73) - 0.5) * texelSize.x * 35.0 * lightningComplexity + 1.0, 1.0);
+              feedback.xy = icTarget;
             } else {
               float rodX = nearestRod.x;
               float rodTargetX = mix(shiftedX, rodX, rodAttraction);
@@ -250,7 +254,9 @@ void main()
               float targetX = mix(rodTargetX, planeTargetX, clamp(airplaneAttraction, 0.0, 1.0));
               float targetY = mix(texCoord.y, nearestRod.y + texelSize.y * 2.0, rodAttraction);
               targetY = mix(targetY, airplanePosNorm.y, clamp(airplaneAttraction * 0.65, 0.0, 1.0));
-              feedback.xy = vec2(targetX, targetY);
+              vec2 cgTarget = vec2(targetX, targetY);
+              cgTarget.x = mod(cgTarget.x + (random2d(spawnSeed * 8.27) - 0.5) * texelSize.x * 18.0 * lightningComplexity + 1.0, 1.0);
+              feedback.xy = cgTarget;
             }
 
             feedback[START_ITERNUM] = iterNum;
@@ -263,7 +269,8 @@ void main()
             float cgGroundBoost = map_rangeC(1.0 - texCoord.y, 0.0, 1.0, 0.9, 1.3);
             float icChannelBoost = map_rangeC(texCoord.y, 0.22, 0.95, 0.95, 1.25);
             flashIntensity *= isIC ? icChannelBoost : cgGroundBoost;
-            flashIntensity = clamp(flashIntensity, 0.08, 6.2);
+            flashIntensity *= mix(1.0, 1.55, clamp(lightningComplexity - 1.0, 0.0, 1.0));
+            flashIntensity = clamp(flashIntensity, 0.08, 8.0);
             feedback[INTENSITY] = isIC ? -flashIntensity * 0.72 : flashIntensity * 1.08;
             gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
           }
