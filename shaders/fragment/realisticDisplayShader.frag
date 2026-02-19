@@ -172,78 +172,59 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   currentLightningIntensity = abs(currentLightningIntensity);
   vec2 lightningTexCoord = texCoord;
 
-  lightningTexCoord.x -= mod(pos.x, 1.);
-
+  lightningTexCoord.x -= mod(pos.x, 1.0);
   lightningTexCoord.y -= pos.y;
 
   float anchorY = strikeTypeSign < 0.0 ? max(pos.y + 0.18, 0.25) : max(pos.y, 0.05);
-  float scaleMult = 1. / anchorY; // stronger clamp for mobile precision so full bolt remains visible
+  float scaleMult = 1.0 / anchorY;
   if (strikeTypeSign < 0.0)
-    scaleMult *= 0.72; // IC spreads more horizontally
+    scaleMult *= 0.72;
 
   lightningTexCoord.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
   lightningTexCoord.y *= -scaleMult;
+  lightningTexCoord.x += 0.5;
 
-  lightningTexCoord.x += 0.5;                                                                                               // center lightning bolt
+  if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68)
+    return vec3(0.0);
 
-  if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68) // prevent edge effect when mipmapping
-    return vec3(0);
+  // New channel model: texture-guided trunk + procedural filament meander + staged multi-stroke envelope.
+  float branchWarp = sin(lightningTexCoord.y * 39.0 + lightningTime * 2.1 + random2d(pos * 17.1) * 6.2831) * 0.009;
+  branchWarp += sin(lightningTexCoord.y * 84.0 + lightningTime * 1.3 + random2d(pos * 7.3) * 6.2831) * 0.0035;
+  float filament = sin((lightningTexCoord.y * 120.0 + lightningTime * 8.0) + lightningTexCoord.x * 22.0) * 0.0018;
+  lightningTexCoord.x += (branchWarp + filament) * (strikeTypeSign < 0.0 ? 1.4 : 1.0);
 
-  float branchWarp = sin(lightningTexCoord.y * 42.0 + lightningTime * 3.7 + random2d(pos * 17.1) * 6.2831) * 0.010;
-  branchWarp += sin(lightningTexCoord.y * 91.0 + random2d(pos * 7.3) * 6.2831) * 0.004;
-  lightningTexCoord.x += branchWarp * (strikeTypeSign < 0.0 ? 1.4 : 0.9);
-
-  float pixVal = texture(lightningTex, lightningTexCoord).r;
+  float trunk = texture(lightningTex, lightningTexCoord).r;
   vec2 px = vec2(1.0 / lightningTexRes.x, 1.0 / lightningTexRes.y);
-  float neighborMax = max(max(texture(lightningTex, lightningTexCoord + vec2(px.x, 0.0)).r,
-                              texture(lightningTex, lightningTexCoord - vec2(px.x, 0.0)).r),
-                          max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y)).r,
-                              texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r));
-  neighborMax = max(neighborMax, max(texture(lightningTex, lightningTexCoord + vec2(px.x, px.y)).r,
-                                      texture(lightningTex, lightningTexCoord + vec2(-px.x, px.y)).r));
-  float mobileBloomPad = mix(0.52, 0.78, clamp((mobileLightningVisibility - 1.0) * 0.9, 0.0, 1.0));
-  pixVal = max(pixVal, neighborMax * (mobileBloomPad * lightningBloomStrength));
+  float side = max(texture(lightningTex, lightningTexCoord + vec2(px.x, 0.0)).r,
+                   texture(lightningTex, lightningTexCoord - vec2(px.x, 0.0)).r);
+  float upDown = max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y)).r,
+                     texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r);
+  float pixVal = max(trunk, max(side, upDown) * (0.50 + 0.22 * lightningBloomStrength));
 
   if (strikeTypeSign < 0.0) {
-    // IC lightning remains embedded within cloud volume.
     float icEnvelope = smoothstep(-0.30, -0.02, lightningTexCoord.y) * (1.0 - smoothstep(0.36, 0.86, lightningTexCoord.y));
     pixVal *= clamp(icEnvelope, 0.0, 1.0);
   }
 
-  const float branchShowFactor = 3.2;
-  const float leaderBrightness = 42000.;
-  const float mainBoltBrightness = 145000.;
+  float strokeA = exp(-pow(max(lightningTime - 0.90, 0.0) * 4.4, 2.0));
+  float strokeB = exp(-pow(max(lightningTime - 1.22, 0.0) * 5.1, 2.0)) * 0.48;
+  float stagedStroke = strokeA + strokeB;
 
-  float brightnessThreshold = 1. - lightningTime * branchShowFactor;
-  brightnessThreshold += lightningTexCoord.y * branchShowFactor; // grow from the top to the bottem
+  const float branchShowFactor = 3.0;
+  float brightnessThreshold = clamp(1.0 - lightningTime * branchShowFactor + lightningTexCoord.y * branchShowFactor, 0.0, 1.0);
+  brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.76 : 0.62, clamp(lightningTime - 1.0, 0.0, 1.0));
 
-  brightnessThreshold = clamp(brightnessThreshold, 0., 1.);
-
-  if (lightningTime > 1.0) { // main bolt
-    brightnessThreshold = strikeTypeSign < 0.0 ? 0.77 : 0.60;
-    currentLightningIntensity *= strikeTypeSign < 0.0 ? leaderBrightness * 1.55 : mainBoltBrightness;
-  } else {
-    currentLightningIntensity = leaderBrightness;
-  }
-
-  pixVal -= brightnessThreshold;
-
-  pixVal = max(pixVal, 0.0);
-
-  pixVal *= currentLightningIntensity;
+  pixVal = max(pixVal - brightnessThreshold, 0.0);
+  pixVal *= stagedStroke * mix(96000.0, 176000.0, strikeTypeSign > 0.0 ? 1.0 : 0.45);
 
   float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
   float thermalColorMix = map_rangeC(lightningTemp, lightningTempMinK, lightningTempMaxK, 0.0, 1.0) * lightningColorTempMult;
-
   vec3 coolLightningCol = strikeTypeSign < 0.0 ? vec3(0.52, 0.66, 1.0) : vec3(0.70, 0.60, 1.0);
   vec3 hotLightningCol = strikeTypeSign < 0.0 ? vec3(0.82, 0.93, 1.00) : vec3(1.00, 0.93, 0.78);
   vec3 lightningCol = mix(coolLightningCol, hotLightningCol, clamp(thermalColorMix, 0.0, 1.0));
 
-  // Visual separation: IC = diffuse cloud-sheet glow, CG = high-contrast return-stroke core.
-  float strikeContrast = strikeTypeSign < 0.0 ? 0.78 : 1.05;
-  vec3 outputColor = max(pixVal * lightningCol * strikeContrast, vec3(0));
-
-  return outputColor;
+  float strikeContrast = strikeTypeSign < 0.0 ? 0.82 : 1.08;
+  return max(pixVal * lightningCol * strikeContrast, vec3(0.0));
 }
 
 
