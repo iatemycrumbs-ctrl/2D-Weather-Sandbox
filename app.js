@@ -502,6 +502,7 @@ const guiControls_default = {
   precipitationVisualBoost : 1.0,
   renderScale : 1.0,
   graphicsPreset : 'High',
+  simulationProfile : 'Balanced',
   ambientScattering : 1.0,
   precipitationEffectMult : 1.0,
   lightningGroundBias : 1.0,
@@ -4050,10 +4051,67 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     const loadedGuiControls = JSON.parse(strGuiControls); // load settings object
     guiControls = Object.assign({}, guiControls_default, loadedGuiControls); // backfill missing keys from older savefiles
 
+    function applyGraphicsPresetSettings(preset)
+    {
+      if (preset == 'Low') {
+        guiControls.renderScale = 0.75;
+        guiControls.lightningBloomStrength = 0.70;
+        guiControls.precipitationVisualBoost = 0.85;
+        guiControls.ambientScattering = 0.80;
+      } else if (preset == 'Medium') {
+        guiControls.renderScale = 0.90;
+        guiControls.lightningBloomStrength = 0.90;
+        guiControls.precipitationVisualBoost = 1.0;
+        guiControls.ambientScattering = 0.92;
+      } else if (preset == 'High') {
+        guiControls.renderScale = 1.0;
+        guiControls.lightningBloomStrength = 1.0;
+        guiControls.precipitationVisualBoost = 1.0;
+        guiControls.ambientScattering = 1.0;
+      } else {
+        guiControls.renderScale = 1.15;
+        guiControls.lightningBloomStrength = 1.15;
+        guiControls.precipitationVisualBoost = 1.15;
+        guiControls.ambientScattering = 1.10;
+      }
+    }
+
+    function applySimulationProfile(profile)
+    {
+      if (profile == 'Calm') {
+        guiControls.turbulentMix = 0.75;
+        guiControls.stormOrganization = 0.75;
+        guiControls.lightningChanceMult = 0.0012;
+        guiControls.spawnChance = 0.00004;
+        guiControls.precipitationEffectMult = 0.9;
+      } else if (profile == 'Balanced') {
+        guiControls.turbulentMix = 1.0;
+        guiControls.stormOrganization = 1.0;
+        guiControls.lightningChanceMult = 0.002;
+        guiControls.spawnChance = 0.00005;
+        guiControls.precipitationEffectMult = 1.0;
+      } else if (profile == 'Dynamic') {
+        guiControls.turbulentMix = 1.25;
+        guiControls.stormOrganization = 1.25;
+        guiControls.lightningChanceMult = 0.0032;
+        guiControls.spawnChance = 0.00006;
+        guiControls.precipitationEffectMult = 1.18;
+      } else {
+        guiControls.turbulentMix = 1.55;
+        guiControls.stormOrganization = 1.45;
+        guiControls.lightningChanceMult = 0.0040;
+        guiControls.spawnChance = 0.00007;
+        guiControls.precipitationEffectMult = 1.30;
+      }
+      setGuiUniforms();
+    }
+
     if (window.matchMedia && window.matchMedia('(pointer:coarse)').matches)
       guiControls.mobilePrecipBoost = Math.max(guiControls.mobilePrecipBoost, 1.35);
 
     guiControls.tool = 'TOOL_NONE';
+
+    applyGraphicsPresetSettings(guiControls.graphicsPreset);
 
     cam.wrapHorizontally = guiControls.wrapHorizontally;
     cam.smooth = guiControls.SmoothCam;
@@ -4806,30 +4864,18 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     var graphics_folder = datGui.addFolder('Graphics');
     graphics_folder.add(guiControls, 'graphicsPreset', ['Low', 'Medium', 'High', 'Ultra']).name('Preset').onChange(function() {
-      if (guiControls.graphicsPreset == 'Low') {
-        guiControls.renderScale = 0.75;
-        guiControls.lightningBloomStrength = 0.70;
-        guiControls.precipitationVisualBoost = 0.85;
-      } else if (guiControls.graphicsPreset == 'Medium') {
-        guiControls.renderScale = 0.90;
-        guiControls.lightningBloomStrength = 0.90;
-        guiControls.precipitationVisualBoost = 1.0;
-      } else if (guiControls.graphicsPreset == 'High') {
-        guiControls.renderScale = 1.0;
-        guiControls.lightningBloomStrength = 1.0;
-        guiControls.precipitationVisualBoost = 1.0;
-      } else {
-        guiControls.renderScale = 1.15;
-        guiControls.lightningBloomStrength = 1.15;
-        guiControls.precipitationVisualBoost = 1.15;
-      }
+      applyGraphicsPresetSettings(guiControls.graphicsPreset);
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
       resizeCanvasAndPostFx();
     });
     graphics_folder.add(guiControls, 'renderScale', 0.5, 1.5, 0.01).name('Render Scale').onChange(function() {
       resizeCanvasAndPostFx();
+    });
+    graphics_folder.add(guiControls, 'simulationProfile', ['Calm', 'Balanced', 'Dynamic', 'Extreme']).name('Simulation Profile').onChange(function() {
+      applySimulationProfile(guiControls.simulationProfile);
     });
 
     var display_folder = datGui.addFolder('Display');
