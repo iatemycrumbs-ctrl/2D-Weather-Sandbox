@@ -738,6 +738,34 @@
                             </td>
                             <td>Sets initial precipitation visual intensity presets.</td>
                         </tr>
+
+                        <tr>
+                            <td><b>Graphics preset</b></td>
+                            <td>
+                                <select id="introGraphicsPreset">
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High" selected>High</option>
+                                    <option value="Ultra">Ultra</option>
+                                </select>
+                            </td>
+                            <td>Applies startup render-scale and visual quality bundle.</td>
+                        </tr>
+                        <tr>
+                            <td><b>Simulation profile</b></td>
+                            <td>
+                                <select id="introSimulationProfile">
+                                    <option value="Calm">Calm</option>
+                                    <option value="Balanced" selected>Balanced</option>
+                                    <option value="Dynamic">Dynamic</option>
+                                    <option value="Extreme">Extreme</option>
+                                </select>
+                            </td>
+                            <td>Applies startup turbulence/storm activity bundle.</td>
+                        </tr>
+                        <tr>
+                            <td colspan="3"><i id="WebGLSupportMessage" style="display:none;color:#ff9b9b;"></i></td>
+                        </tr>
                     </table>
                     <input type="button" value="Create New Simulation" onclick="loadData ()" />
                     <i class="launch-note">Move the mouse until you see a terrain you like, then click to start.</i>

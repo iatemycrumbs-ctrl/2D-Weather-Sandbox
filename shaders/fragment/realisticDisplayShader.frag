@@ -60,6 +60,7 @@ uniform float electricFieldDiffusion;
 uniform float mobileLightningVisibility;
 uniform int lightningRodCount;
 uniform vec2 lightningRodPos[8];
+uniform int showLightningRods;
 
 uniform vec3 view;   // Xpos  Ypos    Zoom
 uniform vec4 cursor; // Xpos   Ypos  Size   type
@@ -710,7 +711,8 @@ void main()
 
   finalLight += vec3(shadowLight) + onLight;
 
-  // Render lightning rods as tall metallic masts near surface.
+  // Render lightning rods as tall metallic masts near surface (optional visual only).
+  if (showLightningRods == 1)
   for (int r = 0; r < 8; r++) {
     if (r >= lightningRodCount)
       break;

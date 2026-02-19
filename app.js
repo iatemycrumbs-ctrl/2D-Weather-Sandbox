@@ -419,7 +419,7 @@ const guiControls_default = {
   cloudLifetimeBoost : 1.0,
   lightningRodRadiusKm : 25.0,
   airplaneLightningAttractor : 0.0,
-  showLightningRods : true,
+  showLightningRods : false,
   allowEditingWhenPaused : true,
   entrainmentDilution : 1.0,
   kesslerAutoconversion : 1.0,
@@ -1551,6 +1551,14 @@ function applyIntroShaderSettings()
   guiControls_default.lightningBloomStrength = readNumericInput('introLightningFxSel', guiControls_default.lightningBloomStrength ?? 1.0);
   guiControls_default.precipitationVisualBoost = readNumericInput('introPrecipFxSel', guiControls_default.precipitationVisualBoost ?? 1.0);
   guiControls_default.radiationHaze = readNumericInput('introShaderQualitySel', guiControls_default.radiationHaze ?? 1.0);
+
+  const introGraphicsPreset = getEl('introGraphicsPreset');
+  if (introGraphicsPreset && introGraphicsPreset.value)
+    guiControls_default.graphicsPreset = introGraphicsPreset.value;
+
+  const introSimulationProfile = getEl('introSimulationProfile');
+  if (introSimulationProfile && introSimulationProfile.value)
+    guiControls_default.simulationProfile = introSimulationProfile.value;
   guiControls_default.introShaderQuality = guiControls_default.radiationHaze;
   guiControls_default.introLightningVisualStrength = guiControls_default.lightningBloomStrength;
   guiControls_default.introPrecipVisualStrength = guiControls_default.precipitationVisualBoost;
@@ -3875,8 +3883,15 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   // console.log(gl.getContextAttributes());
 
   if (!gl) {
-    alert('Your browser does not support WebGL2, Download a new browser.');
-    throw ' Error: Your browser does not support WebGL2';
+    const introPanel = getEl('IntroScreen');
+    const msg = getEl('WebGLSupportMessage');
+    if (msg) {
+      msg.textContent = 'WebGL2 is not available on this device/browser. Simulation mode is disabled; please try a modern browser (Safari 16+/Chrome/Firefox).';
+      msg.style.display = 'block';
+    }
+    if (introPanel)
+      introPanel.style.display = 'block';
+    return;
   }
 
   // SETUP GUI
@@ -4004,6 +4019,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
+    gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'showLightningRods'), guiControls.showLightningRods ? 1 : 0);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
@@ -4373,7 +4389,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     UI_folder.add(guiControls, 'airplanePitchAuthority', 0.5, 2.2, 0.01).name('Airplane Pitch Authority');
     UI_folder.add(guiControls, 'airplaneThrottleResponse', 0.4, 2.0, 0.01).name('Airplane Throttle Response');
     UI_folder.add(guiControls, 'showTornadoLabels').name('Show Tornado Labels');
-    UI_folder.add(guiControls, 'showLightningRods').name('Show Lightning Rods');
+    UI_folder.add(guiControls, 'showLightningRods').name('Show Lightning Rods').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'showLightningRods'), guiControls.showLightningRods ? 1 : 0);
+    });
     UI_folder.add(guiControls, 'allowEditingWhenPaused').name('Edit While Paused');
     UI_folder.add(guiControls, 'allowCaves')
       .onChange(function() {
@@ -4608,6 +4627,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
         gl.useProgram(realisticDisplayProgram);
         gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
+    gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'showLightningRods'), guiControls.showLightningRods ? 1 : 0);
       })
       .name('Mobile Precip Boost');
       
@@ -4851,6 +4871,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
+    gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'showLightningRods'), guiControls.showLightningRods ? 1 : 0);
     });
     lightning_folder.add(guiControls, 'lightningRodRadiusKm', 1.0, 40.0, 0.5).name('Lightning Rod Radius (km)');
     lightning_folder.add(guiControls, 'airplaneLightningAttractor', 0.0, 2.0, 0.01).name('Airplane Lightning Attractor');
@@ -5045,6 +5066,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
+    gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'showLightningRods'), guiControls.showLightningRods ? 1 : 0);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
@@ -6883,6 +6905,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
+    gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'showLightningRods'), guiControls.showLightningRods ? 1 : 0);
 
   gl.useProgram(precipitationProgram);
   gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'baseTex'), 0);
@@ -7527,6 +7550,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
+    gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'showLightningRods'), guiControls.showLightningRods ? 1 : 0);
 
       // Don't display vectors when zoomed out because you would just see noise
       if (cam.curZoom / sim_res_x > 0.003) {
