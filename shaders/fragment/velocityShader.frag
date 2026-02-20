@@ -27,6 +27,10 @@ uniform float gravityCurrentStrength;
 uniform float shearProduction;
 uniform float tornadoPotential;
 uniform float frontogenesisStrength;
+uniform float supercellHelicity;
+uniform float mesocycloneFeedback;
+uniform float stormRelativeInflow;
+uniform float occlusionDowndraftCoupling;
 uniform float gradientRichardsonMix;
 uniform float turbulentPrandtl;
 uniform float pblDepthMeters;
@@ -142,12 +146,26 @@ void main()
     float entrainSignal = max(baseX0Yp[VY] - base[VY], 0.0) + max(base[VX] - baseXmY0[VX], 0.0);
     base[VY] += entrainSignal * 0.000035 * entrainmentFluxBoost * (0.35 + pblWeight);
 
-    // Tornado proxy: low-level stretch + buoyancy + vorticity focus
+    // Tornado / supercell system: mesocyclone rotation, storm-relative inflow, and occlusion feedback.
     float lowLevel = 1.0 - smoothstep(0.10, 0.42, texCoord.y);
     float convergence = max((baseXmY0[VX] - baseXpY0[VX]) + (baseX0Ym[VY] - baseX0Yp[VY]), 0.0);
+    float updraftCore = max(base[VY], 0.0) * smoothstep(0.12, 0.70, texCoord.y);
+    float streamwiseVort = vort * (base[VX] * dVdz - base[VY] * dUdz);
+    float stormHelicityProxy = max(streamwiseVort, 0.0) * (0.6 + updraftCore * 80.0) * supercellHelicity;
+
     float tornadoSpin = max(vort, 0.0) * convergence * cloudBuoyancy * lowLevel;
-    base[VX] += -base[VY] * tornadoSpin * 0.000025 * tornadoPotential;
-    base[VY] += base[VX] * tornadoSpin * 0.000018 * tornadoPotential;
+    float mesocycloneSpin = stormHelicityProxy * (0.22 + convergence * 0.9) * mesocycloneFeedback;
+
+    vec2 inflowDir = normalize(vec2(-base[VX], max(0.001, -base[VY])) + vec2(1e-6));
+    float inflowStrength = (0.4 + convergence * 1.4 + cloudBuoyancy * 0.5) * stormRelativeInflow;
+    base.xy += inflowDir * inflowStrength * lowLevel * 0.00008;
+
+    base[VX] += -base[VY] * (tornadoSpin * 0.000020 + mesocycloneSpin * 0.000010) * tornadoPotential;
+    base[VY] += base[VX] * (tornadoSpin * 0.000014 + mesocycloneSpin * 0.000008) * tornadoPotential;
+
+    float rearFlankDowndraft = max(-base[VY], 0.0) * (0.5 + convergence);
+    float occlusionTwist = rearFlankDowndraft * max(vort, 0.0) * occlusionDowndraftCoupling;
+    base[VX] += sign(vort) * occlusionTwist * lowLevel * 0.000020;
 
     // Storm-front proxy: strengthen horizontal thermal-gradient acceleration near low levels
     float frontGradient = length(vec2(dTdx, dTdy));

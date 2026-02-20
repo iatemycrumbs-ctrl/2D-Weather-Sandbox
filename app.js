@@ -405,6 +405,10 @@ const guiControls_default = {
   shearProduction : 1.0,
   tornadoPotential : 1.0,
   frontogenesisStrength : 1.0,
+  supercellHelicity : 1.0,
+  mesocycloneFeedback : 1.0,
+  stormRelativeInflow : 1.0,
+  occlusionDowndraftCoupling : 1.0,
   gradientRichardsonMix : 1.0,
   turbulentPrandtl : 0.85,
   pblDepthMeters : 1800.0,
@@ -3962,6 +3966,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'tornadoPotential'), guiControls.tornadoPotential);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'frontogenesisStrength'), guiControls.frontogenesisStrength);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'supercellHelicity'), guiControls.supercellHelicity);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'mesocycloneFeedback'), guiControls.mesocycloneFeedback);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'stormRelativeInflow'), guiControls.stormRelativeInflow);
+    gl.uniform1f(gl.getUniformLocation(velocityProgram, 'occlusionDowndraftCoupling'), guiControls.occlusionDowndraftCoupling);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'gradientRichardsonMix'), guiControls.gradientRichardsonMix);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'turbulentPrandtl'), guiControls.turbulentPrandtl);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'pblDepthMeters'), guiControls.pblDepthMeters);
@@ -4274,6 +4282,34 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(velocityProgram, 'frontogenesisStrength'), guiControls.frontogenesisStrength);
       })
       .name('Storm Front Strength');
+
+    fluidParams_folder.add(guiControls, 'supercellHelicity', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'supercellHelicity'), guiControls.supercellHelicity);
+      })
+      .name('Supercell Helicity');
+
+    fluidParams_folder.add(guiControls, 'mesocycloneFeedback', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'mesocycloneFeedback'), guiControls.mesocycloneFeedback);
+      })
+      .name('Mesocyclone Feedback');
+
+    fluidParams_folder.add(guiControls, 'stormRelativeInflow', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'stormRelativeInflow'), guiControls.stormRelativeInflow);
+      })
+      .name('Storm Relative Inflow');
+
+    fluidParams_folder.add(guiControls, 'occlusionDowndraftCoupling', 0.0, 3.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(velocityProgram);
+        gl.uniform1f(gl.getUniformLocation(velocityProgram, 'occlusionDowndraftCoupling'), guiControls.occlusionDowndraftCoupling);
+      })
+      .name('Occlusion Coupling');
 
     fluidParams_folder.add(guiControls, 'gradientRichardsonMix', 0.0, 3.0, 0.01)
       .onChange(function() {
@@ -6855,6 +6891,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1f(gl.getUniformLocation(velocityProgram, 'shearProduction'), guiControls.shearProduction);
   gl.uniform1f(gl.getUniformLocation(velocityProgram, 'tornadoPotential'), guiControls.tornadoPotential);
   gl.uniform1f(gl.getUniformLocation(velocityProgram, 'frontogenesisStrength'), guiControls.frontogenesisStrength);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'supercellHelicity'), guiControls.supercellHelicity);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'mesocycloneFeedback'), guiControls.mesocycloneFeedback);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'stormRelativeInflow'), guiControls.stormRelativeInflow);
+  gl.uniform1f(gl.getUniformLocation(velocityProgram, 'occlusionDowndraftCoupling'), guiControls.occlusionDowndraftCoupling);
 
   // gl.uniform1fv(gl.getUniformLocation(velocityProgram, 'initial_T'), initial_T);
   gl.uniform4fv(gl.getUniformLocation(velocityProgram, 'initial_Tv'), initial_T);
