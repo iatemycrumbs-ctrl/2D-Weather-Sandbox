@@ -172,12 +172,11 @@ float calcLightningTime(float startIterNum)
 
 float lightningChannelEnvelope(float T, bool isIC)
 {
-  float rise = 1.0 - exp(-T * (isIC ? 8.5 : 10.0));
-  float body = exp(-T * (isIC ? 2.0 : 2.4));
-  float tail = exp(-T * (isIC ? 0.72 : 0.82));
-  float blend = smoothstep(0.08, 0.55, T);
-  float envelope = mix(body, tail, blend);
-  return rise * envelope * (isIC ? 1.95 : 2.45);
+  float rise = 1.0 - exp(-T * (isIC ? 9.8 : 11.3));
+  float fastDecay = exp(-T * (isIC ? 2.6 : 3.0));
+  float slowDecay = exp(-T * (isIC ? 0.95 : 1.05));
+  float envelope = fastDecay * 0.78 + slowDecay * 0.22;
+  return rise * envelope * (isIC ? 2.0 : 2.5);
 }
 
 vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTypeSign)
@@ -193,17 +192,15 @@ vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTy
 
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 {
-  float T0 = Tin - 1.0;
-
   bool isIC = intensity < 0.0;
   float absIntensity = abs(intensity);
-  float T = max(T0, 0.0);
+  float T = max(Tin, 0.0);
 
   float channelEnvelope = lightningChannelEnvelope(T, isIC);
 
   // Stable low-frequency flicker to avoid continuous harsh strobing.
   float phase = random2d(lightningPos * 9.17) * 6.2831;
-  float flicker = 0.985 + 0.015 * sin(T * (isIC ? 3.6 : 2.8) + phase);
+  float flicker = 0.99 + 0.01 * sin(T * (isIC ? 3.1 : 2.3) + phase);
 
   return channelEnvelope * max(flicker, 0.90) * pow(absIntensity, 1.50);
 }
@@ -256,10 +253,10 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     pixVal *= clamp(icEnvelope, 0.0, 1.0);
   }
 
-  const float branchShowFactor = 1.7;
+  const float branchShowFactor = 1.3;
   float branchAxis = strikeTypeSign < 0.0 ? abs(lightningTexCoord.x - 0.5) * 1.4 : lightningTexCoord.y;
-  float brightnessThreshold = clamp(0.95 - lightningTime * branchShowFactor + branchAxis * branchShowFactor, 0.0, 1.0);
-  brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.68 : 0.60, clamp(lightningTime - 0.8, 0.0, 1.0));
+  float fadeProgress = smoothstep(0.02, 1.35, lightningTime);
+  float brightnessThreshold = mix(0.05 + branchAxis * 0.28, strikeTypeSign < 0.0 ? 0.68 : 0.60, fadeProgress * branchShowFactor);
 
   pixVal = max(pixVal - brightnessThreshold, 0.0);
   pixVal *= mix(84000.0, 154000.0, strikeTypeSign > 0.0 ? 1.0 : 0.52);
