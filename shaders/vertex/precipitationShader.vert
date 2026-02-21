@@ -114,6 +114,26 @@ float computeHydrometeorGrowth(float cloudAccess, float supersat, float growthRa
   return max((cloudAccretion + vaporDeposition) * growthRate * surfaceArea, 0.0);
 }
 
+
+// Brand-new precipitation transport model:
+// keeps hydrometeors from unrealistically hovering in elevated updraft bands.
+float computeSedimentationVelocity(float totalMass, float surfaceArea, float localDensity, float altitudeNorm, float updraft, float downdraft)
+{
+  float phaseBoost = mix(1.0, 1.55, clamp((localDensity - snowDensity) / max(1.25 - snowDensity, 0.05), 0.0, 1.0));
+  float spectrumBoost = map_rangeC(precipitationSizeSpectrum, 0.2, 2.5, 0.88, 1.45);
+  float massTerminal = sqrt(max(totalMass / max(surfaceArea, 0.0001), 0.04));
+  float baseTerminal = fallSpeed * massTerminal * phaseBoost * spectrumBoost;
+
+  // force a minimum settling component aloft so precip cannot remain suspended indefinitely.
+  float altitudeSettlingFloor = fallSpeed * mix(0.42, 0.95, clamp(altitudeNorm, 0.0, 1.0));
+
+  // updrafts can reduce settling but not fully cancel it; downdrafts accelerate fallout.
+  float cappedUpdraftAssist = min(max(updraft, 0.0) * 0.28, baseTerminal * 0.68);
+  float downdraftAssist = max(downdraft, 0.0) * (0.30 + microburstStrength * 0.25);
+
+  return max(baseTerminal + altitudeSettlingFloor + downdraftAssist - cappedUpdraftAssist, fallSpeed * 0.35);
+}
+
 vec2 computeLightningTarget(vec2 sourcePos, vec2 seed, bool isIC, float rodAttraction, float airplaneAttraction, vec2 nearestRod, float ctgWeight)
 {
   float anvilShift = (random2d(seed * 5.11 + vec2(iterNum * 0.004)) - 0.5) * texelSize.x * (120.0 + lightningComplexity * 80.0) * lightningAnvilDrift;
@@ -480,20 +500,27 @@ void main()
       feedback[HEAT] -= subli * evapHeat;
       feedback[HEAT] -= subli * meltingHeat;
 
-      // Update position
-      // move with air    * 2. because droplet position goes from -1. to 1
-      float microburstPush = max(-base[VY], 0.0) * microburstStrength;
-      newPos += vec2(base.x, base.y - microburstPush * 0.0015) / resolution * 2.;
-      newPos.y -= fallSpeed * newDensity * sqrt(totalMass / surfaceArea); // fall speed relative to air
-      /*
-       // falling at fixed speed:
-      float cellHeight = texelSize.y * 12000.0; // in meters
-      float realSecPerIter = 0.288;
-      float metersPerSec = 6.0;
-      float cellsPerSec = metersPerSec / cellHeight;
-      float cellsPerIter = cellsPerSec * realSecPerIter;
-      newPos.y -= cellsPerIter * 2. * texelSize.y;
-      */
+      // Brand-new precipitation motion system:
+      // horizontal flow still advects drops, but vertical transport prioritizes settling.
+      float updraft = max(base[VY], 0.0);
+      float downdraft = max(-base[VY], 0.0);
+      float altitudeNorm = clamp(texCoord.y, 0.0, 1.0);
+      float fallVelocity = computeSedimentationVelocity(totalMass, surfaceArea, newDensity, altitudeNorm, updraft, downdraft);
+
+      // retain lateral advection, reduce direct vertical wind carry to avoid sky-floating precip.
+      float horizontalDrift = map_rangeC(entrainmentRate, 0.2, 3.0, 0.75, 1.2);
+      newPos.x += (base[VX] / resolution.x) * 2.0 * horizontalDrift;
+
+      float verticalCarry = base[VY] * map_rangeC(newDensity, snowDensity, 1.3, 0.16, 0.06);
+      newPos.y += (verticalCarry / resolution.y) * 2.0;
+      newPos.y -= fallVelocity;
+
+      // dry slots rapidly erode suspended hydrometeors and encourage fallout recycling.
+      float drySlot = map_rangeC(maxWater(dropletTemp) - water[TOTAL], 0.0, 12.0, 0.0, 1.0);
+      if (drySlot > 0.65 && altitudeNorm > 0.35) {
+        newMass[WATER] *= 0.96;
+        newMass[ICE] *= 0.97;
+      }
 
       newPos.x = mod(newPos.x + 1., 2.) - 1.; // wrap horizontal position around map edges
 

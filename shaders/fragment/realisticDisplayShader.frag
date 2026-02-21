@@ -339,7 +339,8 @@ vec4 getAirColor(vec2 fragCoordIn)
 
 
   float lightningVisThreshold = mix(0.18, 0.08, clamp((mobileLightningVisibility - 1.0) * 0.85, 0.0, 1.0));
-  if (abs(lightningData[INTENSITY]) > lightningVisThreshold) { // show full bolt even for weaker mobile-sampled strikes
+  bool forceMobileBoltRender = mobileLightningVisibility >= 2.0;
+  if (forceMobileBoltRender || abs(lightningData[INTENSITY]) > lightningVisThreshold) { // force full bolt structure on mobile, including weaker sampled strikes
     emittedLight += displayLightning(lightningPos, lightningTime, currentLightningIntensity);
     emittedLight /= 1. + cloudDensity * (125.0 / max(lightningBloomStrength, 0.25));
   }

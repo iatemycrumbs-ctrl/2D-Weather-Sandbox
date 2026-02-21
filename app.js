@@ -630,7 +630,8 @@ function computeNumDroplets(resX, resY)
 function getMobileLightningVisibility()
 {
   const coarse = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
-  return Math.max(1.0, guiControls?.mobilePrecipBoost ?? guiControls_default.mobilePrecipBoost) * (coarse ? 1.25 : 1.0);
+  const baseVisibility = Math.max(1.0, guiControls?.mobilePrecipBoost ?? guiControls_default.mobilePrecipBoost);
+  return coarse ? Math.max(baseVisibility * 1.6, 2.0) : baseVisibility;
 }
 
 let hdrFBO;
