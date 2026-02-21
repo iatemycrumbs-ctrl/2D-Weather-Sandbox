@@ -4472,84 +4472,57 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     var UI_folder = datGui.addFolder('Simulation Controls');
 
+    const toolDefinitions = [
+      {key : 'flashlight', label : 'Flashlight', id : 'TOOL_NONE', hotkey : 'Escape', wholeWidth : false},
+      {key : 'temperature', label : 'Temperature', id : 'TOOL_TEMPERATURE', hotkey : 'KeyQ'},
+      {key : 'water', label : 'Water Vapor / Cloud', id : 'TOOL_WATER', hotkey : 'KeyW'},
+      {key : 'land', label : 'Land', id : 'TOOL_WALL_LAND', hotkey : 'KeyE'},
+      {key : 'sea', label : 'Lake / Sea', id : 'TOOL_WALL_SEA', hotkey : 'KeyR'},
+      {key : 'fire', label : 'Fire', id : 'TOOL_WALL_FIRE', hotkey : 'KeyT'},
+      {key : 'smoke', label : 'Smoke / Dust', id : 'TOOL_SMOKE', hotkey : 'KeyY'},
+      {key : 'soilMoisture', label : 'Soil Moisture', id : 'TOOL_WALL_MOIST', hotkey : 'KeyU'},
+      {key : 'vegetation', label : 'Vegetation', id : 'TOOL_VEGETATION', hotkey : 'KeyI'},
+      {key : 'snow', label : 'Snow', id : 'TOOL_WALL_SNOW', hotkey : 'KeyO'},
+      {key : 'wind', label : 'Wind', id : 'TOOL_WIND', hotkey : 'KeyP'},
+      {key : 'urban', label : 'Urban', id : 'TOOL_WALL_URBAN', hotkey : 'BracketLeft'},
+      {key : 'runway', label : 'Runway', id : 'TOOL_WALL_RUNWAY', hotkey : 'BracketRight'},
+      {key : 'industrial', label : 'Industrial', id : 'TOOL_WALL_INDUSTRIAL', hotkey : 'Backslash'},
+      {key : 'sandTerrain', label : 'Sand Terrain', id : 'TOOL_SAND_TERRAIN', hotkey : 'KeyJ'},
+      {key : 'localHeatDry', label : 'Local Heating + Drying', id : 'TOOL_LOCAL_HEAT_DRY', hotkey : 'Semicolon'},
+      {key : 'lightningGround', label : 'Lightning (Ground Strike)', id : 'TOOL_LIGHTNING_GROUND', hotkey : 'Quote'},
+      {key : 'skyscraper', label : 'Skyscraper', id : 'TOOL_SKYSCRAPER'},
+      {key : 'lightningRod', label : 'Lightning Rod', id : 'TOOL_LIGHTNING_ROD'},
+      {key : 'lightningGenerator', label : 'Artificial Lightning Generator', id : 'TOOL_ARTIFICIAL_LIGHTNING'},
+      {key : 'weatherStation', label : 'Weather Station', id : 'TOOL_STATION', hotkey : 'KeyM'},
+      {key : 'weatherBalloon', label : 'Weather Balloon', id : 'TOOL_BALLOON'}
+    ];
+
+    const toolByHotkey = {};
+    const toolDropdownOptions = {};
+    const toolActions = {};
+
     function selectTool(toolId)
     {
       guiControls.tool = toolId;
+      if (toolId == 'TOOL_NONE' || toolId == 'TOOL_STATION' || toolId == 'TOOL_BALLOON' || toolId == 'TOOL_LIGHTNING_ROD')
+        guiControls.wholeWidth = false;
     }
 
-    const toolActions = {
-      flashlight : () => selectTool('TOOL_NONE'),
-      temperature : () => selectTool('TOOL_TEMPERATURE'),
-      water : () => selectTool('TOOL_WATER'),
-      smoke : () => selectTool('TOOL_SMOKE'),
-      wind : () => selectTool('TOOL_WIND'),
-      sandTerrain : () => selectTool('TOOL_SAND_TERRAIN'),
-      localHeatDry : () => selectTool('TOOL_LOCAL_HEAT_DRY'),
-      lightningGround : () => selectTool('TOOL_LIGHTNING_GROUND'),
-      land : () => selectTool('TOOL_WALL_LAND'),
-      sea : () => selectTool('TOOL_WALL_SEA'),
-      urban : () => selectTool('TOOL_WALL_URBAN'),
-      runway : () => selectTool('TOOL_WALL_RUNWAY'),
-      industrial : () => selectTool('TOOL_WALL_INDUSTRIAL'),
-      fire : () => selectTool('TOOL_WALL_FIRE'),
-      skyscraper : () => selectTool('TOOL_SKYSCRAPER'),
-      soilMoisture : () => selectTool('TOOL_WALL_MOIST'),
-      snow : () => selectTool('TOOL_WALL_SNOW'),
-      vegetation : () => selectTool('TOOL_VEGETATION'),
-      lightningRod : () => selectTool('TOOL_LIGHTNING_ROD'),
-      lightningGenerator : () => selectTool('TOOL_ARTIFICIAL_LIGHTNING'),
-      weatherStation : () => selectTool('TOOL_STATION'),
-      weatherBalloon : () => selectTool('TOOL_BALLOON')
-    };
+    for (let i = 0; i < toolDefinitions.length; i++) {
+      const def = toolDefinitions[i];
+      toolDropdownOptions[def.label] = def.id;
+      toolActions[def.key] = () => selectTool(def.id);
+      if (def.hotkey)
+        toolByHotkey[def.hotkey] = def.id;
+    }
 
-    UI_folder.add(guiControls, 'tool', {
-      'Flashlight' : 'TOOL_NONE',
-      'Temperature' : 'TOOL_TEMPERATURE',
-      'Water Vapor / Cloud' : 'TOOL_WATER',
-      'Land' : 'TOOL_WALL_LAND',
-      'Lake / Sea' : 'TOOL_WALL_SEA',
-      'Urban' : 'TOOL_WALL_URBAN',
-      'Runway' : 'TOOL_WALL_RUNWAY',
-      'Industrial' : 'TOOL_WALL_INDUSTRIAL',
-      'Skyscraper' : 'TOOL_SKYSCRAPER',
-      'Lightning Rod' : 'TOOL_LIGHTNING_ROD',
-      'Artificial Lightning Generator' : 'TOOL_ARTIFICIAL_LIGHTNING',
-      'Lightning (Ground Strike)' : 'TOOL_LIGHTNING_GROUND',
-      'Fire' : 'TOOL_WALL_FIRE',
-      'Smoke / Dust' : 'TOOL_SMOKE',
-      'Sand Terrain' : 'TOOL_SAND_TERRAIN',
-      'Local Heating + Drying' : 'TOOL_LOCAL_HEAT_DRY',
-      'Soil Moisture' : 'TOOL_WALL_MOIST',
-      'Vegetation' : 'TOOL_VEGETATION',
-      'Snow' : 'TOOL_WALL_SNOW',
-      'Wind' : 'TOOL_WIND',
-      'Weather Station' : 'TOOL_STATION',
-      'Weather Balloon' : 'TOOL_BALLOON',
-    }).name('Active Tool').listen();
+    UI_folder.add(guiControls, 'tool', toolDropdownOptions).name('Active Tool').listen();
 
     var quickTools_folder = UI_folder.addFolder('Quick Tool Buttons');
-    quickTools_folder.add(toolActions, 'flashlight').name('Flashlight');
-    quickTools_folder.add(toolActions, 'temperature').name('Temperature');
-    quickTools_folder.add(toolActions, 'water').name('Water Vapor / Cloud');
-    quickTools_folder.add(toolActions, 'wind').name('Wind');
-    quickTools_folder.add(toolActions, 'smoke').name('Smoke / Dust');
-    quickTools_folder.add(toolActions, 'sandTerrain').name('Sand Terrain');
-    quickTools_folder.add(toolActions, 'localHeatDry').name('Local Heating + Drying');
-    quickTools_folder.add(toolActions, 'lightningGround').name('Lightning (Ground Strike)');
-    quickTools_folder.add(toolActions, 'land').name('Land');
-    quickTools_folder.add(toolActions, 'sea').name('Lake / Sea');
-    quickTools_folder.add(toolActions, 'urban').name('Urban');
-    quickTools_folder.add(toolActions, 'runway').name('Runway');
-    quickTools_folder.add(toolActions, 'industrial').name('Industrial');
-    quickTools_folder.add(toolActions, 'fire').name('Fire');
-    quickTools_folder.add(toolActions, 'skyscraper').name('Skyscraper');
-    quickTools_folder.add(toolActions, 'soilMoisture').name('Soil Moisture');
-    quickTools_folder.add(toolActions, 'snow').name('Snow');
-    quickTools_folder.add(toolActions, 'vegetation').name('Vegetation');
-    quickTools_folder.add(toolActions, 'lightningRod').name('Lightning Rod');
-    quickTools_folder.add(toolActions, 'lightningGenerator').name('Artificial Lightning');
-    quickTools_folder.add(toolActions, 'weatherStation').name('Weather Station');
-    quickTools_folder.add(toolActions, 'weatherBalloon').name('Weather Balloon');
+    for (let i = 0; i < toolDefinitions.length; i++) {
+      const def = toolDefinitions[i];
+      quickTools_folder.add(toolActions, def.key).name(def.label);
+    }
 
     UI_folder.add(guiControls, 'brushSize', 1, 2000, 1).name('Brush Diameter').listen();
     UI_folder.add(guiControls, 'wholeWidth').name('Whole Width Brush').listen();
@@ -6199,41 +6172,16 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       if (guiControls.tool == 'TOOL_NONE' && airplaneMode && confirm('Exit airplane mode?')) {
         airplane.disableAirplaneMode();
       } else {
-        guiControls.tool = 'TOOL_NONE';
-        guiControls.wholeWidth = false; // flashlight can't be whole width
+        selectTool('TOOL_NONE');
       }
-    } else if (event.code == 'KeyQ') {
-      guiControls.tool = 'TOOL_TEMPERATURE';
-    } else if (event.code == 'KeyW') {
-      guiControls.tool = 'TOOL_WATER';
-    } else if (event.code == 'KeyE') {
-      guiControls.tool = 'TOOL_WALL_LAND';
-    } else if (event.code == 'KeyR') {
-      guiControls.tool = 'TOOL_WALL_SEA';
-    } else if (event.code == 'KeyT') {
-      guiControls.tool = 'TOOL_WALL_FIRE';
-    } else if (event.code == 'KeyY') {
-      guiControls.tool = 'TOOL_SMOKE';
-    } else if (event.code == 'KeyU') {
-      guiControls.tool = 'TOOL_WALL_MOIST';
-    } else if (event.code == 'KeyI') {
-      guiControls.tool = 'TOOL_VEGETATION';
-    } else if (event.code == 'KeyO') {
-      guiControls.tool = 'TOOL_WALL_SNOW';
-    } else if (event.code == 'KeyP') {
-      guiControls.tool = 'TOOL_WIND';
-    } else if (event.code == 'BracketLeft') {
-      guiControls.tool = 'TOOL_WALL_URBAN';
-    } else if (event.code == 'BracketRight') {
-      guiControls.tool = 'TOOL_WALL_RUNWAY';
-    } else if (event.code == 'Backslash') {
-      guiControls.tool = 'TOOL_WALL_INDUSTRIAL';
-    } else if (event.code == 'KeyJ') {
-      guiControls.tool = 'TOOL_SAND_TERRAIN';
-    } else if (event.code == 'KeyK') {
-      guiControls.tool = 'TOOL_LOCAL_HEAT_DRY';
-    } else if (event.code == 'KeyL') {
-      guiControls.tool = 'TOOL_LIGHTNING_GROUND';
+    } else if (toolByHotkey[event.code]) {
+      selectTool(toolByHotkey[event.code]);
+      if (toolByHotkey[event.code] == 'TOOL_STATION') {
+        displayWeatherStations = true;
+        for (i = 0; i < weatherStations.length; i++) {
+          weatherStations[i].setHidden(false);
+        }
+      }
     } else if (event.code == 'KeyN') {
       if (displayWeatherStations) {
         displayWeatherStations = false;
@@ -6249,12 +6197,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
       if (guiControls.tool == 'TOOL_STATION') // prevent placing weather stations when not visible
         guiControls.tool = 'TOOL_NONE';
-    } else if (event.code == 'KeyM') {
-      guiControls.tool = 'TOOL_STATION';
-      displayWeatherStations = true;
-      for (i = 0; i < weatherStations.length; i++) {
-        weatherStations[i].setHidden(false);
-      }
     } else if (event.code == 'Period') {
       airplane.setBrakes(true);
     } else if (event.code == 'Slash') {
