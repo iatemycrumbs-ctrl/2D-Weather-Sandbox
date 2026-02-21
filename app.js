@@ -59,6 +59,10 @@ function updateSetupSliders()
   const simHeightShow = getEl('simHeightShow');
   if (simHeightShow)
     simHeightShow.value = simHeight + ' m';
+
+  const introDeviceInfo = getEl('introDeviceInfo');
+  if (introDeviceInfo)
+    introDeviceInfo.textContent = getDeviceInfoSummary();
 }
 
 var FPS = 60.0;
@@ -506,7 +510,10 @@ const guiControls_default = {
   lightningTempMinK : 9000.0,
   lightningTempMaxK : 33000.0,
   precipitationVisualBoost : 1.0,
+  precipitationTint : 1.0,
+  precipitationContrast : 1.0,
   renderScale : 1.0,
+  pixelRatioScale : 1.0,
   graphicsPreset : 'High',
   simulationProfile : 'Balanced',
   ambientScattering : 1.0,
@@ -572,6 +579,7 @@ var tornadoLabelEl;
 
 var guiControlsFromSaveFile = null;
 var datGui;
+var runtimeDeviceInfo = null;
 
 var sim_res_x;
 var sim_res_y;
@@ -614,16 +622,47 @@ function computeNumDroplets(resX, resY)
   const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
   const touchCapable = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
   const mobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-  let mobileFactor = (coarsePointer || touchCapable || mobileUA) ? 0.48 : 1.0;
+  let mobileFactor = (coarsePointer || touchCapable || mobileUA) ? 0.44 : 1.0;
 
   // Extra safety for high DPR mobile browsers.
   if (window.devicePixelRatio >= 2.0 && mobileFactor < 1.0)
-    mobileFactor *= 0.85;
+    mobileFactor *= 0.80;
 
   const rawDroplets = Math.floor(resX * resY * NUM_DROPLET_MULTIPLIER * mobileFactor);
 
   // Unlimited droplet ceiling: keep only a minimum floor so low-resolution runs still show precipitation.
-  return Math.max(rawDroplets, 24000);
+  return Math.max(rawDroplets, 18000);
+}
+
+function isMobileLikeDevice()
+{
+  if (window.matchMedia && window.matchMedia('(pointer:coarse)').matches)
+    return true;
+  return ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+function getEffectivePixelRatio()
+{
+  const sliderScale = clamp(guiControls?.pixelRatioScale ?? 1.0, 0.5, 1.5);
+  const dpr = window.devicePixelRatio || 1.0;
+  return clamp(dpr * sliderScale, 0.75, 2.5);
+}
+
+function getDeviceInfoSummary()
+{
+  const memory = navigator.deviceMemory ? navigator.deviceMemory + ' GB RAM' : 'RAM n/a';
+  const cores = navigator.hardwareConcurrency ? navigator.hardwareConcurrency + ' threads' : 'threads n/a';
+  return `${navigator.platform || 'unknown platform'} • DPR ${((window.devicePixelRatio || 1.0)).toFixed(2)} • ${memory} • ${cores}`;
+}
+
+function getAdaptiveEvapRate()
+{
+  const baseRate = guiControls?.evapRate ?? guiControls_default.evapRate;
+  const waterTemp = guiControls?.waterTemperature ?? guiControls_default.waterTemperature;
+  const windAssist = guiControls?.coastalMixing ?? guiControls_default.coastalMixing;
+  const tempFactor = map_range(Math.min(Math.max(waterTemp, -5.0), 35.0), -5.0, 35.0, 0.78, 1.34);
+  const windFactor = map_range(Math.min(Math.max(windAssist, 0.2), 2.5), 0.2, 2.5, 0.9, 1.22);
+  return baseRate * tempFactor * windFactor;
 }
 
 
@@ -1728,14 +1767,14 @@ class LoadingBar
     this.loadingBar.appendChild(this.bar);
     this.loadingBar.appendChild(this.underBar);
 
-    this.loadingBar.style.width = 'min(760px, 92vw)';
-    this.loadingBar.style.height = '170px';
+    this.loadingBar.style.width = 'min(860px, 94vw)';
+    this.loadingBar.style.height = '190px';
     this.loadingBar.style.color = '#d7f4ff';
     this.loadingBar.style.textAlign = 'center';
-    this.loadingBar.style.background = 'rgba(8,16,34,0.75)';
+    this.loadingBar.style.background = 'linear-gradient(180deg, rgba(6,16,40,0.84), rgba(9,12,22,0.88))';
     this.loadingBar.style.backdropFilter = 'blur(8px)';
     this.loadingBar.style.border = '1px solid rgba(90,225,255,0.40)';
-    this.loadingBar.style.borderRadius = '16px';
+    this.loadingBar.style.borderRadius = '18px';
     this.loadingBar.style.boxShadow = '0 14px 38px rgba(0,0,0,0.50), inset 0 0 22px rgba(41,190,255,0.12)';
     this.loadingBar.style.position = 'fixed';
     this.loadingBar.style.left = '50%';
@@ -1750,18 +1789,18 @@ class LoadingBar
     this.title.style.letterSpacing = '1.2px';
     this.title.style.fontWeight = '700';
     this.title.style.textTransform = 'uppercase';
-    this.title.innerHTML = 'Initializing Weather Simulation';
+    this.title.innerHTML = 'Bootstrapping Atmospheric Engine';
 
     this.underBar.style.width = '100%';
-    this.underBar.style.height = '30px';
-    this.underBar.style.lineHeight = '30px';
-    this.underBar.style.fontSize = '14px';
+    this.underBar.style.height = '52px';
+    this.underBar.style.lineHeight = '24px';
+    this.underBar.style.fontSize = '13px';
     this.underBar.style.color = '#9bd9ff';
 
-    this.bar.style.height = '44px';
+    this.bar.style.height = '48px';
     this.bar.style.lineHeight = '44px';
-    this.bar.style.borderRadius = '10px';
-    this.bar.style.background = 'linear-gradient(90deg, #1b6fff, #2dd7ff)';
+    this.bar.style.borderRadius = '12px';
+    this.bar.style.background = 'linear-gradient(90deg, #1c79ff, #27d2ff, #54f0e2)';
     this.bar.style.boxShadow = '0 0 20px rgba(45,215,255,0.35)';
     this.bar.style.fontSize = '20px';
     this.bar.style.fontWeight = '700';
@@ -1797,7 +1836,7 @@ class LoadingBar
     return new Promise((resolve) => {
       this.bar.style.width = this.percent + '%';
       this.bar.innerHTML = this.percent + '%';
-      this.underBar.innerHTML = this.description;
+      this.underBar.innerHTML = (this.description || 'Compiling shaders, preparing terrain, and calibrating weather physics') + '<br><span style="font-size:11px;color:#9ad0ff">Device: ' + getDeviceInfoSummary() + '</span>';
       let timeout;
       if (this.percent == 100)
         timeout = 5;
@@ -3864,11 +3903,15 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   function resizeCanvasAndPostFx()
   {
+    const viewport = window.visualViewport;
+    const viewportWidth = viewport ? viewport.width : window.innerWidth;
+    const viewportHeight = viewport ? viewport.height : window.innerHeight;
     const scale = clamp(guiControls?.renderScale ?? 1.0, 0.5, 1.5);
-    canvas.width = Math.max(1, Math.floor(window.innerWidth * scale));
-    canvas.height = Math.max(1, Math.floor(window.innerHeight * scale));
-    canvas.style.width = window.innerWidth + 'px';
-    canvas.style.height = window.innerHeight + 'px';
+    const pixelRatio = getEffectivePixelRatio();
+    canvas.width = Math.max(1, Math.floor(viewportWidth * scale * pixelRatio));
+    canvas.height = Math.max(1, Math.floor(viewportHeight * scale * pixelRatio));
+    canvas.style.width = viewportWidth + 'px';
+    canvas.style.height = viewportHeight + 'px';
     if (typeof createBloomFBOs === 'function')
       createBloomFBOs();
     if (typeof createHdrFBO === 'function')
@@ -4020,7 +4063,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate_30C'), guiControls.growthRate_30C);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'freezingRate'), guiControls.freezingRate);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'meltingRate'), guiControls.meltingRate);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapRate'), guiControls.evapRate);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapRate'), getAdaptiveEvapRate());
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'entrainmentDilution'), guiControls.entrainmentDilution);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'kesslerAutoconversion'), guiControls.kesslerAutoconversion);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ventilationEvapEnhancement'), guiControls.ventilationEvapEnhancement);
@@ -4039,6 +4082,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationTint'), guiControls.precipitationTint);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationContrast'), guiControls.precipitationContrast);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
@@ -4392,33 +4437,80 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Apply above altitude');
 
 
-    var UI_folder = datGui.addFolder('User Interaction');
+    var UI_folder = datGui.addFolder('Simulation Controls');
 
-    UI_folder
-      .add(guiControls, 'tool', {
-        'Flashlight' : 'TOOL_NONE',
-        'Temperature' : 'TOOL_TEMPERATURE',
-        'Water Vapor / Cloud' : 'TOOL_WATER',
-        'Land' : 'TOOL_WALL_LAND',
-        'Lake / Sea' : 'TOOL_WALL_SEA',
-        'Urban' : 'TOOL_WALL_URBAN',
-        'Runway' : 'TOOL_WALL_RUNWAY',
-        'Industrial' : 'TOOL_WALL_INDUSTRIAL',
-        'Skyscraper' : 'TOOL_SKYSCRAPER',
-        'Lightning Rod' : 'TOOL_LIGHTNING_ROD',
-        'Artificial Lightning Generator' : 'TOOL_ARTIFICIAL_LIGHTNING',
-        'Fire' : 'TOOL_WALL_FIRE',
-        'Smoke / Dust' : 'TOOL_SMOKE',
-        'Sand (SAN)' : 'TOOL_SAND',
-        'Soil Moisture' : 'TOOL_WALL_MOIST',
-        'Vegetation' : 'TOOL_VEGETATION',
-        'Snow' : 'TOOL_WALL_SNOW',
-        'Wind' : 'TOOL_WIND',
-        'Weather Station' : 'TOOL_STATION',
-        'Weather Balloon' : 'TOOL_BALLOON',
-      })
-      .name('Tool')
-      .listen();
+    function selectTool(toolId)
+    {
+      guiControls.tool = toolId;
+    }
+
+    const toolActions = {
+      flashlight : () => selectTool('TOOL_NONE'),
+      temperature : () => selectTool('TOOL_TEMPERATURE'),
+      water : () => selectTool('TOOL_WATER'),
+      smoke : () => selectTool('TOOL_SMOKE'),
+      wind : () => selectTool('TOOL_WIND'),
+      sand : () => selectTool('TOOL_SAND'),
+      land : () => selectTool('TOOL_WALL_LAND'),
+      sea : () => selectTool('TOOL_WALL_SEA'),
+      urban : () => selectTool('TOOL_WALL_URBAN'),
+      runway : () => selectTool('TOOL_WALL_RUNWAY'),
+      industrial : () => selectTool('TOOL_WALL_INDUSTRIAL'),
+      fire : () => selectTool('TOOL_WALL_FIRE'),
+      skyscraper : () => selectTool('TOOL_SKYSCRAPER'),
+      soilMoisture : () => selectTool('TOOL_WALL_MOIST'),
+      snow : () => selectTool('TOOL_WALL_SNOW'),
+      vegetation : () => selectTool('TOOL_VEGETATION'),
+      lightningRod : () => selectTool('TOOL_LIGHTNING_ROD'),
+      lightningGenerator : () => selectTool('TOOL_ARTIFICIAL_LIGHTNING'),
+      weatherStation : () => selectTool('TOOL_STATION'),
+      weatherBalloon : () => selectTool('TOOL_BALLOON')
+    };
+
+    UI_folder.add(guiControls, 'tool', {
+      'Flashlight' : 'TOOL_NONE',
+      'Temperature' : 'TOOL_TEMPERATURE',
+      'Water Vapor / Cloud' : 'TOOL_WATER',
+      'Land' : 'TOOL_WALL_LAND',
+      'Lake / Sea' : 'TOOL_WALL_SEA',
+      'Urban' : 'TOOL_WALL_URBAN',
+      'Runway' : 'TOOL_WALL_RUNWAY',
+      'Industrial' : 'TOOL_WALL_INDUSTRIAL',
+      'Skyscraper' : 'TOOL_SKYSCRAPER',
+      'Lightning Rod' : 'TOOL_LIGHTNING_ROD',
+      'Artificial Lightning Generator' : 'TOOL_ARTIFICIAL_LIGHTNING',
+      'Fire' : 'TOOL_WALL_FIRE',
+      'Smoke / Dust' : 'TOOL_SMOKE',
+      'Sand (SAN)' : 'TOOL_SAND',
+      'Soil Moisture' : 'TOOL_WALL_MOIST',
+      'Vegetation' : 'TOOL_VEGETATION',
+      'Snow' : 'TOOL_WALL_SNOW',
+      'Wind' : 'TOOL_WIND',
+      'Weather Station' : 'TOOL_STATION',
+      'Weather Balloon' : 'TOOL_BALLOON',
+    }).name('Active Tool').listen();
+
+    var quickTools_folder = UI_folder.addFolder('Quick Tool Buttons');
+    quickTools_folder.add(toolActions, 'flashlight').name('Flashlight');
+    quickTools_folder.add(toolActions, 'temperature').name('Temperature');
+    quickTools_folder.add(toolActions, 'water').name('Water Vapor / Cloud');
+    quickTools_folder.add(toolActions, 'wind').name('Wind');
+    quickTools_folder.add(toolActions, 'smoke').name('Smoke / Dust');
+    quickTools_folder.add(toolActions, 'land').name('Land');
+    quickTools_folder.add(toolActions, 'sea').name('Lake / Sea');
+    quickTools_folder.add(toolActions, 'urban').name('Urban');
+    quickTools_folder.add(toolActions, 'runway').name('Runway');
+    quickTools_folder.add(toolActions, 'industrial').name('Industrial');
+    quickTools_folder.add(toolActions, 'fire').name('Fire');
+    quickTools_folder.add(toolActions, 'skyscraper').name('Skyscraper');
+    quickTools_folder.add(toolActions, 'soilMoisture').name('Soil Moisture');
+    quickTools_folder.add(toolActions, 'snow').name('Snow');
+    quickTools_folder.add(toolActions, 'vegetation').name('Vegetation');
+    quickTools_folder.add(toolActions, 'lightningRod').name('Lightning Rod');
+    quickTools_folder.add(toolActions, 'lightningGenerator').name('Artificial Lightning');
+    quickTools_folder.add(toolActions, 'weatherStation').name('Weather Station');
+    quickTools_folder.add(toolActions, 'weatherBalloon').name('Weather Balloon');
+
     UI_folder.add(guiControls, 'brushSize', 1, 2000, 1).name('Brush Diameter').listen();
     UI_folder.add(guiControls, 'wholeWidth').name('Whole Width Brush').listen();
     UI_folder.add(guiControls, 'brushIntensity', 0.005, 0.075, 0.001).name('Brush Intensity');
@@ -4445,13 +4537,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     UI_folder.add(guiControls, 'allowCaves')
       .onChange(function() {
         if (!gl)
-      return;
+          return;
 
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'allowCaves'), guiControls.allowCaves ? 1 : 0);
       })
       .name('Allow Caves');
-
     var radiation_folder = datGui.addFolder('Radiation');
 
     radiation_folder.add(guiControls, 'timeOfDay', 0.0, 23.96, 0.01).onChange(onUpdateTimeOfDaySlider).name('Time of day').listen();
@@ -4880,7 +4971,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     precipitation_folder.add(guiControls, 'evapRate', 0.0001, 0.005, 0.0001)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
-        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapRate'), guiControls.evapRate);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapRate'), getAdaptiveEvapRate());
       })
       .name('Evaporation Rate');
     precipitation_folder.add(guiControls, 'cloudLifetimeBoost', 0.5, 2.5, 0.01).name('Cloud Lifetime Boost').onChange(function() {
@@ -4976,23 +5067,39 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     balloon_folder.add(guiControls, 'balloonTelemetryDetailed').name('Detailed Telemetry');
 
 
-    var graphics_folder = datGui.addFolder('Graphics');
-    graphics_folder.add(guiControls, 'graphicsPreset', ['Low', 'Medium', 'High', 'Ultra']).name('Preset').onChange(function() {
+    var graphics_folder = datGui.addFolder('Graphics Settings');
+    var graphicsQuality_folder = graphics_folder.addFolder('Quality');
+    var graphicsDevice_folder = graphics_folder.addFolder('Device Info');
+
+    graphicsQuality_folder.add(guiControls, 'graphicsPreset', ['Low', 'Medium', 'High', 'Ultra']).name('Preset').onChange(function() {
       applyGraphicsPresetSettings(guiControls.graphicsPreset);
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationTint'), guiControls.precipitationTint);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationContrast'), guiControls.precipitationContrast);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
       resizeCanvasAndPostFx();
     });
-    graphics_folder.add(guiControls, 'renderScale', 0.5, 1.5, 0.01).name('Render Scale').onChange(function() {
+    graphicsQuality_folder.add(guiControls, 'renderScale', 0.5, 1.5, 0.01).name('Render Scale').onChange(function() {
       resizeCanvasAndPostFx();
     });
-    graphics_folder.add(guiControls, 'simulationProfile', ['Calm', 'Balanced', 'Dynamic', 'Extreme']).name('Simulation Profile').onChange(function() {
+    graphicsQuality_folder.add(guiControls, 'pixelRatioScale', 0.5, 1.5, 0.01).name('Pixel Ratio Scale').onChange(function() {
+      resizeCanvasAndPostFx();
+    });
+    graphicsQuality_folder.add(guiControls, 'simulationProfile', ['Calm', 'Balanced', 'Dynamic', 'Extreme']).name('Simulation Profile').onChange(function() {
       applySimulationProfile(guiControls.simulationProfile);
     });
 
+    runtimeDeviceInfo = {
+      summary : getDeviceInfoSummary(),
+      resolution : `${window.innerWidth} x ${window.innerHeight}`,
+      userAgent : navigator.userAgent
+    };
+    graphicsDevice_folder.add(runtimeDeviceInfo, 'summary').name('Summary').listen();
+    graphicsDevice_folder.add(runtimeDeviceInfo, 'resolution').name('Viewport').listen();
+    graphicsDevice_folder.add(runtimeDeviceInfo, 'userAgent').name('User Agent').listen();
     var display_folder = datGui.addFolder('Display');
 
     display_folder.add(guiControls, 'cloudLayerComplexity', 0.5, 2.5, 0.01).name('Cloud Layer Complexity').onChange(function() {
@@ -5031,6 +5138,16 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     display_folder.add(guiControls, 'precipitationVisualBoost', 0.5, 2.0, 0.01).name('Precip Lighting Boost').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationTint'), guiControls.precipitationTint);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationContrast'), guiControls.precipitationContrast);
+    });
+    display_folder.add(guiControls, 'precipitationTint', 0.4, 1.8, 0.01).name('Precipitation Tint').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationTint'), guiControls.precipitationTint);
+    });
+    display_folder.add(guiControls, 'precipitationContrast', 0.6, 1.6, 0.01).name('Precipitation Contrast').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationContrast'), guiControls.precipitationContrast);
     });
     display_folder.add(guiControls, 'ambientScattering', 0.3, 2.5, 0.01).name('Ambient Scattering').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
@@ -5211,6 +5328,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationTint'), guiControls.precipitationTint);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationContrast'), guiControls.precipitationContrast);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
@@ -5240,13 +5359,16 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       fpsCounterEl.style.right = '14px';
       fpsCounterEl.style.top = '14px';
       fpsCounterEl.style.zIndex = '3';
-      fpsCounterEl.style.padding = '6px 10px';
-      fpsCounterEl.style.background = 'rgba(0,0,0,0.45)';
-      fpsCounterEl.style.border = '1px solid rgba(255,255,255,0.25)';
-      fpsCounterEl.style.borderRadius = '8px';
+      fpsCounterEl.style.padding = '8px 12px';
+      fpsCounterEl.style.background = 'linear-gradient(180deg, rgba(8,20,46,0.75), rgba(4,10,26,0.75))';
+      fpsCounterEl.style.border = '1px solid rgba(119,218,255,0.45)';
+      fpsCounterEl.style.borderRadius = '10px';
       fpsCounterEl.style.fontFamily = 'Monospace';
-      fpsCounterEl.style.fontSize = '14px';
-      fpsCounterEl.style.color = 'white';
+      fpsCounterEl.style.fontSize = '12px';
+      fpsCounterEl.style.color = '#d8f6ff';
+      fpsCounterEl.style.minWidth = '136px';
+      fpsCounterEl.style.textAlign = 'right';
+      fpsCounterEl.style.whiteSpace = 'pre-line';
     }
 
     // initialize time and solar angle
@@ -5549,15 +5671,22 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   var mouseXinSim, mouseYinSim;
   var prevMouseXinSim, prevMouseYinSim;
 
-  window.addEventListener('resize', function() {
+  function handleViewportResize()
+  {
     resizeCanvasAndPostFx();
     canvas_aspect = canvas.width / canvas.height;
 
     if (soundingGraph.graphCanvas) {
-      soundingGraph.graphCanvas.height = window.innerHeight;
-      soundingGraph.graphCanvas.width = window.innerHeight;
+      const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      soundingGraph.graphCanvas.height = viewportHeight;
+      soundingGraph.graphCanvas.width = viewportHeight;
     }
-  });
+  }
+
+  window.addEventListener('resize', handleViewportResize);
+  window.addEventListener('orientationchange', handleViewportResize);
+  if (window.visualViewport)
+    window.visualViewport.addEventListener('resize', handleViewportResize);
 
   function logSample()
   {
@@ -6834,16 +6963,40 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   }
 
 
+  const lightningGeneratorWorker = new Worker('./lightningGenerator.js');
+  const lightningTextureTasks = [];
+  const pendingLightningTextureRequests = new Map();
+
+  lightningGeneratorWorker.onmessage = (event) => {
+    const payload = event.data || {};
+    const pending = pendingLightningTextureRequests.get(payload.id);
+    if (!pending)
+      return;
+
+    pendingLightningTextureRequests.delete(payload.id);
+    // downloadImageData(payload.imageData); // for debugging
+    generateLightningTexture(pending.textureIndex, payload.imageData);
+    pending.resolve();
+  };
+
+  const lightningTextureWidth = isMobileLikeDevice() ? 1400 : 2500;
+  const lightningTextureHeight = isMobileLikeDevice() ? 2800 : 5000;
+
   for (let i = 0; i < numLightningTextures; i++) {
-    const lightningGeneratorWorker = new Worker('./lightningGenerator.js');
-    lightningGeneratorWorker.onmessage = (imgElement) => {
-      // downloadImageData(imgElement.data); // for debugging
-
-      generateLightningTexture(i, imgElement.data);
-    };
-
-    lightningGeneratorWorker.postMessage({width : 2500, height : 5000}); // 10000 5000
+    lightningTextureTasks.push(new Promise((resolve) => {
+      const reqId = i + 1;
+      pendingLightningTextureRequests.set(reqId, {resolve, textureIndex : i});
+      lightningGeneratorWorker.postMessage({
+        id : reqId,
+        width : lightningTextureWidth,
+        height : lightningTextureHeight,
+        seed : (Date.now() + i * 2654435761) >>> 0
+      });
+    }));
   }
+
+  await Promise.all(lightningTextureTasks);
+  lightningGeneratorWorker.terminate();
 
   await loadingBar.set(90, 'Setting up FBO`s');
 
@@ -7121,6 +7274,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   // preload uniform locations for tiny performance gain
   var uniformLocation_boundaryProgram_iterNum = gl.getUniformLocation(boundaryProgram, 'iterNum');
+  var uniformLocation_precipitationProgram_iterNum = gl.getUniformLocation(precipitationProgram, 'iterNum');
+  var uniformLocation_precipitationProgram_inactiveDroplets = gl.getUniformLocation(precipitationProgram, 'inactiveDroplets');
+  var uniformLocation_lightningLocationProgram_iterNum = gl.getUniformLocation(lightningLocationProgram, 'iterNum');
 
 
   for (i = 0; i < weatherStations.length; i++) { // initial measurement at weather stations
@@ -7430,7 +7586,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             if (guiControls.enablePrecipitation) { // move precipitation, HUGE PERFORMANCE BOTTLENECK!
 
               gl.useProgram(precipitationProgram);
-              gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'iterNum'), iterNum);
+              gl.uniform1f(uniformLocation_precipitationProgram_iterNum, iterNum);
               gl.enable(gl.BLEND);
               gl.blendFunc(gl.ONE, gl.ONE); // add everything together
               gl.activeTexture(gl.TEXTURE0);
@@ -7458,7 +7614,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
                 filteredInactiveDroplets = (filteredInactiveDroplets == 0.0) ? sampleValues[0] : mixGeneric(filteredInactiveDroplets, sampleValues[0], 0.32);
                 guiControls.inactiveDroplets = filteredInactiveDroplets;
                 // gl.useProgram(precipitationProgram); // already set
-                gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'inactiveDroplets'), filteredInactiveDroplets);
+                gl.uniform1f(uniformLocation_precipitationProgram_inactiveDroplets, filteredInactiveDroplets);
               }
 
               gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
@@ -7468,7 +7624,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
               // Extract lightningLocation from precipitationfeedback
               gl.useProgram(lightningLocationProgram);
-              gl.uniform1f(gl.getUniformLocation(lightningLocationProgram, 'iterNum'), iterNum);
+              gl.uniform1f(uniformLocation_lightningLocationProgram_iterNum, iterNum);
 
               gl.activeTexture(gl.TEXTURE0);
               gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
@@ -8266,10 +8422,19 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       lastFrameNum = frameNum;
 
 
+      if (runtimeDeviceInfo) {
+        runtimeDeviceInfo.summary = getDeviceInfoSummary();
+        runtimeDeviceInfo.resolution = `${window.innerWidth} x ${window.innerHeight}`;
+      }
+
       if (fpsCounterEl) {
         if (guiControls.showFPS) {
           fpsCounterEl.style.display = 'block';
-          fpsCounterEl.textContent = FPS + ' FPS';
+          const frameMs = (1000.0 / Math.max(FPS, 1)).toFixed(1);
+          const iterPerSecond = Math.round(FPS * guiControls.IterPerFrame);
+          const perfState = FPS >= 58 ? 'STABLE' : (FPS >= 42 ? 'BALANCED' : 'HEAVY');
+          fpsCounterEl.textContent = `${FPS} FPS\n${frameMs} ms  |  ${iterPerSecond} it/s\n${perfState}`;
+          fpsCounterEl.style.borderColor = FPS >= 58 ? 'rgba(78,224,142,0.6)' : (FPS >= 42 ? 'rgba(255,217,94,0.62)' : 'rgba(255,112,112,0.62)');
         } else {
           fpsCounterEl.style.display = 'none';
         }
