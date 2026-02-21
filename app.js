@@ -72,7 +72,7 @@ const VALID_DISPLAY_MODES = new Set([
   'DISP_TEMPERATURE', 'DISP_WATER', 'DISP_REAL', 'DISP_HORIVEL', 'DISP_VERTVEL',
   'DISP_IRHEATING', 'DISP_IRDOWNTEMP', 'DISP_IRUPTEMP', 'DISP_PRECIPFEEDBACK_MASS',
   'DISP_PRECIPFEEDBACK_HEAT', 'DISP_PRECIPFEEDBACK_VAPOR', 'DISP_PRECIPFEEDBACK_RAIN',
-  'DISP_PRECIPFEEDBACK_SNOW', 'DISP_SOIL_MOISTURE', 'DISP_CURL', 'DISP_AIRQUALITY'
+  'DISP_PRECIPFEEDBACK_SNOW', 'DISP_SOIL_MOISTURE', 'DISP_CURL', 'DISP_AIRQUALITY', 'DISP_RADAR'
 ]);
 
 function sanitizeDisplayMode(mode)
@@ -513,7 +513,7 @@ const guiControls_default = {
   precipitationTint : 1.0,
   precipitationContrast : 1.0,
   renderScale : 1.0,
-  pixelRatioScale : 1.0,
+  pixelRatioScale : 0.5,
   graphicsPreset : 'High',
   simulationProfile : 'Balanced',
   ambientScattering : 1.0,
@@ -5175,7 +5175,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         'Snow Deposition' : 'DISP_PRECIPFEEDBACK_SNOW',
         'Precipitation/Soil Moisture' : 'DISP_SOIL_MOISTURE',
         'Curl' : 'DISP_CURL',
-        'Air Quality' : 'DISP_AIRQUALITY'
+        'Air Quality' : 'DISP_AIRQUALITY',
+        'Radar Reflectivity' : 'DISP_RADAR'
       })
       .name('Display Mode')
       .onChange(function() { guiControls.displayMode = sanitizeDisplayMode(guiControls.displayMode); })
@@ -8166,6 +8167,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           gl.bindTexture(gl.TEXTURE_2D, waterTexture_0);
           gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 2);
           gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 0.02);
+          break;
+        case 'DISP_RADAR':
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, waterTexture_1);
+          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 2);
+          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 1.85);
           break;
         case 'DISP_CURL':
           gl.activeTexture(gl.TEXTURE0);

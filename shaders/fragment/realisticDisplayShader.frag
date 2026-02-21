@@ -199,11 +199,11 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 
   float channelEnvelope = lightningChannelEnvelope(T, isIC);
 
-  // Smooth flash with subtle flicker (no hard multi-stroke stepping).
-  float flicker = 0.92 + 0.08 * sin(T * (isIC ? 11.5 : 8.5) + random2d(lightningPos * 9.17) * 6.2831);
-  flicker += (random2d(vec2(T * 17.3, lightningPos.x * 31.1)) - 0.5) * (isIC ? 0.05 : 0.03);
+  // Stable low-frequency flicker to avoid continuous harsh strobing.
+  float phase = random2d(lightningPos * 9.17) * 6.2831;
+  float flicker = 0.97 + 0.03 * sin(T * (isIC ? 4.6 : 3.2) + phase);
 
-  return channelEnvelope * max(flicker, 0.75) * pow(absIntensity, 1.50);
+  return channelEnvelope * max(flicker, 0.90) * pow(absIntensity, 1.50);
 }
 
 vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningIntensity)
