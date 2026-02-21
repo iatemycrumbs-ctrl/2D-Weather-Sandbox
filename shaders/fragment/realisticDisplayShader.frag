@@ -213,6 +213,9 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   float upDown = max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y)).r,
                      texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r);
   float pixVal = max(trunk, max(side, upDown) * (0.50 + 0.22 * lightningBloomStrength));
+  float branchGhost = texture(lightningTex, lightningTexCoord + vec2(px.x * 2.0, -px.y * 3.0)).r;
+  branchGhost = max(branchGhost, texture(lightningTex, lightningTexCoord + vec2(-px.x * 2.5, -px.y * 4.0)).r);
+  pixVal += branchGhost * (strikeTypeSign < 0.0 ? 0.42 : 0.30);
 
   if (strikeTypeSign < 0.0) {
     float icEnvelope = smoothstep(-0.30, -0.02, lightningTexCoord.y) * (1.0 - smoothstep(0.36, 0.86, lightningTexCoord.y));
@@ -221,7 +224,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   float strokeA = exp(-pow(max(lightningTime - 0.90, 0.0) * 4.4, 2.0));
   float strokeB = exp(-pow(max(lightningTime - 1.22, 0.0) * 5.1, 2.0)) * 0.48;
-  float stagedStroke = strokeA + strokeB;
+  float strokeC = exp(-pow(max(lightningTime - 1.46, 0.0) * 6.5, 2.0)) * 0.24;
+  float stagedStroke = strokeA + strokeB + strokeC;
 
   const float branchShowFactor = 3.0;
   float brightnessThreshold = clamp(1.0 - lightningTime * branchShowFactor + lightningTexCoord.y * branchShowFactor, 0.0, 1.0);
@@ -283,18 +287,24 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   float cloudwater = water[CLOUD];
 
-  vec3 cloudCol = vec3(1.0 / (cloudwater * 0.005 + 1.0)); // 0.10 white to black
+  float cloudShade = clamp(1.0 / (cloudwater * 0.0046 + 1.0), 0.18, 1.0);
+  vec3 cloudCol = vec3(cloudShade);
 
-  float cloudDensity = max(cloudwater * (11.0 + cloudLayerComplexity * 5.6), 0.0);
+  float cloudDensity = max(cloudwater * (8.8 + cloudLayerComplexity * 4.4), 0.0);
   float cloudLayerA = smoothstep(0.18, 0.52, texCoord.y) * cloudLayerComplexity;
   float cloudLayerB = smoothstep(0.48, 0.86, texCoord.y) * (0.65 + 0.35 * cloudLayerComplexity);
-  cloudDensity *= (0.85 + cloudLayerA * 0.35 + cloudLayerB * 0.30);
+  float cloudLayerC = smoothstep(0.70, 0.97, texCoord.y) * (0.45 + cloudLayerComplexity * 0.25);
+  cloudDensity *= (0.80 + cloudLayerA * 0.30 + cloudLayerB * 0.24 + cloudLayerC * 0.18);
+
+  // Keep rendered cloud opacity bounded even during extreme cloud-water bursts.
+  float cloudVisualLimiter = 1.0 / (1.0 + max(cloudDensity - 2.8, 0.0) * 0.26);
+  cloudDensity *= cloudVisualLimiter;
 
   float totalDensity = cloudDensity + water[PRECIPITATION] * (0.8 * precipitationVisualBoost); // visualize precipitation
 
 
   // float cloudOpacity = clamp(cloudwater * 4.0, 0.0, 1.0);
-  float cloudOpacity = clamp(1.0 - (1.0 / (1. + totalDensity)), 0.0, 1.0);
+  float cloudOpacity = clamp(1.0 - (1.0 / (1. + totalDensity)), 0.0, 0.88);
 
   const vec3 smokeThinCol = vec3(0.8, 0.51, 0.26);
   const vec3 smokeThickCol = vec3(0., 0., 0.);

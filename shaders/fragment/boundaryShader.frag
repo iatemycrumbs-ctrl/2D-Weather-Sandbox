@@ -131,6 +131,18 @@ void main()
     water[TOTAL] += precipEvaporation; // evaporating rain adds water vapor to air
     water[CLOUD] += precipEvaporation * 0.055 * precipitationRecycling;
 
+    // Anti-runaway cloud limiter: prevent oversized cloud reservoirs from blanketing the whole domain
+    // and producing pathological precipitation feedback spikes.
+    float heightLimiter = map_rangeC(texCoord.y, 0.0, 1.0, 1.9, 3.8);
+    float cloudSoftCap = mix(2.2, 5.2, clamp(cloudLifetimeBoost * 0.45, 0.0, 1.0)) * heightLimiter;
+    if (water[CLOUD] > cloudSoftCap) {
+      float cloudOverflow = water[CLOUD] - cloudSoftCap;
+      float overflowToPrecip = cloudOverflow * map_rangeC(cloudAutoconversionRate, 0.2, 3.0, 0.30, 0.60);
+      water[CLOUD] -= cloudOverflow;
+      water[PRECIPITATION] += overflowToPrecip * 0.010;
+      water[TOTAL] -= cloudOverflow * 0.12;
+    }
+
 
     //  0.004 for rain visualisation
     water[PRECIPITATION] = max(water[PRECIPITATION] * 0.9972 - 0.000009 + precipFeedback[MASS] * 0.0055 * precipitationRecycling, 0.0);
