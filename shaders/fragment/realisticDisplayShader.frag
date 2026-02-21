@@ -111,28 +111,52 @@ vec4 surfaceTexture(int index, vec2 pos)
 
 vec3 getWallColor(float depth)
 {
-  vec3 vegetationCol = mix(greenGrassCol, dryGrassCol, max(1.0 - water[SOIL_MOISTURE] * (1. / fullGreenSoilMoisture), 0.)); // green to brown
-
+  vec3 vegetationCol = mix(greenGrassCol, dryGrassCol, max(1.0 - water[SOIL_MOISTURE] * (1. / fullGreenSoilMoisture), 0.0));
   vec3 bareSoilCol = mix(bareDrySoilCol, bareWetSoilCol, map_rangeC(water[SOIL_MOISTURE], 0.0, 20.0, 0.0, 1.0));
 
-  float vegFrac = min(float(wall[VEGETATION]) / 50., 1.0);
+  float vegFrac = min(float(wall[VEGETATION]) / 50.0, 1.0);
   vec3 surfCol = mix(bareSoilCol, vegetationCol, vegFrac);
 
-  // Reworked vegetation texturing: canopy mottling + fine grass variation.
   float broadPatch = texture(noiseTex, vec2(texCoord.x * resolution.x, texCoord.y * resolution.y) * 0.06).r;
   float finePatch = texture(noiseTex, vec2(texCoord.x * resolution.x + 117.0, texCoord.y * resolution.y - 43.0) * 0.28).r;
   vec3 canopyTint = mix(vec3(0.82, 1.05, 0.82), vec3(1.10, 0.92, 0.78), broadPatch);
   vec3 bladeTint = mix(vec3(0.88, 0.96, 0.88), vec3(1.08, 1.10, 0.92), finePatch);
   surfCol = mix(surfCol, surfCol * canopyTint * bladeTint, vegFrac * 0.45);
 
-  const vec3 rockCol = vec3(0.70);                                 // gray rock
+  vec3 color;
+  if (wall[TYPE] == WALLTYPE_URBAN) {
+    float blockGrid = step(0.58, fract(texCoord.x * resolution.x * 0.18)) * step(0.58, fract(texCoord.y * resolution.y * 0.18));
+    vec3 concrete = mix(vec3(0.42, 0.45, 0.50), vec3(0.30, 0.33, 0.38), broadPatch);
+    vec3 asphalt = mix(vec3(0.18, 0.19, 0.21), vec3(0.24, 0.24, 0.26), finePatch);
+    color = mix(concrete, asphalt, blockGrid * 0.45 + depth * 0.08);
+  } else if (wall[TYPE] == WALLTYPE_INDUSTRIAL) {
+    bool skyscraperProxy = wall[VEGETATION] < 10;
+    if (skyscraperProxy) {
+      float verticalBands = step(0.48, fract(texCoord.x * resolution.x * 0.26));
+      float windowRows = step(0.44, fract(texCoord.y * resolution.y * 0.24));
+      float lit = verticalBands * windowRows;
+      vec3 towerBase = mix(vec3(0.16, 0.19, 0.24), vec3(0.24, 0.28, 0.34), broadPatch);
+      vec3 windowGlow = vec3(0.55, 0.68, 0.82) * (0.25 + 0.75 * finePatch);
+      color = mix(towerBase, windowGlow, lit * 0.38);
+    } else {
+      float metalPanel = step(0.5, fract(texCoord.x * resolution.x * 0.12 + broadPatch));
+      vec3 steel = mix(vec3(0.34, 0.36, 0.39), vec3(0.24, 0.26, 0.30), finePatch);
+      vec3 rust = vec3(0.43, 0.30, 0.22);
+      color = mix(steel, rust, metalPanel * 0.16 + depth * 0.06);
+    }
+  } else if (wall[TYPE] == WALLTYPE_FIRE) {
+    float flame = clamp(water[SMOKE] * 1.8 + finePatch * 0.25, 0.0, 1.0);
+    vec3 charCol = vec3(0.09, 0.06, 0.05);
+    vec3 emberCol = vec3(1.00, 0.46, 0.10);
+    vec3 coreCol = vec3(1.0, 0.88, 0.64);
+    color = mix(charCol, mix(emberCol, coreCol, broadPatch), flame);
+  } else {
+    const vec3 rockCol = vec3(0.70);
+    color = mix(surfCol, rockCol, clamp(depth * 0.35, 0.0, 1.0));
+  }
 
-  vec3 color = mix(surfCol, rockCol, clamp(depth * 0.35, 0., 1.)); // * 0.15
-
-
-  color *= texture(noiseTex, vec2(texCoord.x * resolution.x, texCoord.y * resolution.y) * 0.2).rgb;                                   // add noise texture
-
-  color = mix(color, vec3(1.0), clamp(min(water[SNOW], fullWhiteSnowHeight) / fullWhiteSnowHeight - max(depth * 0.3, 0.), 0.0, 1.0)); // mix in white for snow cover
+  color *= mix(vec3(0.88), vec3(1.12), texture(noiseTex, vec2(texCoord.x * resolution.x, texCoord.y * resolution.y) * 0.20).rgb);
+  color = mix(color, vec3(1.0), clamp(min(water[SNOW], fullWhiteSnowHeight) / fullWhiteSnowHeight - max(depth * 0.3, 0.0), 0.0, 1.0));
 
   return color;
 }
