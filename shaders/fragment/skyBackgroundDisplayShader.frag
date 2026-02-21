@@ -5,6 +5,7 @@ precision highp isampler2D;
 
 in vec2 fragCoord;
 in vec2 texCoord;
+in vec2 onScreenUV;
 
 uniform vec2 resolution;
 uniform vec2 texelSize;
@@ -17,6 +18,7 @@ uniform sampler2D planeGearTex;
 uniform sampler2D ambientLightTex;
 
 uniform float minShadowLight;
+uniform float sunAngle;
 
 uniform float iterNum;
 
@@ -151,6 +153,29 @@ void main()
   mixedCol += A380Col.rgb * A380Col.a;
 
   vec3 finalColor = mixedCol * (light + minShadowLight + airplaneOnLight);
+
+  // Add explicit sun + moon discs in sky space for better day/night readability.
+  float solarElevation = clamp(cos(sunAngle), -1.0, 1.0);
+  float azimuth = sin(sunAngle);
+  vec2 sunPos = vec2(azimuth * 0.78, clamp(solarElevation * 0.82 + 0.02, -0.80, 0.88));
+  vec2 moonPos = -sunPos * vec2(1.0, 0.92) + vec2(0.0, 0.06);
+
+  vec2 sunDelta = onScreenUV - sunPos;
+  vec2 moonDelta = onScreenUV - moonPos;
+
+  float sunDisk = exp(-pow(length(sunDelta) / 0.060, 4.0));
+  float sunHalo = exp(-pow(length(sunDelta) / 0.22, 2.0));
+  float moonDisk = exp(-pow(length(moonDelta) / 0.052, 4.0));
+  float moonHalo = exp(-pow(length(moonDelta) / 0.18, 2.0));
+
+  float dayMask = smoothstep(-0.08, 0.18, solarElevation);
+  float nightMask = 1.0 - dayMask;
+
+  vec3 sunCol = vec3(1.0, 0.93, 0.76);
+  vec3 moonCol = vec3(0.78, 0.84, 1.0);
+
+  finalColor += sunCol * (sunDisk * 2.6 + sunHalo * 0.25) * dayMask;
+  finalColor += moonCol * (moonDisk * 1.35 + moonHalo * 0.12) * nightMask;
 
   float airDensityFactor = clamp(1.0 - texCoord.y, 0., 1.);
 

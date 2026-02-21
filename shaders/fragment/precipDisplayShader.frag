@@ -28,18 +28,21 @@ void main()
   */
 
   float totalMass = mass_out[WATER] + mass_out[ICE];
+  float iceFrac = mass_out[ICE] / max(totalMass, 0.0001);
+  float rainFrac = mass_out[WATER] / max(totalMass, 0.0001);
   vec2 local = gl_PointCoord - vec2(0.5);
   float r = length(local);
 
-  // New visual model: hydrometeor core + wake plume + refractive halo.
+  // Reworked streak model: denser core + elongated rain trail with softer lateral falloff.
   float wakeBody = max(1.0 - abs(local.x) * 2.6, 0.0) * max(1.0 - abs(local.y) * 1.2, 0.0);
-  float streakTrail = exp(-max(local.y + 0.34, 0.0) * 11.5) * max(1.0 - abs(local.x) * 5.0, 0.0);
+  float streakAxis = max(local.y + 0.42, 0.0);
+  float streakWidth = mix(3.6, 5.8, clamp(rainFrac + density_out * 0.22, 0.0, 1.0));
+  float streakCore = exp(-streakAxis * mix(8.0, 12.5, rainFrac));
+  float streakLateral = exp(-abs(local.x) * streakWidth);
+  float streakTrail = streakCore * streakLateral;
   float condensedCore = exp(-r * r * 12.0);
   float haloRing = exp(-abs(r - 0.32) * 14.0);
   float wakeTail = exp(-max(local.y + 0.22, 0.0) * 7.5) * max(1.0 - abs(local.x) * 3.1, 0.0);
-
-  float iceFrac = mass_out[ICE] / max(totalMass, 0.0001);
-  float rainFrac = mass_out[WATER] / max(totalMass, 0.0001);
 
   float terminalSpeedHint = mix(0.50, 1.45, clamp(density_out, 0.0, 1.6));
   float anisotropy = mix(0.65, 1.72, rainFrac * terminalSpeedHint);
@@ -47,7 +50,8 @@ void main()
   float shimmer = sin((local.x - local.y) * 22.0 + totalMass * 35.0) * 0.5 + 0.5;
 
   float opacity = clamp(totalMass * (0.09 + 0.11 * density_out), 0.05, 1.0);
-  opacity *= clamp(wakeBody * anisotropy + condensedCore * 0.92 + wakeTail * 0.40 + streakTrail * (0.20 + 0.55 * rainFrac) + haloRing * 0.22, 0.0, 1.8);
+  float streakWeight = mix(0.16, 0.88, rainFrac) * (0.65 + 0.35 * clamp(anisotropy, 0.0, 2.0));
+  opacity *= clamp(wakeBody * anisotropy + condensedCore * 0.92 + wakeTail * 0.40 + streakTrail * streakWeight + haloRing * 0.22, 0.0, 1.8);
 
   vec3 rainCol = mix(vec3(0.08, 0.34, 0.90), vec3(0.36, 0.80, 1.00), clamp(rainFrac * 1.2, 0.0, 1.0));
   vec3 snowCol = vec3(0.96, 0.98, 1.00);
@@ -63,7 +67,7 @@ void main()
   phaseCol += chargeTint * clamp(iceFrac * 0.32, 0.0, 0.26);
   phaseCol += vec3(0.35, 0.40, 0.48) * sparkle;
   phaseCol += vec3(0.18, 0.24, 0.33) * wakeTail * (0.35 + 0.65 * rainFrac);
-  phaseCol += vec3(0.12, 0.18, 0.27) * streakTrail * rainFrac;
+  phaseCol += vec3(0.10, 0.16, 0.25) * streakTrail * rainFrac * (0.75 + 0.25 * shimmer);
 
   fragmentColor = vec4(clamp(phaseCol, 0.0, 1.0), clamp(opacity, 0.0, 1.0));
 
