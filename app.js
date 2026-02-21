@@ -495,6 +495,7 @@ const guiControls_default = {
   shakeFrequency : 1.45,
   shakeDecay : 0.78,
   lightningTempShakeMult : 1.20,
+  lightningMotionBlur : 0.0,
   lightningColorTempMult : 1.0,
   icLightningRatio : 0.62,
   ctgLightningRatio : 0.38,
@@ -1970,18 +1971,11 @@ function updateLightningShakePhysics()
     }
   }
 
-  // damped spring model
-  const spring = 0.18;
-  const damping = 0.80;
-
-  lightningShakeVelocityX += -lightningShakeOffsetX * spring;
-  lightningShakeVelocityY += -lightningShakeOffsetY * spring;
-
-  lightningShakeVelocityX *= damping;
-  lightningShakeVelocityY *= damping;
-
-  lightningShakeOffsetX += lightningShakeVelocityX;
-  lightningShakeOffsetY += lightningShakeVelocityY;
+  // disable low-frequency/glide shake so lightning camera motion stays high-frequency only
+  lightningShakeVelocityX = 0.0;
+  lightningShakeVelocityY = 0.0;
+  lightningShakeOffsetX = 0.0;
+  lightningShakeOffsetY = 0.0;
 
   // high-frequency lightning jitter with configurable frequency and faster decay
   lightningShakeHFAmplitude *= guiControls.shakeDecay;
@@ -3936,6 +3930,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     if (!sunIsUp)
       sunIntensity *= 0.04;
 
+    if (!gl)
+      return;
+
     gl.useProgram(boundaryProgram);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vorticity'), guiControls.vorticity);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'landEvaporation'), guiControls.landEvaporation);
@@ -4180,6 +4177,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() {
         if (!sunIsUp)
       sunIntensity *= 0.04;
+
+    if (!gl)
+      return;
 
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vorticity'), guiControls.vorticity);
@@ -4442,7 +4442,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     UI_folder.add(guiControls, 'allowEditingWhenPaused').name('Edit While Paused');
     UI_folder.add(guiControls, 'allowCaves')
       .onChange(function() {
-        gl.useProgram(boundaryProgram);
+        if (!gl)
+      return;
+
+    gl.useProgram(boundaryProgram);
         gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'allowCaves'), guiControls.allowCaves ? 1 : 0);
       })
       .name('Allow Caves');
@@ -4511,6 +4514,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       if (!sunIsUp)
       sunIntensity *= 0.04;
 
+    if (!gl)
+      return;
+
     gl.useProgram(boundaryProgram);
       gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dynamicWaterTemperature'), guiControls.dynamicWaterTemperature ? 1.0 : 0.0);
     });
@@ -4520,6 +4526,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         if (!sunIsUp)
       sunIntensity *= 0.04;
 
+    if (!gl)
+      return;
+
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'landEvaporation'), guiControls.landEvaporation);
       })
@@ -4528,6 +4537,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() {
         if (!sunIsUp)
       sunIntensity *= 0.04;
+
+    if (!gl)
+      return;
 
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterEvaporation'), guiControls.waterEvaporation);
@@ -4541,6 +4553,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapHeat'), guiControls.evapHeat);
         if (!sunIsUp)
       sunIntensity *= 0.04;
+
+    if (!gl)
+      return;
 
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'evapHeat'), guiControls.evapHeat);
@@ -4566,6 +4581,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         if (!sunIsUp)
       sunIntensity *= 0.04;
 
+    if (!gl)
+      return;
+
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterWeight'), guiControls.waterWeight);
       })
@@ -4575,6 +4593,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() {
         if (!sunIsUp)
       sunIntensity *= 0.04;
+
+    if (!gl)
+      return;
 
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
@@ -4586,6 +4607,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         if (!sunIsUp)
       sunIntensity *= 0.04;
 
+    if (!gl)
+      return;
+
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'surfaceRunoffRate'), guiControls.surfaceRunoffRate);
       })
@@ -4595,6 +4619,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() {
         if (!sunIsUp)
       sunIntensity *= 0.04;
+
+    if (!gl)
+      return;
 
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'soilInfiltrationRate'), guiControls.soilInfiltrationRate);
@@ -4606,6 +4633,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         if (!sunIsUp)
       sunIntensity *= 0.04;
 
+    if (!gl)
+      return;
+
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'canopyInterception'), guiControls.canopyInterception);
       })
@@ -4615,6 +4645,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() {
         if (!sunIsUp)
       sunIntensity *= 0.04;
+
+    if (!gl)
+      return;
 
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'urbanHeatIslandStrength'), guiControls.urbanHeatIslandStrength);
@@ -4626,6 +4659,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         if (!sunIsUp)
       sunIntensity *= 0.04;
 
+    if (!gl)
+      return;
+
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'coastalMixing'), guiControls.coastalMixing);
       })
@@ -4635,6 +4671,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() {
         if (!sunIsUp)
       sunIntensity *= 0.04;
+
+    if (!gl)
+      return;
 
     gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterAlbedoShift'), guiControls.waterAlbedoShift);
@@ -4846,6 +4885,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       if (!sunIsUp)
       sunIntensity *= 0.04;
 
+    if (!gl)
+      return;
+
     gl.useProgram(boundaryProgram);
       gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudLifetimeBoost'), guiControls.cloudLifetimeBoost);
     });
@@ -4882,6 +4924,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     lightning_folder.add(guiControls, 'cameraShake').name('Camera Shake');
     lightning_folder.add(guiControls, 'shakeFrequency', 0.5, 3.0, 0.01).name('Shake Frequency');
     lightning_folder.add(guiControls, 'shakeDecay', 0.60, 0.92, 0.005).name('Shake Decay');
+    lightning_folder.add(guiControls, 'lightningMotionBlur', 0.0, 1.0, 0.01).name('Shake Motion Blur');
     lightning_folder.add(guiControls, 'lightningTempShakeMult', 0.5, 2.5, 0.01).name('Temp -> Shake Mult');
     lightning_folder.add(guiControls, 'lightningComplexity', 0.4, 2.6, 0.01).name('Lightning Complexity').onChange(function() {
       gl.useProgram(precipitationProgram);
@@ -4975,6 +5018,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         'Air Quality' : 'DISP_AIRQUALITY'
       })
       .name('Display Mode')
+      .onChange(function() { guiControls.displayMode = sanitizeDisplayMode(guiControls.displayMode); })
       .listen();
     display_folder.add(guiControls, 'exposure', 0.5, 5.0, 0.01)
       .onChange(function() {
@@ -7021,6 +7065,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.useProgram(postProcessingProgram);
   gl.uniform1i(gl.getUniformLocation(postProcessingProgram, 'hdrTex'), 0);
   gl.uniform1i(gl.getUniformLocation(postProcessingProgram, 'bloomTex'), 1);
+  gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'motionBlurStrength'), 0.0);
 
 
   gl.useProgram(isolateBrightPartsProgram);
@@ -7282,6 +7327,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             if (!sunIsUp)
       sunIntensity *= 0.04;
 
+    if (!gl)
+      return;
+
     gl.useProgram(boundaryProgram);
             gl.uniform1f(uniformLocation_boundaryProgram_iterNum, iterNum);
             gl.activeTexture(gl.TEXTURE0);
@@ -7472,6 +7520,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     } else {
       gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
     }
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'motionBlurStrength'), clamp(guiControls.lightningMotionBlur + lightningShakeHFAmplitude * 18.0, 0.0, 1.0));
 
     if (inputType == 0) {
       // clicking while tool is set to flashlight(NONE)
@@ -7955,6 +8004,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   function onUpdateTimeOfDaySlider()
   {
+    if (!simDateTime)
+      simDateTime = new Date();
     let minutes = (guiControls.timeOfDay % 1) * 60;
     simDateTime.setHours(guiControls.timeOfDay, minutes);
     updateSunlight();
@@ -7962,6 +8013,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   function onUpdateMonthSlider()
   {
+    if (!simDateTime)
+      simDateTime = new Date();
     let month = guiControls.month - 0.96;
     let date = (month % 1) * 30;
     simDateTime.setMonth(month, date);
@@ -7970,6 +8023,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   function updateSunlight(deltaT_hours)
   {
+    if (!simDateTime)
+      simDateTime = new Date();
     if (deltaT_hours != 'MANUAL_ANGLE') {
       if (deltaT_hours != null) {                                                   // increment time
         simDateTime = new Date(simDateTime.getTime() + deltaT_hours * 3600 * 1000); // convert hours to ms and add to current date
@@ -8022,6 +8077,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     if (!sunIsUp)
       sunIntensity *= 0.04;
 
+    if (!gl)
+      return;
+
     gl.useProgram(boundaryProgram);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'sunAngle'), solarZenithAngle);
     gl.useProgram(lightingProgram);
@@ -8033,9 +8091,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.useProgram(skyBackgroundDisplayProgram);
     gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'minShadowLight'), minShadowLight);
 
-    if (guiControls.dayNightCycle)
+    if (guiControls.dayNightCycle && clockEl)
       clockEl.innerHTML = dateTimeStr(); // update clock
-    else
+    else if (clockEl)
       clockEl.innerHTML = '';
   }
 

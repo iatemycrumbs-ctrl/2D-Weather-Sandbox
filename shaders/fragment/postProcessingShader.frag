@@ -14,6 +14,7 @@ uniform vec2 resolution; // sim resolution
 uniform vec2 texelSize;
 
 uniform float exposure;
+uniform float motionBlurStrength;
 
 uniform sampler2D hdrTex;
 uniform sampler2D bloomTex;
@@ -25,6 +26,12 @@ out vec4 fragmentColor;
 void main()
 {
   vec3 outputCol = texture(hdrTex, texCoord).rgb;
+
+  vec2 blurDir = normalize(vec2(0.85, 0.52));
+  vec2 blurStep = texelSize * blurDir * motionBlurStrength * 4.0;
+  vec3 blurA = texture(hdrTex, texCoord + blurStep).rgb;
+  vec3 blurB = texture(hdrTex, texCoord - blurStep).rgb;
+  outputCol = mix(outputCol, (outputCol + blurA + blurB) / 3.0, motionBlurStrength * 0.75);
 
   vec3 bloom = texture(bloomTex, texCoord).rgb;
 
