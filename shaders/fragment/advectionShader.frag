@@ -242,8 +242,21 @@ void main()
       }
 
       if (water[SOIL_MOISTURE] > 0.0 && tempC > 0.0) { // water evaporating from ground
-        float evaporation = max((maxWater(CtoK(tempC)) - water[TOTAL]) * 0.00001, 0.);
+        float vaporDeficit = max(maxWater(CtoK(tempC)) - water[TOTAL], 0.0);
+        float windDrying = map_rangeC(length(baseX0Yp.xy), 0.0, 0.03, 0.85, 1.95);
+        float moistureAvail = map_rangeC(water[SOIL_MOISTURE], 0.0, 60.0, 0.45, 1.35);
+        float landTypeFactor = 1.0;
+        if (wall[TYPE] == WALLTYPE_URBAN)
+          landTypeFactor = 0.68;
+        else if (wall[TYPE] == WALLTYPE_INDUSTRIAL)
+          landTypeFactor = 0.52;
+        else if (wall[TYPE] == WALLTYPE_FIRE)
+          landTypeFactor = 1.55;
+
+        float evaporation = vaporDeficit * 0.0000085 * windDrying * moistureAvail * landTypeFactor;
+        evaporation = min(evaporation, water[SOIL_MOISTURE] * 0.14 + 0.0012);
         water[SOIL_MOISTURE] -= evaporation;
+        water[TOTAL] += evaporation * 0.85;
       }
     }
   }

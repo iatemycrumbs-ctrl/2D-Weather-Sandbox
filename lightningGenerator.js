@@ -1,116 +1,157 @@
+function createRng(seed)
+{
+  let state = (seed >>> 0) || 1;
+  return function rand()
+  {
+    state = (1664525 * state + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
 onmessage = (event) => {
-  const msg = event.data;
-  // console.log(msg);
-  let imgElement = generateLightningBolt(msg.width, msg.height);
-  postMessage(imgElement);
+  const msg = event.data || {};
+  const width = Math.max(64, Math.floor(msg.width || 1024));
+  const height = Math.max(128, Math.floor(msg.height || 2048));
+  const seed = (msg.seed ?? ((Date.now() ^ (width * 2654435761)) >>> 0)) >>> 0;
+  const imageData = generateLightningBolt(width, height, seed);
+  postMessage({id : msg.id, imageData});
 };
 
-// const lightningAngle = 1;
-
-
-function generateLightningBolt(width, height)
+function generateLightningBolt(width, height, seed)
 {
   const lightningCanvas = new OffscreenCanvas(width, height);
-  const ctx = lightningCanvas.getContext('2d');
+  const ctx = lightningCanvas.getContext('2d', {alpha : true, desynchronized : true});
+  const rand = createRng(seed);
 
   ctx.clearRect(0, 0, width, height);
 
+  const channels = {
+    core : [],
+    branch : [],
+    glow : []
+  };
 
-  function genLightningColor(lineWidth)
-  {
-    const colR = 12;
-    const colG = 12;
-    const colB = 12;
-    brightness = Math.pow(lineWidth, 2.0);
-    return `rgb(${colR * brightness}, ${colG * brightness}, ${colB * brightness})`;
-  }
+  const trunkStartX = width * (0.48 + (rand() - 0.5) * 0.16);
+  const trunkState = {
+    x : trunkStartX,
+    y : 0,
+    angle : (rand() - 0.5) * 0.08,
+    step : Math.max(1.2, height / 1300),
+    width : Math.max(2.6, width / 540)
+  };
 
+  growBranch(trunkState, {
+    biasAngle : 0,
+    maxSteps : 5000,
+    splitChance : 0.065,
+    wiggle : 0.31,
+    descendBias : 0.18,
+    widthLoss : 0.986,
+    minWidth : 0.55,
+    forkDepth : 0,
+    maxForkDepth : 4,
+    energy : 1.0
+  });
 
-  ctx.beginPath();
-
-  let startX = width / 2.0;
-  let startY = 0;
-  let angle = Math.PI / 6.;
-  let lineWidth = 9.0;
-  const targetAngle = 0.0;
-
-  ctx.moveTo(startX, startY);
-
-  ctx.lineWidth = lineWidth;
-
-  while (startY < height) {
-
-    const nextX = startX + Math.sin(angle);
-    const nextY = startY + Math.cos(angle);
-
-    angle += (Math.random() - 0.5) * 1.4;  // 0.7
-
-    angle -= (angle - targetAngle) * 0.08; // keep it going in a general direction
-
-    ctx.lineTo(nextX, nextY);
-
-    startX = nextX;
-    startY = nextY;
-
-
-    if (Math.random() < 0.015 * (1. - nextY / height)) { // branch
-      ctx.strokeStyle = genLightningColor(lineWidth);
-      ctx.stroke();
-      drawBranch(nextX, nextY, targetAngle + (Math.random() - 0.5) * 2.5, lineWidth * 0.5 * Math.random());
-      ctx.beginPath();
-      ctx.moveTo(nextX, nextY); // move back to last position after drawing branch
-      ctx.lineWidth = lineWidth;
-    }
-  }
-  ctx.strokeStyle = genLightningColor(lineWidth);
-  ctx.stroke();
-
+  drawSegments(channels.glow, 'rgba(196, 222, 255, 0.24)', 1.9, 'screen');
+  drawSegments(channels.branch, 'rgba(228, 240, 255, 0.92)', 1.0, 'source-over');
+  drawSegments(channels.core, 'rgba(255, 255, 255, 1.0)', 0.52, 'lighter');
 
   return ctx.getImageData(0, 0, width, height);
 
-
-  function drawBranch(startX, startY, targetAngle, line_width)
+  function drawSegments(segments, color, widthScale, compositeOp)
   {
-    let angle = targetAngle;
+    ctx.save();
+    ctx.globalCompositeOperation = compositeOp;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = color;
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      ctx.beginPath();
+      ctx.lineWidth = Math.max(0.3, seg.w * widthScale);
+      ctx.moveTo(seg.x0, seg.y0);
+      ctx.lineTo(seg.x1, seg.y1);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineWidth = line_width;
+  function pushSegment(x0, y0, x1, y1, w, energy)
+  {
+    const seg = {x0, y0, x1, y1, w};
+    channels.glow.push(seg);
+    if (energy > 0.1)
+      channels.branch.push(seg);
+    if (energy > 0.35)
+      channels.core.push(seg);
+  }
 
-    while (startY < height) {
+  function growBranch(state, cfg)
+  {
+    let local = {
+      x : state.x,
+      y : state.y,
+      angle : state.angle,
+      step : state.step,
+      width : state.width
+    };
 
-      const nextX = startX + Math.sin(angle);
-      const nextY = startY + Math.cos(angle);
+    for (let i = 0; i < cfg.maxSteps; i++) {
+      if (local.y >= height || local.width <= cfg.minWidth)
+        return;
 
-      angle += (Math.random() - 0.5) * 0.7;
+      const wiggleForce = (rand() - 0.5) * cfg.wiggle;
+      const returnToCenter = (trunkStartX - local.x) / width * 0.18;
+      local.angle += wiggleForce + returnToCenter;
+      local.angle *= 0.95;
+      local.angle += cfg.biasAngle;
 
-      angle -= (angle - targetAngle) * 0.08; // keep it going in a general direction
+      const dx = Math.sin(local.angle) * local.step;
+      const dy = Math.max(0.45, Math.cos(local.angle) * local.step + cfg.descendBias * local.step);
 
-      ctx.lineTo(nextX, nextY);
+      const nextX = clamp(local.x + dx, 0, width - 1);
+      const nextY = local.y + dy;
 
-      startX = nextX;
-      startY = nextY;
+      pushSegment(local.x, local.y, nextX, nextY, local.width, cfg.energy);
 
-      if (Math.random() < 0.018) { // reduce width
+      local.x = nextX;
+      local.y = nextY;
+      local.width *= cfg.widthLoss;
 
-        ctx.strokeStyle = genLightningColor(line_width);
-        ctx.stroke();
-        line_width -= 0.2;
+      const depthPenalty = cfg.forkDepth * 0.15;
+      const attenuation = 1.0 - local.y / height;
+      const dynamicSplitChance = Math.max(0.0, cfg.splitChance * attenuation * (1.0 - depthPenalty));
+      if (cfg.forkDepth < cfg.maxForkDepth && rand() < dynamicSplitChance) {
+        const branchDir = rand() < 0.5 ? -1 : 1;
+        growBranch({
+          x : local.x,
+          y : local.y,
+          angle : local.angle + branchDir * (0.45 + rand() * 0.5),
+          step : local.step * (0.82 + rand() * 0.22),
+          width : local.width * (0.56 + rand() * 0.18)
+        }, {
+          biasAngle : branchDir * (0.01 + rand() * 0.03),
+          maxSteps : Math.floor(cfg.maxSteps * (0.28 + rand() * 0.32)),
+          splitChance : cfg.splitChance * 0.82,
+          wiggle : cfg.wiggle * (0.92 + rand() * 0.24),
+          descendBias : cfg.descendBias * (0.92 + rand() * 0.15),
+          widthLoss : cfg.widthLoss * 0.996,
+          minWidth : cfg.minWidth * 0.92,
+          forkDepth : cfg.forkDepth + 1,
+          maxForkDepth : cfg.maxForkDepth,
+          energy : cfg.energy * 0.74
+        });
+      }
 
-        if (line_width < 0.1)
-          return;
-
-        if (Math.random() < 0.1) { // branch 0.005
-
-          drawBranch(nextX, nextY, targetAngle + (Math.random() - 0.5) * 1.5, line_width);
-        }
-
-        ctx.beginPath();
-        ctx.moveTo(nextX, nextY); // move back to last position after drawing branch
-        ctx.lineWidth = line_width;
+      if (local.y > height * (0.9 + rand() * 0.08) && rand() < 0.16) {
+        local.width *= 0.82;
       }
     }
-    ctx.strokeStyle = genLightningColor(line_width);
-    ctx.stroke();
   }
+}
+
+function clamp(num, min, max)
+{
+  return Math.min(Math.max(num, min), max);
 }
