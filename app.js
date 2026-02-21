@@ -506,7 +506,7 @@ const guiControls_default = {
   lightningFlashRate : 1.35,
   lightningComplexity : 1.0,
   multiStrokeLightning : 1.0,
-  lightningFlashPersistence : 1.0,
+  lightningFlashPersistence : 0.72,
   lightningTempMinK : 9000.0,
   lightningTempMaxK : 33000.0,
   precipitationVisualBoost : 1.0,
@@ -787,11 +787,13 @@ function maxWater(Td)
                   wf_pow); // w = ((Td)/(250))^(18) // Td in Kelvin, w in grams per m^3
 }
 
-function dewpoint(W)
+function dewpoint(W, tempK = 273.15)
 {
-  // Reworked dew point approximation from absolute humidity (g/m^3) to improve realism.
-  const absHumidity = Math.max(W, 0.0001);
-  const vaporPressure_hPa = clamp(absHumidity * 0.40, 0.01, 110.0);
+  // Reworked dew point from absolute humidity using ideal-gas vapor pressure relation.
+  const absHumidity = Math.max(W, 0.00001); // g/m^3
+  const safeTempK = clamp(tempK, 170.0, 340.0);
+  const vaporDensity = absHumidity * 0.001; // kg/m^3
+  const vaporPressure_hPa = clamp((vaporDensity * 461.5 * safeTempK) / 100.0, 0.01, 110.0);
   const lnRatio = Math.log(vaporPressure_hPa / 6.112);
   const TdC = (243.5 * lnRatio) / (17.67 - lnRatio);
   return CtoK(clamp(TdC, -90.0, 55.0));
@@ -1350,7 +1352,7 @@ class Weatherstation
       this.#waterTemperature = -100.;
     }
 
-    this.#dewpoint = KtoC(dewpoint(waterTextureValues[4 + 0]));
+    this.#dewpoint = KtoC(dewpoint(waterTextureValues[4 + 0], T));
 
     if (guiControls.realDewPoint) {
       this.#dewpoint = Math.min(this.#temperature, this.#dewpoint);
@@ -1547,7 +1549,7 @@ class WeatherBalloon
     }
 
     this.temperature = KtoC(potentialToRealT(baseValues[3], clampedY / sim_res_y));
-    this.dewpoint = KtoC(dewpoint(waterValues[0]));
+    this.dewpoint = KtoC(dewpoint(waterValues[0], CtoK(this.temperature)));
 
     let altitudeM = clampedY * cellHeight;
     let hydrostaticPressure = 1013.25 * Math.exp(-altitudeM / 8400.0);
@@ -4217,6 +4219,23 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     // add functions to guicontrols object
     guiControls.download = function() { prepareDownload(); };
 
+    guiControls.recreateSimulation = function() {
+      if (!confirm('Recreate the simulation from the current initial setup and terrain?'))
+        return;
+
+      setupPrecipitationBuffers();
+      setupTextures();
+      even = true;
+      frameNum = 0;
+      iterNum = 0;
+      lightningRods = [];
+      pendingLightningPayloads.length = 0;
+      pendingLightningTextureWrites.length = 0;
+      for (let i = 0; i < weatherStations.length; i++) {
+        weatherStations[i].clearChart();
+      }
+    };
+
     guiControls.resetSettings = function() {
       if (confirm('Are you sure you want to reset all settings to default?')) {
         datGui.destroy();                                 // remove datGui completely
@@ -5304,6 +5323,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     advanced_folder.add(guiControls, 'resetSettings').name('Reset all settings');
 
     datGui.add(guiControls, 'paused').onChange(handlePause).name('Paused').listen();
+    datGui.add(guiControls, 'recreateSimulation').name('Recreate Simulation');
     datGui.add(guiControls, 'download').name('Save Simulation to File');
 
     // keep core controls visible when simulation starts
@@ -5567,9 +5587,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
         if (wallTextureValues[4 * y + 1] != 0) { // fluid cell
 
-          var dewPoint = KtoC(dewpoint(waterTextureValues[4 * y]));
-
           var temp = baseTextureValues[4 * y + 3] - ((y / sim_res_y) * guiControls.simHeight * guiControls.dryLapseRate) / 1000.0 - 273.15;
+          var dewPoint = KtoC(dewpoint(waterTextureValues[4 * y], CtoK(temp)));
           if (guiControls.realDewPoint) {
             dewPoint = Math.min(temp, dewPoint);
           }

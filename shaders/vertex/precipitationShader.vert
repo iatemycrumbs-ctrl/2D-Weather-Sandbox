@@ -308,7 +308,7 @@ void main()
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
           lightningSpawnChance *= (0.18 + electricPotential * 1.9);
           lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.50) * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.75, 1.55);
-          lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.18) * lightningFrequencyBoost;
+          lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.42) * lightningFrequencyBoost;
 
           float icWeight = max(icLightningRatio, 0.0);
           float ctgWeight = max(ctgLightningRatio, 0.0);
@@ -320,6 +320,8 @@ void main()
           float aerosolElectric = map_rangeC(aerosolLoad, 0.2, 2.5, 0.7, 1.25);
           lightningSpawnChance *= cgBoost * organizationElectric * aerosolElectric;
           lightningSpawnChance *= map_rangeC(lightningBranching * lightningComplexity, 0.2, 4.0, 0.68, 1.95);
+          float stratiformFloor = max(cloudPlusPrecipDensity - (lightningCloudDensityThreshold + 0.06), 0.0) * 0.015;
+          lightningSpawnChance = max(lightningSpawnChance, stratiformFloor * lightningFrequencyBoost);
 
           float rodAttraction = 0.0;
           vec2 nearestRod = vec2(0.0);
@@ -351,7 +353,10 @@ void main()
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
           float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.25, 0.58), 7.0 + abs(lightningData[INTENSITY]) * (2.8 + multiStrokeLightning * 2.1));
           bool lightningChannelFree = lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
-          if (lightningChannelFree && strikeRand < lightningSpawnChance) {
+          bool overdueStormRecharge = lightningChannelFree && previousLightningAge > (120.0 + 40.0 * lightningMinInterval)
+                                    && cloudPlusPrecipDensity > lightningCloudDensityThreshold + 0.22
+                                    && electricPotential > 0.20;
+          if ((lightningChannelFree && strikeRand < lightningSpawnChance) || overdueStormRecharge) {
             lightningSpawned = true;
             isActive = false;
             gl_PointSize = 1.0;

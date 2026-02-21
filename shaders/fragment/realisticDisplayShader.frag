@@ -167,14 +167,14 @@ const float lightningTexAspect = lightningTexRes.x / lightningTexRes.y;
 float calcLightningTime(float startIterNum)
 {
   float lightningTime = iterNum - startIterNum;
-  return lightningTime / (3.8 * lightningFlashPersistence);
+  return lightningTime / (2.55 * lightningFlashPersistence);
 }
 
 float lightningChannelEnvelope(float T, bool isIC)
 {
   float rise = 1.0 - exp(-T * (isIC ? 10.0 : 13.0));
-  float decay = exp(-T * (isIC ? 1.9 : 2.6));
-  float glowTail = exp(-T * (isIC ? 0.62 : 0.85)) * (isIC ? 0.32 : 0.24);
+  float decay = exp(-T * (isIC ? 2.6 : 3.4));
+  float glowTail = exp(-T * (isIC ? 0.95 : 1.25)) * (isIC ? 0.24 : 0.18);
   return rise * decay * (isIC ? 2.2 : 3.0) + glowTail;
 }
 
