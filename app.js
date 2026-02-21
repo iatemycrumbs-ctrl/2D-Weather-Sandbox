@@ -7935,12 +7935,15 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
 
       // draw clouds and terrain
+      const lightningAnimIter = guiControls.paused ? frameNum : iterNum;
+
       gl.useProgram(realisticDisplayProgram);
       gl.uniform2f(gl.getUniformLocation(realisticDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
       gl.uniform3f(gl.getUniformLocation(realisticDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
       gl.uniform4f(gl.getUniformLocation(realisticDisplayProgram, 'cursor'), mouseXinSim, mouseYinSim, guiControls.brushSize * 0.5, cursorType);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'Xmult'), horizontalDisplayMult);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'iterNum'), iterNum);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningAnimIter'), lightningAnimIter);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
@@ -7956,7 +7959,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       }
 
 
-      let lightningTexNum = Math.floor(iterNum / 400) % numLightningTextures;
+      let lightningTexNum = Math.floor(lightningAnimIter / 400) % numLightningTextures;
       // console.log(lightningTexNum)
 
       gl.activeTexture(gl.TEXTURE7);

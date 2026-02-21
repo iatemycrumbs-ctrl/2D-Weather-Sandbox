@@ -71,6 +71,7 @@ uniform vec4 cursor; // Xpos   Ypos  Size   type
 uniform float displayVectorField;
 
 uniform float iterNum;
+uniform float lightningAnimIter;
 
 out vec4 fragmentColor;
 
@@ -166,7 +167,7 @@ const float lightningTexAspect = lightningTexRes.x / lightningTexRes.y;
 
 float calcLightningTime(float startIterNum)
 {
-  float lightningTime = iterNum - startIterNum;
+  float lightningTime = lightningAnimIter - startIterNum;
   return lightningTime / (2.55 * lightningFlashPersistence);
 }
 
