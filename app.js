@@ -597,9 +597,7 @@ var frameNum = 0;
 var lastFrameNum = 0;
 
 var iterNum = 0;
-var lightningPauseStartFrame = 0;
-var lightningPauseStartIter = 0;
-var lightningWasPaused = false;
+var lightningVisualClock = 0;
 
 var lightningShakeOffsetX = 0.0;
 var lightningShakeOffsetY = 0.0;
@@ -4231,9 +4229,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       even = true;
       frameNum = 0;
       iterNum = 0;
-      lightningPauseStartFrame = 0;
-      lightningPauseStartIter = 0;
-      lightningWasPaused = false;
+      lightningVisualClock = 0;
+      gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT, new Float32Array([ 0.0, 0.0, -10000.0, 0.0 ]));
       lightningRods = [];
       pendingLightningPayloads.length = 0;
       pendingLightningTextureWrites.length = 0;
@@ -6784,7 +6782,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   const lightTexture_1 = gl.createTexture();
   const precipitationFeedbackTexture = gl.createTexture();
   const precipitationDepositionTexture = gl.createTexture();
-  const lightningDataTexture = gl.createTexture(); // single pixel texture holding location and timing of current lightning strike
+  const lightningDataTexture = gl.createTexture(); // simulation lightning data (precipitation coupling)
+  const lightningRenderDataTexture = gl.createTexture(); // render lightning data with visual-time start
 
   // Static texures:
   const noiseTexture = gl.createTexture();
@@ -6934,6 +6933,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 1, 0, gl.RGBA, gl.FLOAT, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+  gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 1, 0, gl.RGBA, gl.FLOAT, new Float32Array([ 0.0, 0.0, -10000.0, 0.0 ]));
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
@@ -7720,7 +7724,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
               // console.log('lightningDataValues: ', lightningDataValues[0], lightningDataValues[1], lightningDataValues[2], iterNum, lightningDataValues[3]);
 
               if (Math.round(lightningDataValues[2]) == iterNum) {
-                const lightningIntensity = Math.pow(lightningDataValues[3], 2.0);
+                const lightningSignedIntensity = lightningDataValues[3];
+                const lightningIntensity = Math.pow(Math.abs(lightningSignedIntensity), 2.0);
+
+                gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
+                gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT,
+                                 new Float32Array([ lightningDataValues[0], lightningDataValues[1], lightningVisualClock, lightningSignedIntensity ]));
 
                 triggerLightningEffects(lightningDataValues[0], lightningDataValues[1], lightningIntensity);
 
@@ -7941,17 +7950,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
 
       // draw clouds and terrain
-      if (guiControls.paused && !lightningWasPaused) {
-        lightningPauseStartFrame = frameNum;
-        lightningPauseStartIter = iterNum;
-        lightningWasPaused = true;
-      } else if (!guiControls.paused && lightningWasPaused) {
-        lightningWasPaused = false;
-      }
-
-      const lightningAnimIter = guiControls.paused
-        ? lightningPauseStartIter + (frameNum - lightningPauseStartFrame)
-        : iterNum;
+      lightningVisualClock += 1.0;
+      const lightningAnimIter = lightningVisualClock;
 
       gl.useProgram(realisticDisplayProgram);
       gl.uniform2f(gl.getUniformLocation(realisticDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
@@ -7981,7 +7981,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.activeTexture(gl.TEXTURE7);
       gl.bindTexture(gl.TEXTURE_2D, lightningTextures[lightningTexNum]);
       gl.activeTexture(gl.TEXTURE8);
-      gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
+      gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
 
       gl.activeTexture(gl.TEXTURE9);
       gl.bindTexture(gl.TEXTURE_2D, ambientLightFBOs[0].texture);
