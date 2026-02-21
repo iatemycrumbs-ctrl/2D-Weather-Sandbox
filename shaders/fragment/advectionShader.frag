@@ -316,10 +316,14 @@ void main()
       water[SMOKE] += userInputValues[BRUSH_INTENSITY];
       water[SMOKE] = min(max(water[SMOKE], 0.0), 2.0);
 
-    } else if (userInputType == 23 && wall[DISTANCE] != 0) { // SAN tool: lofted sand/dust plume
-      water[SMOKE] += userInputValues[BRUSH_INTENSITY] * 1.8;
-      base[TEMPERATURE] += userInputValues[BRUSH_INTENSITY] * 40.0;
-      water[SMOKE] = min(max(water[SMOKE], 0.0), 3.5);
+    } else if (userInputType == 27) { // local heating + drying
+      float heating = userInputValues[BRUSH_INTENSITY] * 55.0;
+      base[TEMPERATURE] += heating;
+
+      float dryMult = clamp(0.30 + abs(userInputValues[BRUSH_INTENSITY]) * 0.75, 0.0, 2.0);
+      if (wall[DISTANCE] == 0 && wall[TYPE] != WALLTYPE_WATER && texture(wallTex, texCoordX0Yp)[DISTANCE] != 0)
+        water[SOIL_MOISTURE] = max(water[SOIL_MOISTURE] - max(userInputValues[BRUSH_INTENSITY], 0.0) * 14.0 * dryMult, 0.0);
+      water[TOTAL] = max(water[TOTAL] - max(userInputValues[BRUSH_INTENSITY], 0.0) * 0.22 * dryMult, 0.0);
 
     } else if (userInputType == 4) {                                                 // drag/move air
 
@@ -381,6 +385,16 @@ void main()
           }
           break;
 
+        case 28: // sand terrain tool
+          if (wall[DISTANCE] == 0 && wall[TYPE] != WALLTYPE_WATER && texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) {
+            wall[TYPE] = WALLTYPE_LAND;
+            wall[VEGETATION] = int(clamp(float(wall[VEGETATION]) - 4.0, 0.0, 127.0));
+            water[SOIL_MOISTURE] = max(water[SOIL_MOISTURE] - max(userInputValues[BRUSH_INTENSITY], 0.0) * 16.0, 0.0);
+            water[SNOW] = max(water[SNOW] - max(userInputValues[BRUSH_INTENSITY], 0.0) * 0.7, 0.0);
+            base[TEMPERATURE] += max(userInputValues[BRUSH_INTENSITY], 0.0) * 12.0;
+          }
+          break;
+
         case 20:                                                                                                      // add soil moisture
           if (wall[DISTANCE] == 0 && wall[TYPE] != WALLTYPE_WATER && texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) { // if land wall and no wall above
             water[SOIL_MOISTURE] += userInputValues[BRUSH_INTENSITY] * 10.0;
@@ -427,6 +441,8 @@ void main()
           } else if (userInputType == 16 || userInputType == 24) {
             if (wall[TYPE] == WALLTYPE_INDUSTRIAL) // remove industry/skyscraper
               wall[TYPE] = WALLTYPE_LAND;
+          } else if (userInputType == 28) {
+            water[SOIL_MOISTURE] = min(water[SOIL_MOISTURE] + abs(userInputValues[BRUSH_INTENSITY]) * 10.0, 40.0);
           } else if (userInputType == 20) {        // remove moisture
             water[SOIL_MOISTURE] += userInputValues[BRUSH_INTENSITY] * 10.0;
           } else if (userInputType == 21) {

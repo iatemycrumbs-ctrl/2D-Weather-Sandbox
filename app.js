@@ -4483,7 +4483,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       water : () => selectTool('TOOL_WATER'),
       smoke : () => selectTool('TOOL_SMOKE'),
       wind : () => selectTool('TOOL_WIND'),
-      sand : () => selectTool('TOOL_SAND'),
+      sandTerrain : () => selectTool('TOOL_SAND_TERRAIN'),
+      localHeatDry : () => selectTool('TOOL_LOCAL_HEAT_DRY'),
+      lightningGround : () => selectTool('TOOL_LIGHTNING_GROUND'),
       land : () => selectTool('TOOL_WALL_LAND'),
       sea : () => selectTool('TOOL_WALL_SEA'),
       urban : () => selectTool('TOOL_WALL_URBAN'),
@@ -4512,9 +4514,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       'Skyscraper' : 'TOOL_SKYSCRAPER',
       'Lightning Rod' : 'TOOL_LIGHTNING_ROD',
       'Artificial Lightning Generator' : 'TOOL_ARTIFICIAL_LIGHTNING',
+      'Lightning (Ground Strike)' : 'TOOL_LIGHTNING_GROUND',
       'Fire' : 'TOOL_WALL_FIRE',
       'Smoke / Dust' : 'TOOL_SMOKE',
-      'Sand (SAN)' : 'TOOL_SAND',
+      'Sand Terrain' : 'TOOL_SAND_TERRAIN',
+      'Local Heating + Drying' : 'TOOL_LOCAL_HEAT_DRY',
       'Soil Moisture' : 'TOOL_WALL_MOIST',
       'Vegetation' : 'TOOL_VEGETATION',
       'Snow' : 'TOOL_WALL_SNOW',
@@ -4529,6 +4533,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     quickTools_folder.add(toolActions, 'water').name('Water Vapor / Cloud');
     quickTools_folder.add(toolActions, 'wind').name('Wind');
     quickTools_folder.add(toolActions, 'smoke').name('Smoke / Dust');
+    quickTools_folder.add(toolActions, 'sandTerrain').name('Sand Terrain');
+    quickTools_folder.add(toolActions, 'localHeatDry').name('Local Heating + Drying');
+    quickTools_folder.add(toolActions, 'lightningGround').name('Lightning (Ground Strike)');
     quickTools_folder.add(toolActions, 'land').name('Land');
     quickTools_folder.add(toolActions, 'sea').name('Lake / Sea');
     quickTools_folder.add(toolActions, 'urban').name('Urban');
@@ -6221,6 +6228,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       guiControls.tool = 'TOOL_WALL_RUNWAY';
     } else if (event.code == 'Backslash') {
       guiControls.tool = 'TOOL_WALL_INDUSTRIAL';
+    } else if (event.code == 'KeyJ') {
+      guiControls.tool = 'TOOL_SAND_TERRAIN';
+    } else if (event.code == 'KeyK') {
+      guiControls.tool = 'TOOL_LOCAL_HEAT_DRY';
+    } else if (event.code == 'KeyL') {
+      guiControls.tool = 'TOOL_LIGHTNING_GROUND';
     } else if (event.code == 'KeyN') {
       if (displayWeatherStations) {
         displayWeatherStations = false;
@@ -7446,8 +7459,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = 2;
         else if (guiControls.tool == 'TOOL_SMOKE')
           inputType = 3;
-        else if (guiControls.tool == 'TOOL_SAND')
-          inputType = 23;
+        else if (guiControls.tool == 'TOOL_LIGHTNING_GROUND')
+          inputType = 26;
+        else if (guiControls.tool == 'TOOL_LOCAL_HEAT_DRY')
+          inputType = 27;
+        else if (guiControls.tool == 'TOOL_SAND_TERRAIN')
+          inputType = 28;
         else if (guiControls.tool == 'TOOL_WIND')
           inputType = 4;
         else if (guiControls.tool == 'TOOL_WALL')
@@ -7480,8 +7497,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = 22;
 
         var intensity = guiControls.brushIntensity;
-        if (guiControls.tool == 'TOOL_SAND')
-          intensity *= 1.8;
+        if (guiControls.tool == 'TOOL_LOCAL_HEAT_DRY')
+          intensity *= 1.4;
 
         if (ctrlPressed) {
           intensity *= -1;

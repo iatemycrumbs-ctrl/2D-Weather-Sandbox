@@ -182,6 +182,30 @@ void main()
   feedback = vec4(0.0);
   deposition = vec2(0.0);
 
+  // Lightning Ground Strike tool: tap to force a cloud-to-ground strike near the cursor.
+  if (userInputType == 26 && gl_VertexID == 0 && userInputValues.x >= 0.0 && userInputValues.x <= 1.0) {
+    vec4 lightningDataNow = texture(lightningDataTex, vec2(0.5));
+    float previousLightningAge = iterNum - lightningDataNow[START_ITERNUM];
+    float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.2, 0.6), 6.0 + abs(lightningDataNow[INTENSITY]) * (2.0 + multiStrokeLightning * 1.5));
+    bool lightningChannelFree = lightningDataNow[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
+
+    if (lightningChannelFree) {
+      float sourceX = userInputValues.x;
+      float sourceY = clamp(max(userInputValues.y, 0.18), 0.18, 0.95);
+      float launchStrength = max(0.35 + abs(userInputValues.z) * 0.9, 0.35);
+      feedback.xy = vec2(sourceX, sourceY);
+      feedback[START_ITERNUM] = iterNum;
+      feedback[INTENSITY] = launchStrength;
+      isActive = false;
+      gl_PointSize = 1.0;
+      gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
+      position_out = newPos;
+      mass_out = newMass;
+      density_out = max(newDensity, 0.0);
+      return;
+    }
+  }
+
   // Artificial Lightning Generator tool: can only trigger from industrial cells and links to nearby cloud within ~100km.
   if (userInputType == 25 && gl_VertexID == 0 && userInputValues.x >= 0.0 && userInputValues.x <= 1.0) {
     float sourceX = userInputValues.x;
