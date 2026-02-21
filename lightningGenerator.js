@@ -28,7 +28,8 @@ function generateLightningBolt(width, height, seed)
   const channels = {
     core : [],
     branch : [],
-    glow : []
+    glow : [],
+    halo : []
   };
 
   const trunkStartX = width * (0.48 + (rand() - 0.5) * 0.16);
@@ -53,19 +54,25 @@ function generateLightningBolt(width, height, seed)
     energy : 1.0
   });
 
-  drawSegments(channels.glow, 'rgba(196, 222, 255, 0.24)', 1.9, 'screen');
-  drawSegments(channels.branch, 'rgba(228, 240, 255, 0.92)', 1.0, 'source-over');
+  drawSegments(channels.halo, 'rgba(130, 182, 255, 0.10)', 4.6, 'screen', 10.0);
+  drawSegments(channels.glow, 'rgba(196, 222, 255, 0.24)', 2.1, 'screen', 5.0);
+  drawSegments(channels.branch, 'rgba(220, 236, 255, 0.90)', 1.05, 'source-over');
   drawSegments(channels.core, 'rgba(255, 255, 255, 1.0)', 0.52, 'lighter');
+  drawVerticalBloom();
 
   return ctx.getImageData(0, 0, width, height);
 
-  function drawSegments(segments, color, widthScale, compositeOp)
+  function drawSegments(segments, color, widthScale, compositeOp, shadowBlur = 0.0)
   {
     ctx.save();
     ctx.globalCompositeOperation = compositeOp;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = color;
+    if (shadowBlur > 0.0) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = shadowBlur;
+    }
     for (let i = 0; i < segments.length; i++) {
       const seg = segments[i];
       ctx.beginPath();
@@ -77,9 +84,23 @@ function generateLightningBolt(width, height, seed)
     ctx.restore();
   }
 
+  function drawVerticalBloom()
+  {
+    const gradient = ctx.createLinearGradient(0, 0, 0, height);
+    gradient.addColorStop(0.0, 'rgba(70, 122, 255, 0.08)');
+    gradient.addColorStop(0.40, 'rgba(120, 165, 255, 0.06)');
+    gradient.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = gradient;
+    ctx.fillRect(width * 0.20, 0, width * 0.60, height);
+    ctx.restore();
+  }
+
   function pushSegment(x0, y0, x1, y1, w, energy)
   {
     const seg = {x0, y0, x1, y1, w};
+    channels.halo.push(seg);
     channels.glow.push(seg);
     if (energy > 0.1)
       channels.branch.push(seg);

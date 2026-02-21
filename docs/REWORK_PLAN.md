@@ -1,6 +1,10 @@
-# Weather Sandbox Rework Plan (v3)
+# Weather Sandbox Rework Plan (v4)
 
 This plan converts the broad rework request into a staged, shippable roadmap with explicit scope, dependencies, and acceptance criteria.
+
+## Update Log
+
+- **2026-02-21:** Reworked all tools under the unified toolset direction (Section 6) and reworked lightning generation visual effects as part of the next-gen lightning system (Section 1, Optical + Thermal Response).
 
 ## 0) Delivery Strategy
 
@@ -179,16 +183,29 @@ This plan converts the broad rework request into a staged, shippable roadmap wit
 
 ---
 
-## 10) Rework Misc Features / Debt Cleanup
+## 10) Old Feature Enhancement Pass (No Tweaks)
 
-### Scope
-- Input smoothing, camera behavior, overlay readability, save format compatibility, FPS telemetry rework, and evaporation model improvements.
+### Goals
+- Identify legacy core systems and enhance their fidelity/capability directly.
+- Do **not** spend this pass on small UX polish or minor toggle adjustments.
+
+### Old Core Features to Enhance
+1. **Lightning Engine (legacy path):** improve branching quality, channel persistence, and multi-stroke sequencing.
+2. **Precipitation System (legacy particles):** improve phase behavior, fall consistency, and terrain interaction.
+3. **Water/Wave Model (legacy surface motion):** improve wind coupling, shoreline damping, and storm-state response.
+4. **Display/Shader Stack (legacy mode-specific paths):** improve compositing consistency and remove outdated render branches.
 
 ### Work Items
-1. Rework FPS counter into frametime telemetry widget (avg/1% low, GPU-bound hint, simulation step time).
-2. Rework water evaporation with humidity/temperature/wind-coupled rates and clearer tuning controls.
-3. Add compatibility layer for older save files where needed; remove duplicated shader logic/dead uniforms.
-4. Add debug HUD + migration notes and release checklist.
+1. Build a short inventory of old feature modules still running in default scenarios.
+2. Replace or upgrade each listed legacy module with a stronger implementation (no micro-tweak-only tasks).
+3. Validate each enhancement in storm scenarios (calm, supercell, coastal, mountain).
+4. Remove deprecated fallback paths only after parity checks pass.
+
+### Acceptance Criteria
+- Each old core feature above has a shipped enhancement, not just a minor parameter tweak.
+- Lightning and precipitation visibly improve in structure/behavior versus baseline captures.
+- Water and display paths show measurable quality gains without regressions in default presets.
+- Legacy fallback code for replaced paths is either removed or fully gated behind explicit debug flags.
 
 ---
 
@@ -235,7 +252,7 @@ This plan converts the broad rework request into a staged, shippable roadmap wit
 2. **M1 Lightning Replacement + Precip foundation** (Sections 1 + 9)
 3. **M2 Rendering/Shader modernization** (Sections 4 + 8 + 7 + 12)
 4. **M3 UI/Tools/Fullscreen** (Sections 3 + 6)
-5. **M4 Radar + Feature polish/debt** (Sections 5 + 10)
+5. **M4 Radar + Old-feature enhancement pass** (Sections 5 + 10)
 
 ---
 
