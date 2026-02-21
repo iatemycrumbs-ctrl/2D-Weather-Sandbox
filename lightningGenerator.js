@@ -8,150 +8,210 @@ function createRng(seed)
   };
 }
 
+function clamp(num, min, max)
+{
+  return Math.min(Math.max(num, min), max);
+}
+
+function getQualityConfig(quality)
+{
+  if (quality == 'low') {
+    return {
+      trunkSteps : 340,
+      branchSteps : 95,
+      splitChance : 0.085,
+      maxDepth : 2,
+      haloWidth : 3.1,
+      glowWidth : 1.7,
+      branchWidth : 0.9,
+      coreWidth : 0.45,
+      haloAlpha : 0.20,
+      glowAlpha : 0.44,
+      bloomAlpha : 0.0,
+      branchDecay : 0.968
+    };
+  }
+
+  if (quality == 'medium') {
+    return {
+      trunkSteps : 490,
+      branchSteps : 140,
+      splitChance : 0.115,
+      maxDepth : 3,
+      haloWidth : 3.8,
+      glowWidth : 1.95,
+      branchWidth : 0.95,
+      coreWidth : 0.50,
+      haloAlpha : 0.24,
+      glowAlpha : 0.52,
+      bloomAlpha : 0.06,
+      branchDecay : 0.972
+    };
+  }
+
+  return {
+    trunkSteps : 680,
+    branchSteps : 185,
+    splitChance : 0.14,
+    maxDepth : 4,
+    haloWidth : 4.5,
+    glowWidth : 2.25,
+    branchWidth : 1.0,
+    coreWidth : 0.55,
+    haloAlpha : 0.29,
+    glowAlpha : 0.60,
+    bloomAlpha : 0.10,
+    branchDecay : 0.976
+  };
+}
+
 onmessage = (event) => {
   const msg = event.data || {};
-  const width = Math.max(64, Math.floor(msg.width || 1024));
-  const height = Math.max(128, Math.floor(msg.height || 2048));
+  const width = Math.max(96, Math.floor(msg.width || 1024));
+  const height = Math.max(192, Math.floor(msg.height || 2048));
   const seed = (msg.seed ?? ((Date.now() ^ (width * 2654435761)) >>> 0)) >>> 0;
-  const imageData = generateLightningBolt(width, height, seed);
-  postMessage({id : msg.id, imageData});
+  const quality = msg.quality || 'high';
+
+  try {
+    const imageData = generateLightningTexture(width, height, seed, quality);
+    postMessage({id : msg.id, imageData});
+  } catch (err) {
+    const fallback = new ImageData(width, height);
+    postMessage({id : msg.id, imageData : fallback, error : String(err)});
+  }
 };
 
-function generateLightningBolt(width, height, seed)
+function generateLightningTexture(width, height, seed, quality)
 {
-  const lightningCanvas = new OffscreenCanvas(width, height);
-  const ctx = lightningCanvas.getContext('2d', {alpha : true, desynchronized : true});
+  const cfg = getQualityConfig(quality);
   const rand = createRng(seed);
 
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d', {alpha : true, desynchronized : true});
   ctx.clearRect(0, 0, width, height);
 
-  const channels = {
-    core : [],
-    branch : [],
-    glow : []
-  };
+  const trunk = [];
+  const branches = [];
 
-  const trunkStartX = width * (0.48 + (rand() - 0.5) * 0.16);
-  const trunkState = {
-    x : trunkStartX,
+  const startX = width * (0.46 + (rand() - 0.5) * 0.12);
+  tracePath({
+    x : startX,
     y : 0,
-    angle : (rand() - 0.5) * 0.08,
-    step : Math.max(1.2, height / 1300),
-    width : Math.max(2.6, width / 540)
-  };
-
-  growBranch(trunkState, {
-    biasAngle : 0,
-    maxSteps : 5000,
-    splitChance : 0.065,
-    wiggle : 0.31,
-    descendBias : 0.18,
-    widthLoss : 0.986,
-    minWidth : 0.55,
-    forkDepth : 0,
-    maxForkDepth : 4,
-    energy : 1.0
+    angle : (rand() - 0.5) * 0.10,
+    step : Math.max(1.25, height / 1550),
+    width : Math.max(2.4, width / 720),
+    energy : 1.0,
+    depth : 0,
+    list : trunk,
+    maxSteps : cfg.trunkSteps
   });
 
-  drawSegments(channels.glow, 'rgba(196, 222, 255, 0.24)', 1.9, 'screen');
-  drawSegments(channels.branch, 'rgba(228, 240, 255, 0.92)', 1.0, 'source-over');
-  drawSegments(channels.core, 'rgba(255, 255, 255, 1.0)', 0.52, 'lighter');
+  drawSegments(ctx, trunk, `rgba(160, 205, 255, ${cfg.haloAlpha})`, cfg.haloWidth, 'screen');
+  drawSegments(ctx, trunk, `rgba(208, 232, 255, ${cfg.glowAlpha})`, cfg.glowWidth, 'screen');
+  drawSegments(ctx, branches, 'rgba(232, 244, 255, 0.72)', cfg.branchWidth, 'source-over');
+  drawSegments(ctx, trunk, 'rgba(255, 255, 255, 1.0)', cfg.coreWidth, 'lighter');
+
+  if (cfg.bloomAlpha > 0.0)
+    drawColumnBloom(ctx, width, height, cfg.bloomAlpha);
 
   return ctx.getImageData(0, 0, width, height);
 
-  function drawSegments(segments, color, widthScale, compositeOp)
+  function tracePath(state)
   {
-    ctx.save();
-    ctx.globalCompositeOperation = compositeOp;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = color;
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      ctx.beginPath();
-      ctx.lineWidth = Math.max(0.3, seg.w * widthScale);
-      ctx.moveTo(seg.x0, seg.y0);
-      ctx.lineTo(seg.x1, seg.y1);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  function pushSegment(x0, y0, x1, y1, w, energy)
-  {
-    const seg = {x0, y0, x1, y1, w};
-    channels.glow.push(seg);
-    if (energy > 0.1)
-      channels.branch.push(seg);
-    if (energy > 0.35)
-      channels.core.push(seg);
-  }
-
-  function growBranch(state, cfg)
-  {
-    let local = {
+    let current = {
       x : state.x,
       y : state.y,
       angle : state.angle,
       step : state.step,
-      width : state.width
+      width : state.width,
+      energy : state.energy,
+      depth : state.depth,
+      list : state.list,
+      maxSteps : state.maxSteps
     };
 
-    for (let i = 0; i < cfg.maxSteps; i++) {
-      if (local.y >= height || local.width <= cfg.minWidth)
+    for (let i = 0; i < current.maxSteps; i++) {
+      if (current.y >= height || current.width < 0.35)
         return;
 
-      const wiggleForce = (rand() - 0.5) * cfg.wiggle;
-      const returnToCenter = (trunkStartX - local.x) / width * 0.18;
-      local.angle += wiggleForce + returnToCenter;
-      local.angle *= 0.95;
-      local.angle += cfg.biasAngle;
+      const descendBias = 0.20 + current.depth * 0.02;
+      const wiggle = (rand() - 0.5) * (0.28 + current.depth * 0.08);
+      const centerPull = (startX - current.x) / width * 0.12;
 
-      const dx = Math.sin(local.angle) * local.step;
-      const dy = Math.max(0.45, Math.cos(local.angle) * local.step + cfg.descendBias * local.step);
+      current.angle = current.angle * 0.86 + wiggle + centerPull;
 
-      const nextX = clamp(local.x + dx, 0, width - 1);
-      const nextY = local.y + dy;
+      const dx = Math.sin(current.angle) * current.step;
+      const dy = Math.max(0.48, Math.cos(current.angle) * current.step + descendBias * current.step);
 
-      pushSegment(local.x, local.y, nextX, nextY, local.width, cfg.energy);
+      const x2 = clamp(current.x + dx, 0, width - 1);
+      const y2 = Math.min(height, current.y + dy);
+      const seg = {x0 : current.x, y0 : current.y, x1 : x2, y1 : y2, w : current.width};
 
-      local.x = nextX;
-      local.y = nextY;
-      local.width *= cfg.widthLoss;
+      if (current.depth === 0)
+        trunk.push(seg);
+      else
+        branches.push(seg);
 
-      const depthPenalty = cfg.forkDepth * 0.15;
-      const attenuation = 1.0 - local.y / height;
-      const dynamicSplitChance = Math.max(0.0, cfg.splitChance * attenuation * (1.0 - depthPenalty));
-      if (cfg.forkDepth < cfg.maxForkDepth && rand() < dynamicSplitChance) {
-        const branchDir = rand() < 0.5 ? -1 : 1;
-        growBranch({
-          x : local.x,
-          y : local.y,
-          angle : local.angle + branchDir * (0.45 + rand() * 0.5),
-          step : local.step * (0.82 + rand() * 0.22),
-          width : local.width * (0.56 + rand() * 0.18)
-        }, {
-          biasAngle : branchDir * (0.01 + rand() * 0.03),
-          maxSteps : Math.floor(cfg.maxSteps * (0.28 + rand() * 0.32)),
-          splitChance : cfg.splitChance * 0.82,
-          wiggle : cfg.wiggle * (0.92 + rand() * 0.24),
-          descendBias : cfg.descendBias * (0.92 + rand() * 0.15),
-          widthLoss : cfg.widthLoss * 0.996,
-          minWidth : cfg.minWidth * 0.92,
-          forkDepth : cfg.forkDepth + 1,
-          maxForkDepth : cfg.maxForkDepth,
-          energy : cfg.energy * 0.74
+      current.x = x2;
+      current.y = y2;
+      current.width *= cfg.branchDecay;
+      current.energy *= 0.992;
+
+      const altitudeFactor = 1.0 - current.y / height;
+      const depthPenalty = 1.0 - current.depth * 0.22;
+      const branchChance = cfg.splitChance * altitudeFactor * Math.max(depthPenalty, 0.15) * current.energy;
+
+      if (current.depth < cfg.maxDepth && rand() < branchChance) {
+        const dir = rand() < 0.5 ? -1 : 1;
+        tracePath({
+          x : current.x,
+          y : current.y,
+          angle : current.angle + dir * (0.42 + rand() * 0.45),
+          step : current.step * (0.78 + rand() * 0.24),
+          width : current.width * (0.52 + rand() * 0.16),
+          energy : current.energy * 0.84,
+          depth : current.depth + 1,
+          list : branches,
+          maxSteps : Math.floor(cfg.branchSteps * (0.45 + rand() * 0.65))
         });
-      }
-
-      if (local.y > height * (0.9 + rand() * 0.08) && rand() < 0.16) {
-        local.width *= 0.82;
       }
     }
   }
 }
 
-function clamp(num, min, max)
+function drawSegments(ctx, segments, color, widthScale, mode)
 {
-  return Math.min(Math.max(num, min), max);
+  if (!segments.length)
+    return;
+
+  ctx.save();
+  ctx.globalCompositeOperation = mode;
+  ctx.strokeStyle = color;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    ctx.beginPath();
+    ctx.lineWidth = Math.max(0.25, seg.w * widthScale);
+    ctx.moveTo(seg.x0, seg.y0);
+    ctx.lineTo(seg.x1, seg.y1);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawColumnBloom(ctx, width, height, alpha)
+{
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0.0, `rgba(112, 165, 255, ${alpha})`);
+  gradient.addColorStop(0.45, `rgba(180, 210, 255, ${alpha * 0.6})`);
+  gradient.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.fillStyle = gradient;
+  ctx.fillRect(width * 0.25, 0, width * 0.50, height);
+  ctx.restore();
 }
