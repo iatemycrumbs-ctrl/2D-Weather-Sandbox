@@ -7208,11 +7208,13 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'baseTex'), 0);
   gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'waterTex'), 1);
   gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'lightningDataTex'), 2);
+  gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'wallTex'), 3);
   gl.uniform2f(gl.getUniformLocation(precipitationProgram, 'resolution'), sim_res_x, sim_res_y);
   gl.uniform2f(gl.getUniformLocation(precipitationProgram, 'texelSize'), texelSizeX, texelSizeY);
   gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'dryLapse'), dryLapse);
   gl.uniform4f(gl.getUniformLocation(precipitationProgram, 'userInputValues'), -2.0, -2.0, 0.0, 0.0);
   gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'userInputType'), -1);
+  gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningCloudLinkRadiusNorm'), clamp(100000.0 / max(cellHeight * sim_res_x, 1.0), 0.02, 0.45));
   gl.useProgram(IRtempDisplayProgram);
   gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'resolution'), sim_res_x, sim_res_y);
   gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'texelSize'), texelSizeX, texelSizeY);
@@ -7595,6 +7597,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
               gl.bindTexture(gl.TEXTURE_2D, waterTexture_1);
               gl.activeTexture(gl.TEXTURE2);
               gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
+              gl.activeTexture(gl.TEXTURE3);
+              gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
 
               gl.bindVertexArray(srcVAO);
               gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, destTF);
