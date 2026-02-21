@@ -263,6 +263,11 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   pixVal = max(pixVal - brightnessThreshold, 0.0);
   pixVal *= mix(84000.0, 154000.0, strikeTypeSign > 0.0 ? 1.0 : 0.52);
 
+  // Dissipate visible channel energy over time instead of leaving a static/frozen bolt imprint.
+  float channelFade = clamp(currentLightningIntensity * 0.12, 0.0, 1.0);
+  float tailFade = 1.0 - smoothstep(1.05, 2.35, lightningTime);
+  pixVal *= channelFade * tailFade;
+
   float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
   float thermalColorMix = map_rangeC(lightningTemp, lightningTempMinK, lightningTempMaxK, 0.0, 1.0) * lightningColorTempMult;
   vec3 coolLightningCol = strikeTypeSign < 0.0 ? vec3(0.52, 0.66, 1.0) : vec3(0.70, 0.60, 1.0);
