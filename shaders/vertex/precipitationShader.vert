@@ -27,6 +27,8 @@ uniform sampler2D lightningDataTex;
 uniform vec2 resolution;
 uniform vec2 texelSize;
 uniform float dryLapse;
+uniform vec4 userInputValues; // xpos ypos intensity brushSize
+uniform int userInputType;
 
 uniform float iterNum;          // used as seed for random function
 uniform float numDroplets;      // total number of droplets
@@ -151,13 +153,53 @@ void main()
   feedback = vec4(0.0);
   deposition = vec2(0.0);
 
+  // Artificial Lightning Generator tool: trigger cloud-targeted strike from user ground source.
+  if (userInputType == 25 && gl_VertexID == 0 && userInputValues.x >= 0.0 && userInputValues.x <= 1.0) {
+    float sourceX = userInputValues.x;
+    float sourceY = clamp(userInputValues.y, 0.0, 1.0);
+    float scanStartY = clamp(sourceY + texelSize.y * 3.0, 0.10, 0.92);
+    float bestCloud = 0.0;
+    float targetY = -1.0;
+
+    for (int i = 0; i < 14; i++) {
+      float y = mix(scanStartY, 0.96, float(i) / 13.0);
+      float cloudSample = texture(waterTex, vec2(sourceX, y))[CLOUD];
+      if (cloudSample > bestCloud) {
+        bestCloud = cloudSample;
+        targetY = y;
+      }
+    }
+
+    if (targetY > 0.0) {
+      vec4 lightningDataNow = texture(lightningDataTex, vec2(0.5));
+      float previousLightningAge = iterNum - lightningDataNow[START_ITERNUM];
+      float currentFlashHold = max(lightningMinInterval, 11.0 + abs(lightningDataNow[INTENSITY]) * (3.6 + multiStrokeLightning * 3.0));
+      bool lightningChannelFree = lightningDataNow[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
+
+      if (lightningChannelFree && bestCloud > 0.01) {
+        float sourceCloud = texture(waterTex, vec2(sourceX, sourceY))[CLOUD];
+        float channelStrength = max(bestCloud, sourceCloud) * (1.0 + abs(userInputValues.z) * 0.5);
+        feedback.xy = vec2(sourceX, targetY);
+        feedback[START_ITERNUM] = iterNum;
+        feedback[INTENSITY] = max(channelStrength * 2.2, 0.15);
+        isActive = false;
+        gl_PointSize = 1.0;
+        gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
+        position_out = newPos;
+        mass_out = newMass;
+        density_out = max(newDensity, 0.);
+        return;
+      }
+    }
+  }
+
   if (mass[WATER] < 0.) { // inactive
     // Reworked spawn system:
     // - seed from gl_VertexID to avoid state-collapse patterns (mobile precision friendly)
     // - adaptive spawn limiter from active/inactive ratio
     // - cloud/instability driven spawn mass and lightning generation
 
-    float dropID = float(gl_VertexID) + 1.0;
+    float dropID = mod(float(gl_VertexID), 65535.0) + 1.0;
     vec2 spawnSeed = vec2(dropID * 0.754877 + iterNum * 0.013,
                           dropID * 0.569840 - iterNum * 0.017);
     texCoord = vec2(random2d(spawnSeed), random2d(spawnSeed.yx + 13.37));

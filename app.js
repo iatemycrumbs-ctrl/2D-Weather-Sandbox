@@ -4405,6 +4405,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         'Industrial' : 'TOOL_WALL_INDUSTRIAL',
         'Skyscraper' : 'TOOL_SKYSCRAPER',
         'Lightning Rod' : 'TOOL_LIGHTNING_ROD',
+        'Artificial Lightning Generator' : 'TOOL_ARTIFICIAL_LIGHTNING',
         'Fire' : 'TOOL_WALL_FIRE',
         'Smoke / Dust' : 'TOOL_SMOKE',
         'Sand (SAN)' : 'TOOL_SAND',
@@ -7056,6 +7057,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform2f(gl.getUniformLocation(precipitationProgram, 'resolution'), sim_res_x, sim_res_y);
   gl.uniform2f(gl.getUniformLocation(precipitationProgram, 'texelSize'), texelSizeX, texelSizeY);
   gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'dryLapse'), dryLapse);
+  gl.uniform4f(gl.getUniformLocation(precipitationProgram, 'userInputValues'), -2.0, -2.0, 0.0, 0.0);
+  gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'userInputType'), -1);
   gl.useProgram(IRtempDisplayProgram);
   gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'resolution'), sim_res_x, sim_res_y);
   gl.uniform2f(gl.getUniformLocation(IRtempDisplayProgram, 'texelSize'), texelSizeX, texelSizeY);
@@ -7225,6 +7228,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = 24;
         else if (guiControls.tool == 'TOOL_LIGHTNING_ROD')
           inputType = -1;
+        else if (guiControls.tool == 'TOOL_ARTIFICIAL_LIGHTNING')
+          inputType = 25;
 
         // Surface environment modifiers
         else if (guiControls.tool == 'TOOL_WALL_MOIST')
@@ -7258,8 +7263,20 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform4f(gl.getUniformLocation(advectionProgram, 'userInputValues'), posXinSim, mouseYinSim, intensity, guiControls.brushSize * 0.5);
         gl.uniform2f(gl.getUniformLocation(advectionProgram, 'userInputMove'), moveX, moveY);
         gl.uniform1i(gl.getUniformLocation(advectionProgram, 'wrapHorizontally'), guiControls.wrapHorizontally);
+
+        gl.useProgram(precipitationProgram);
+        gl.uniform4f(gl.getUniformLocation(precipitationProgram, 'userInputValues'), posXinSim, mouseYinSim, intensity, guiControls.brushSize * 0.5);
+        gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'userInputType'), inputType);
+        gl.useProgram(advectionProgram);
       }
       gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
+
+      if (!leftMousePressed) {
+        gl.useProgram(precipitationProgram);
+        gl.uniform4f(gl.getUniformLocation(precipitationProgram, 'userInputValues'), -2.0, -2.0, 0.0, 0.0);
+        gl.uniform1i(gl.getUniformLocation(precipitationProgram, 'userInputType'), -1);
+        gl.useProgram(advectionProgram);
+      }
       if (!airplaneMode) {
         gl.useProgram(precipitationProgram);
         gl.uniform2f(gl.getUniformLocation(precipitationProgram, 'airplanePosNorm'), -2.0, -2.0);

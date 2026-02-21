@@ -335,7 +335,7 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   float lightningTime = calcLightningTime(lightningStartIterNum);
   float lightningSign = lightningData[INTENSITY] < 0.0 ? -1.0 : 1.0;
-  float currentLightningIntensity = lightningIntensityOverTime(lightningTime, lightningPos, abs(lightningData[INTENSITY])) * lightningSign;
+  float currentLightningIntensity = lightningIntensityOverTime(lightningTime, lightningPos, lightningData[INTENSITY]) * lightningSign;
 
 
   float lightningVisThreshold = mix(0.18, 0.08, clamp((mobileLightningVisibility - 1.0) * 0.85, 0.0, 1.0));
