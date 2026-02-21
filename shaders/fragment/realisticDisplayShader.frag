@@ -48,6 +48,8 @@ uniform float lightningFlashPersistence;
 uniform float lightningTempMinK;
 uniform float lightningTempMaxK;
 uniform float precipitationVisualBoost;
+uniform float precipitationTint;
+uniform float precipitationContrast;
 uniform float ambientScattering;
 uniform float cloudLayerComplexity;
 uniform float lightningBloomStrength;
@@ -288,7 +290,9 @@ vec4 getAirColor(vec2 fragCoordIn)
   float cloudwater = water[CLOUD];
 
   float cloudShade = clamp(1.0 / (cloudwater * 0.0046 + 1.0), 0.18, 1.0);
-  vec3 cloudCol = vec3(cloudShade);
+  float precipPresence = clamp(water[PRECIPITATION] * 2.2 * precipitationVisualBoost, 0.0, 1.0);
+  vec3 precipTintCol = mix(vec3(0.88, 0.92, 1.0), vec3(0.62, 0.74, 1.0), clamp(precipitationTint, 0.0, 2.0));
+  vec3 cloudCol = mix(vec3(cloudShade), precipTintCol * cloudShade, precipPresence * 0.55);
 
   float cloudDensity = max(cloudwater * (8.8 + cloudLayerComplexity * 4.4), 0.0);
   float cloudLayerA = smoothstep(0.18, 0.52, texCoord.y) * cloudLayerComplexity;
@@ -304,7 +308,7 @@ vec4 getAirColor(vec2 fragCoordIn)
 
 
   // float cloudOpacity = clamp(cloudwater * 4.0, 0.0, 1.0);
-  float cloudOpacity = clamp(1.0 - (1.0 / (1. + totalDensity)), 0.0, 0.88);
+  float cloudOpacity = clamp((1.0 - (1.0 / (1. + totalDensity))) * mix(0.82, 1.16, clamp(precipitationContrast, 0.5, 1.8) - 0.5), 0.0, 0.92);
 
   const vec3 smokeThinCol = vec3(0.8, 0.51, 0.26);
   const vec3 smokeThickCol = vec3(0., 0., 0.);
