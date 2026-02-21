@@ -48,6 +48,8 @@ uniform float lightningFlashPersistence;
 uniform float lightningTempMinK;
 uniform float lightningTempMaxK;
 uniform float precipitationVisualBoost;
+uniform float precipitationTint;
+uniform float precipitationContrast;
 uniform float ambientScattering;
 uniform float cloudLayerComplexity;
 uniform float lightningBloomStrength;
@@ -146,19 +148,21 @@ float calcLightningTime(float startIterNum)
 
 float lightningChannelEnvelope(float T, bool isIC)
 {
-  float fastRise = exp(-pow(T * (isIC ? 2.9 : 4.4), 2.0)) * (isIC ? 1.95 : 3.15);
-  float afterGlow = max((1.0 / (0.05 + pow(T * (isIC ? 1.45 : 2.45), 3.0))) - 0.01, 0.0);
-  float strokeSecondary = exp(-pow(max(T - (isIC ? 0.42 : 0.28), 0.0) * (isIC ? 3.8 : 5.4), 2.0)) * (isIC ? 0.42 : 0.58);
-  return fastRise + afterGlow + strokeSecondary;
+  float rise = 1.0 - exp(-T * (isIC ? 10.0 : 13.0));
+  float decay = exp(-T * (isIC ? 1.9 : 2.6));
+  float glowTail = exp(-T * (isIC ? 0.62 : 0.85)) * (isIC ? 0.32 : 0.24);
+  return rise * decay * (isIC ? 2.2 : 3.0) + glowTail;
 }
 
 vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTypeSign)
 {
-  float meander = sin(uv.y * 38.0 + lightningTime * 2.0 + random2d(seed * 17.1) * 6.2831) * 0.0095;
-  meander += sin(uv.y * 86.0 + lightningTime * 1.45 + random2d(seed * 7.3) * 6.2831) * 0.0038;
-  float filament = sin((uv.y * 124.0 + lightningTime * 8.5) + uv.x * 23.0) * 0.0019;
-  float horizontalSweep = sin(uv.y * 6.5 + lightningTime * 1.6) * 0.003 * (strikeTypeSign < 0.0 ? 1.55 : 0.85);
-  return vec2((meander + filament) * (strikeTypeSign < 0.0 ? 1.45 : 1.0) + horizontalSweep, 0.0);
+  float axis = strikeTypeSign < 0.0 ? uv.x : uv.y;
+  float meander = sin(axis * 34.0 + lightningTime * 2.1 + random2d(seed * 17.1) * 6.2831) * 0.0085;
+  meander += sin(axis * 82.0 + lightningTime * 1.5 + random2d(seed * 7.3) * 6.2831) * 0.0035;
+  float filament = sin((axis * 120.0 + lightningTime * 7.0) + (strikeTypeSign < 0.0 ? uv.y : uv.x) * 19.0) * 0.0016;
+  if (strikeTypeSign < 0.0)
+    return vec2(0.0, (meander + filament) * 0.45);
+  return vec2(meander + filament, 0.0);
 }
 
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
@@ -171,14 +175,11 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 
   float channelEnvelope = lightningChannelEnvelope(T, isIC);
 
-  // IC keeps mild internal pulsing; CG stays mostly single-strike to avoid flicker.
-  float pulse = 1.0;
-  if (isIC)
-    pulse = 0.82 + 0.18 * sin(T * 7.5 + random2d(lightningPos * 9.17) * 6.2831);
-  else
-    pulse = 0.96 + 0.04 * sin(T * 3.4 + random2d(lightningPos * 5.37) * 6.2831);
+  // Smooth flash with subtle flicker (no hard multi-stroke stepping).
+  float flicker = 0.92 + 0.08 * sin(T * (isIC ? 11.5 : 8.5) + random2d(lightningPos * 9.17) * 6.2831);
+  flicker += (random2d(vec2(T * 17.3, lightningPos.x * 31.1)) - 0.5) * (isIC ? 0.05 : 0.03);
 
-  return channelEnvelope * pulse * pow(absIntensity, 1.55);
+  return channelEnvelope * max(flicker, 0.75) * pow(absIntensity, 1.50);
 }
 
 vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningIntensity)
@@ -191,14 +192,21 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   lightningTexCoord.x -= mod(pos.x, 1.0);
   lightningTexCoord.y -= pos.y;
 
+  bool upwardGroundArc = strikeTypeSign > 0.0 && pos.y < 0.14;
   float anchorY = strikeTypeSign < 0.0 ? max(pos.y + 0.18, 0.25) : max(pos.y, 0.05);
   float scaleMult = 1.0 / anchorY;
   if (strikeTypeSign < 0.0)
     scaleMult *= 0.72;
 
   lightningTexCoord.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
-  lightningTexCoord.y *= -scaleMult;
+  lightningTexCoord.y *= upwardGroundArc ? scaleMult : -scaleMult;
   lightningTexCoord.x += 0.5;
+
+  if (strikeTypeSign < 0.0) {
+    vec2 icSwap = lightningTexCoord;
+    lightningTexCoord.x = icSwap.y * 0.90 + 0.5;
+    lightningTexCoord.y = (icSwap.x - 0.5) * 0.95 + 0.46;
+  }
 
   if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68)
     return vec3(0.0);
@@ -222,17 +230,13 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     pixVal *= clamp(icEnvelope, 0.0, 1.0);
   }
 
-  float strokeA = exp(-pow(max(lightningTime - 0.90, 0.0) * 4.4, 2.0));
-  float strokeB = exp(-pow(max(lightningTime - 1.22, 0.0) * 5.1, 2.0)) * 0.48;
-  float strokeC = exp(-pow(max(lightningTime - 1.46, 0.0) * 6.5, 2.0)) * 0.24;
-  float stagedStroke = strokeA + strokeB + strokeC;
-
-  const float branchShowFactor = 3.0;
-  float brightnessThreshold = clamp(1.0 - lightningTime * branchShowFactor + lightningTexCoord.y * branchShowFactor, 0.0, 1.0);
-  brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.76 : 0.62, clamp(lightningTime - 1.0, 0.0, 1.0));
+  const float branchShowFactor = 2.4;
+  float branchAxis = strikeTypeSign < 0.0 ? abs(lightningTexCoord.x - 0.5) * 1.4 : lightningTexCoord.y;
+  float brightnessThreshold = clamp(0.95 - lightningTime * branchShowFactor + branchAxis * branchShowFactor, 0.0, 1.0);
+  brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.68 : 0.60, clamp(lightningTime - 0.8, 0.0, 1.0));
 
   pixVal = max(pixVal - brightnessThreshold, 0.0);
-  pixVal *= stagedStroke * mix(96000.0, 176000.0, strikeTypeSign > 0.0 ? 1.0 : 0.45);
+  pixVal *= mix(84000.0, 154000.0, strikeTypeSign > 0.0 ? 1.0 : 0.52);
 
   float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
   float thermalColorMix = map_rangeC(lightningTemp, lightningTempMinK, lightningTempMaxK, 0.0, 1.0) * lightningColorTempMult;
@@ -288,7 +292,9 @@ vec4 getAirColor(vec2 fragCoordIn)
   float cloudwater = water[CLOUD];
 
   float cloudShade = clamp(1.0 / (cloudwater * 0.0046 + 1.0), 0.18, 1.0);
-  vec3 cloudCol = vec3(cloudShade);
+  float precipPresence = clamp(water[PRECIPITATION] * 2.2 * precipitationVisualBoost, 0.0, 1.0);
+  vec3 precipTintCol = mix(vec3(0.88, 0.92, 1.0), vec3(0.62, 0.74, 1.0), clamp(precipitationTint, 0.0, 2.0));
+  vec3 cloudCol = mix(vec3(cloudShade), precipTintCol * cloudShade, precipPresence * 0.55);
 
   float cloudDensity = max(cloudwater * (8.8 + cloudLayerComplexity * 4.4), 0.0);
   float cloudLayerA = smoothstep(0.18, 0.52, texCoord.y) * cloudLayerComplexity;
@@ -304,7 +310,7 @@ vec4 getAirColor(vec2 fragCoordIn)
 
 
   // float cloudOpacity = clamp(cloudwater * 4.0, 0.0, 1.0);
-  float cloudOpacity = clamp(1.0 - (1.0 / (1. + totalDensity)), 0.0, 0.88);
+  float cloudOpacity = clamp((1.0 - (1.0 / (1. + totalDensity))) * mix(0.82, 1.16, clamp(precipitationContrast, 0.5, 1.8) - 0.5), 0.0, 0.92);
 
   const vec3 smokeThinCol = vec3(0.8, 0.51, 0.26);
   const vec3 smokeThickCol = vec3(0., 0., 0.);

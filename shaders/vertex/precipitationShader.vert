@@ -23,6 +23,7 @@ float realTemp;
 uniform sampler2D baseTex;
 uniform sampler2D waterTex;
 uniform sampler2D lightningDataTex;
+uniform isampler2D wallTex;
 
 uniform vec2 resolution;
 uniform vec2 texelSize;
@@ -79,6 +80,7 @@ uniform vec2 lightningRodPos[8];
 uniform float lightningRodRadiusNorm;
 uniform vec2 airplanePosNorm;
 uniform float airplaneLightningAttractor;
+uniform float lightningCloudLinkRadiusNorm;
 
 #include "common.glsl"
 
@@ -140,9 +142,9 @@ vec2 computeLightningTarget(vec2 sourcePos, vec2 seed, bool isIC, float rodAttra
   float shiftedX = mod(sourcePos.x + anvilShift + 1.0, 1.0);
 
   if (isIC) {
-    float icYOffset = map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.08, 0.22);
-    vec2 icTarget = vec2(shiftedX, clamp(sourcePos.y + icYOffset, 0.30, 0.96));
-    icTarget.x = mod(icTarget.x + (random2d(seed * 4.73) - 0.5) * texelSize.x * 35.0 * lightningComplexity + 1.0, 1.0);
+    float icYOffset = map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.03, 0.12);
+    vec2 icTarget = vec2(shiftedX, clamp(sourcePos.y + icYOffset, 0.26, 0.94));
+    icTarget.x = mod(icTarget.x + (random2d(seed * 4.73) - 0.5) * texelSize.x * 140.0 * lightningComplexity + 1.0, 1.0);
     return icTarget;
   }
 
@@ -155,7 +157,8 @@ vec2 computeLightningTarget(vec2 sourcePos, vec2 seed, bool isIC, float rodAttra
   targetY = mix(targetY, airplanePosNorm.y, clamp(airplaneAttraction * 0.65, 0.0, 1.0));
   vec2 cgTarget = vec2(targetX, clamp(targetY, texelSize.y, 0.98));
   cgTarget.x = mod(cgTarget.x + (random2d(seed * 8.27) - 0.5) * texelSize.x * 18.0 * lightningComplexity + 1.0, 1.0);
-  return cgTarget;
+  // Keep visible bolt origin in-cloud while still choosing a ground endpoint for physics/selection.
+  return vec2(sourcePos.x, max(sourcePos.y, 0.16));
 }
 
 
@@ -173,42 +176,53 @@ void main()
   feedback = vec4(0.0);
   deposition = vec2(0.0);
 
-  // Artificial Lightning Generator tool: trigger cloud-targeted strike from user ground source.
+  // Artificial Lightning Generator tool: can only trigger from industrial cells and links to nearby cloud within ~100km.
   if (userInputType == 25 && gl_VertexID == 0 && userInputValues.x >= 0.0 && userInputValues.x <= 1.0) {
     float sourceX = userInputValues.x;
     float sourceY = clamp(userInputValues.y, 0.0, 1.0);
-    float scanStartY = clamp(sourceY + texelSize.y * 3.0, 0.10, 0.92);
-    float bestCloud = 0.0;
-    float targetY = -1.0;
+    ivec2 sourceCell = ivec2(clamp(int(sourceX * resolution.x), 0, int(resolution.x) - 1), clamp(int(sourceY * resolution.y), 0, int(resolution.y) - 1));
+    int sourceWallType = texelFetch(wallTex, sourceCell, 0)[TYPE];
 
-    for (int i = 0; i < 14; i++) {
-      float y = mix(scanStartY, 0.96, float(i) / 13.0);
-      float cloudSample = texture(waterTex, vec2(sourceX, y))[CLOUD];
-      if (cloudSample > bestCloud) {
-        bestCloud = cloudSample;
-        targetY = y;
+    if (sourceWallType == WALLTYPE_INDUSTRIAL) {
+      float bestScore = 0.0;
+      vec2 bestCloudPos = vec2(sourceX, sourceY);
+      float radius = clamp(lightningCloudLinkRadiusNorm, texelSize.x * 12.0, 0.45);
+
+      for (int sx = -22; sx <= 22; sx++) {
+        for (int sy = 1; sy <= 24; sy++) {
+          vec2 samplePos = vec2(mod(sourceX + float(sx) * radius / 22.0 + 1.0, 1.0), clamp(sourceY + float(sy) * texelSize.y * 3.2, 0.12, 0.98));
+          float cloudSample = texture(waterTex, samplePos)[CLOUD];
+          float distX = wrappedDistX(samplePos.x, sourceX);
+          float distY = max(samplePos.y - sourceY, 0.0);
+          float dist = length(vec2(distX, distY));
+          float inRange = smoothstep(radius, 0.0, dist);
+          float score = cloudSample * inRange;
+          if (score > bestScore) {
+            bestScore = score;
+            bestCloudPos = samplePos;
+          }
+        }
       }
-    }
 
-    if (targetY > 0.0) {
-      vec4 lightningDataNow = texture(lightningDataTex, vec2(0.5));
-      float previousLightningAge = iterNum - lightningDataNow[START_ITERNUM];
-      float currentFlashHold = max(lightningMinInterval, 11.0 + abs(lightningDataNow[INTENSITY]) * (3.6 + multiStrokeLightning * 3.0));
-      bool lightningChannelFree = lightningDataNow[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
+      if (bestScore > 0.008) {
+        vec4 lightningDataNow = texture(lightningDataTex, vec2(0.5));
+        float previousLightningAge = iterNum - lightningDataNow[START_ITERNUM];
+        float currentFlashHold = max(lightningMinInterval, 8.0 + abs(lightningDataNow[INTENSITY]) * (2.4 + multiStrokeLightning * 1.8));
+        bool lightningChannelFree = lightningDataNow[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
 
-      if (lightningChannelFree && bestCloud > 0.01) {
-        float sourceCloud = texture(waterTex, vec2(sourceX, sourceY))[CLOUD];
-        float channelStrength = max(bestCloud, sourceCloud) * (1.0 + abs(userInputValues.z) * 0.5);
-        feedback.xy = vec2(sourceX, targetY);
-        feedback[START_ITERNUM] = iterNum;
-        feedback[INTENSITY] = max(channelStrength * 2.2, 0.15);
-        isActive = false;
-        gl_PointSize = 1.0;
-        gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
-        position_out = newPos;
-        mass_out = newMass;
-        density_out = max(newDensity, 0.);
-        return;
+        if (lightningChannelFree) {
+          float launchStrength = max(bestScore * 5.0 + abs(userInputValues.z) * 0.8, 0.20);
+          feedback.xy = vec2(sourceX, clamp(sourceY, 0.02, 0.25));
+          feedback[START_ITERNUM] = iterNum;
+          feedback[INTENSITY] = launchStrength;
+          isActive = false;
+          gl_PointSize = 1.0;
+          gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
+          position_out = newPos;
+          mass_out = newMass;
+          density_out = max(newDensity, 0.);
+          return;
+        }
       }
     }
   }
@@ -507,13 +521,19 @@ void main()
       float altitudeNorm = clamp(texCoord.y, 0.0, 1.0);
       float fallVelocity = computeSedimentationVelocity(totalMass, surfaceArea, newDensity, altitudeNorm, updraft, downdraft);
 
-      // retain lateral advection, reduce direct vertical wind carry to avoid sky-floating precip.
-      float horizontalDrift = map_rangeC(entrainmentRate, 0.2, 3.0, 0.75, 1.2);
-      newPos.x += (base[VX] / resolution.x) * 2.0 * horizontalDrift;
+      // 2D hail dynamics approximation: denser hail keeps momentum, drifts less with air, and can rebound in strong updraft cores.
+      float hailFraction = clamp(map_rangeC(newDensity, 0.95, 1.35, 0.0, 1.0), 0.0, 1.0);
+      float inertia = mix(1.0, 1.85, hailFraction);
+      float drag = mix(1.0, 0.62, hailFraction);
+      float lateralTurb = (random2d(newPos * 23.7 + vec2(iterNum * 0.014, -iterNum * 0.011)) - 0.5) * texelSize.x * (0.8 + hailFraction * 1.8);
+
+      float horizontalDrift = map_rangeC(entrainmentRate, 0.2, 3.0, 0.75, 1.2) * drag;
+      newPos.x += (base[VX] / resolution.x) * 2.0 * horizontalDrift + lateralTurb;
 
       float verticalCarry = base[VY] * map_rangeC(newDensity, snowDensity, 1.3, 0.16, 0.06);
-      newPos.y += (verticalCarry / resolution.y) * 2.0;
-      newPos.y -= fallVelocity;
+      float hailRebound = max(updraft - (0.0025 + hailFraction * 0.0015), 0.0) * 0.24 * hailFraction;
+      newPos.y += ((verticalCarry + hailRebound * inertia) / resolution.y) * 2.0;
+      newPos.y -= fallVelocity * mix(1.0, 1.38, hailFraction);
 
       // dry slots rapidly erode suspended hydrometeors and encourage fallout recycling.
       float drySlot = map_rangeC(maxWater(dropletTemp) - water[TOTAL], 0.0, 12.0, 0.0, 1.0);
