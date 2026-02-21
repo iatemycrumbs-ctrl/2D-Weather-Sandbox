@@ -110,15 +110,11 @@ void main()
   float mountainMix = smoothstep(0.35, 0.95, continent) * terrainRuggednessBoost;
   mountainMix = clamp(mountainMix, 0.0, 1.0);
   float riverValley = smoothstep(0.18, 0.95, abs(fbm(pw * vec2(1.65, 1.0) + vec2(seedB * 0.27, seedA * 0.14), 2.0, 0.5, 4))) * terrainRiverBias;
-  float elevation = mix(hills * 0.52 + 0.11, ridges * 0.82, mountainMix) - riverValley * 0.07;
+  float elevationRaw = mix(hills * 0.52 + 0.11, ridges * 0.78, mountainMix) - riverValley * 0.07;
 
   // heightMult now controls water coverage + overall relief.
   float waterCoverage = map_rangeC(heightMult, 0.0, 2.0, 0.78, 0.25);
-  float relief = map_rangeC(heightMult, 0.0, 2.0, 0.03, 0.42) * mix(0.82, 1.18, clamp(terrainRuggednessBoost - 0.5, 0.0, 1.5) / 1.5);
-
-  float height = continent * elevation * relief - waterCoverage * 0.12;
-  float terrainHeightNorm = clamp(height + 0.04, 0.0, 0.95); // 0..1 of simulation height
-  terrainHeightNorm = mix(terrainHeightNorm, smoothstep(0.0, 1.0, terrainHeightNorm), 0.35);
+  float relief = map_rangeC(heightMult, 0.0, 2.0, 0.03, 0.36) * mix(0.82, 1.10, clamp(terrainRuggednessBoost - 0.5, 0.0, 1.5) / 1.5);
 
   // Estimate slope from neighboring x samples instead of screen-space derivatives.
   float xStep = texelSize.x * 6.0;
@@ -140,6 +136,11 @@ void main()
   float elevationR = mix(hillsR * 0.55 + 0.10, ridgesR * 0.95, smoothstep(0.35, 0.95, continentR));
   float terrainHeightNormL = clamp(continentL * elevationL * relief - waterCoverage * 0.12 + 0.04, 0.0, 0.95);
   float terrainHeightNormR = clamp(continentR * elevationR * relief - waterCoverage * 0.12 + 0.04, 0.0, 0.95);
+
+  float elevation = mix(elevationRaw, (elevationL + elevationRaw + elevationR) / 3.0, 0.48);
+  float terrainHeightNorm = clamp(continent * elevation * relief - waterCoverage * 0.12 + 0.04, 0.0, 0.95);
+  terrainHeightNorm = mix(terrainHeightNorm, smoothstep(0.0, 1.0, terrainHeightNorm), 0.28);
+  terrainHeightNorm = mix(terrainHeightNorm, (terrainHeightNormL + terrainHeightNorm + terrainHeightNormR) / 3.0, 0.42);
 
   float terrainHeightM = terrainHeightNorm * simHeight;
   float slopeProbe = abs(terrainHeightNormR - terrainHeightNormL) * resolution.x * 0.38;
