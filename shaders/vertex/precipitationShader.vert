@@ -75,10 +75,7 @@ uniform float drizzleThresholdShift;
 uniform float graupelChargeGain;
 uniform float iceCrystalChargeGain;
 uniform float stormMoistureLift;
-uniform float lightningFrequencyBoost;
 uniform float dryLightningAllowance;
-uniform float stormPulseStrength;
-uniform float lightningRecoveryBoost;
 uniform float kesslerAutoconversion;
 uniform float ventilationEvapEnhancement;
 uniform int lightningRodCount;
@@ -213,7 +210,7 @@ void main()
       if (bestScore > 0.008) {
         vec4 lightningDataNow = texture(lightningDataTex, vec2(0.5));
         float previousLightningAge = iterNum - lightningDataNow[START_ITERNUM];
-        float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.2, 0.6), 6.0 + abs(lightningDataNow[INTENSITY]) * (2.0 + multiStrokeLightning * 1.5));
+        float currentFlashHold = max(lightningMinInterval, 6.0 + abs(lightningDataNow[INTENSITY]) * (2.0 + multiStrokeLightning * 1.5));
         bool lightningChannelFree = lightningDataNow[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
 
         if (lightningChannelFree) {
@@ -272,8 +269,7 @@ void main()
       float organizationBoost = map_rangeC(stormOrganization, 0.2, 2.5, 0.65, 1.9);
       float aerosolSpawnFactor = map_rangeC(aerosolLoad, 0.2, 2.5, 1.15, 0.72);
       float smokeSuppression = map_rangeC(water[SMOKE], 0.0, 0.9, 1.0, 0.12);
-      float stormPulse = 1.0 + sin(iterNum * 0.017 + texCoord.x * 14.0 + texCoord.y * 5.0) * 0.25 * stormPulseStrength;
-      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.45, 2.2) * moistureSupport * orographicBoost * downdraftEnhancement * precipitationEffectMult * organizationBoost * aerosolSpawnFactor * mobilePrecipBoost * smokeSuppression * stormMoistureLift * stormPulse;
+      spawnChance *= map_rangeC(cloudExcess, 0.0, 2.8, 0.45, 2.2) * moistureSupport * orographicBoost * downdraftEnhancement * precipitationEffectMult * organizationBoost * aerosolSpawnFactor * mobilePrecipBoost * smokeSuppression * stormMoistureLift;
       float spawnFloor = clamp(1.0 / max(numDroplets, 1.0), 0.000001, 0.0015) * precipitationEffectMult * mobilePrecipBoost;
       spawnChance = clamp(spawnChance, spawnFloor, 0.96);
 
@@ -307,8 +303,8 @@ void main()
 
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
           lightningSpawnChance *= (0.18 + electricPotential * 1.9);
-          lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.50) * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.75, 1.55);
-          lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.18) * lightningFrequencyBoost;
+          lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.50);
+          lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.42);
 
           float icWeight = max(icLightningRatio, 0.0);
           float ctgWeight = max(ctgLightningRatio, 0.0);
@@ -320,6 +316,8 @@ void main()
           float aerosolElectric = map_rangeC(aerosolLoad, 0.2, 2.5, 0.7, 1.25);
           lightningSpawnChance *= cgBoost * organizationElectric * aerosolElectric;
           lightningSpawnChance *= map_rangeC(lightningBranching * lightningComplexity, 0.2, 4.0, 0.68, 1.95);
+          float stratiformFloor = max(cloudPlusPrecipDensity - (lightningCloudDensityThreshold + 0.06), 0.0) * 0.015;
+          lightningSpawnChance = max(lightningSpawnChance, stratiformFloor);
 
           float rodAttraction = 0.0;
           vec2 nearestRod = vec2(0.0);
@@ -349,9 +347,12 @@ void main()
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
-          float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.25, 0.58), 7.0 + abs(lightningData[INTENSITY]) * (2.8 + multiStrokeLightning * 2.1));
+          float currentFlashHold = max(lightningMinInterval, 7.0 + abs(lightningData[INTENSITY]) * (2.8 + multiStrokeLightning * 2.1));
           bool lightningChannelFree = lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
-          if (lightningChannelFree && strikeRand < lightningSpawnChance) {
+          bool overdueStormRecharge = lightningChannelFree && previousLightningAge > (120.0 + 40.0 * lightningMinInterval)
+                                    && cloudPlusPrecipDensity > lightningCloudDensityThreshold + 0.22
+                                    && electricPotential > 0.20;
+          if ((lightningChannelFree && strikeRand < lightningSpawnChance) || overdueStormRecharge) {
             lightningSpawned = true;
             isActive = false;
             gl_PointSize = 1.0;

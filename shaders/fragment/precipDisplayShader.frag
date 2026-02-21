@@ -33,6 +33,7 @@ void main()
 
   // New visual model: hydrometeor core + wake plume + refractive halo.
   float wakeBody = max(1.0 - abs(local.x) * 2.6, 0.0) * max(1.0 - abs(local.y) * 1.2, 0.0);
+  float streakTrail = exp(-max(local.y + 0.34, 0.0) * 11.5) * max(1.0 - abs(local.x) * 5.0, 0.0);
   float condensedCore = exp(-r * r * 12.0);
   float haloRing = exp(-abs(r - 0.32) * 14.0);
   float wakeTail = exp(-max(local.y + 0.22, 0.0) * 7.5) * max(1.0 - abs(local.x) * 3.1, 0.0);
@@ -46,7 +47,7 @@ void main()
   float shimmer = sin((local.x - local.y) * 22.0 + totalMass * 35.0) * 0.5 + 0.5;
 
   float opacity = clamp(totalMass * (0.09 + 0.11 * density_out), 0.05, 1.0);
-  opacity *= clamp(wakeBody * anisotropy + condensedCore * 0.92 + wakeTail * 0.40 + haloRing * 0.22, 0.0, 1.8);
+  opacity *= clamp(wakeBody * anisotropy + condensedCore * 0.92 + wakeTail * 0.40 + streakTrail * (0.20 + 0.55 * rainFrac) + haloRing * 0.22, 0.0, 1.8);
 
   vec3 rainCol = mix(vec3(0.08, 0.34, 0.90), vec3(0.36, 0.80, 1.00), clamp(rainFrac * 1.2, 0.0, 1.0));
   vec3 snowCol = vec3(0.96, 0.98, 1.00);
@@ -62,6 +63,7 @@ void main()
   phaseCol += chargeTint * clamp(iceFrac * 0.32, 0.0, 0.26);
   phaseCol += vec3(0.35, 0.40, 0.48) * sparkle;
   phaseCol += vec3(0.18, 0.24, 0.33) * wakeTail * (0.35 + 0.65 * rainFrac);
+  phaseCol += vec3(0.12, 0.18, 0.27) * streakTrail * rainFrac;
 
   fragmentColor = vec4(clamp(phaseCol, 0.0, 1.0), clamp(opacity, 0.0, 1.0));
 

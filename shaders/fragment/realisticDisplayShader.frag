@@ -167,15 +167,17 @@ const float lightningTexAspect = lightningTexRes.x / lightningTexRes.y;
 float calcLightningTime(float startIterNum)
 {
   float lightningTime = iterNum - startIterNum;
-  return lightningTime / (3.8 * lightningFlashPersistence);
+  return lightningTime / (2.95 * lightningFlashPersistence);
 }
 
 float lightningChannelEnvelope(float T, bool isIC)
 {
-  float rise = 1.0 - exp(-T * (isIC ? 10.0 : 13.0));
-  float decay = exp(-T * (isIC ? 1.9 : 2.6));
-  float glowTail = exp(-T * (isIC ? 0.62 : 0.85)) * (isIC ? 0.32 : 0.24);
-  return rise * decay * (isIC ? 2.2 : 3.0) + glowTail;
+  float rise = 1.0 - exp(-T * (isIC ? 8.5 : 10.0));
+  float body = exp(-T * (isIC ? 2.0 : 2.4));
+  float tail = exp(-T * (isIC ? 0.72 : 0.82));
+  float blend = smoothstep(0.08, 0.55, T);
+  float envelope = mix(body, tail, blend);
+  return rise * envelope * (isIC ? 1.95 : 2.45);
 }
 
 vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTypeSign)
@@ -201,7 +203,7 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 
   // Stable low-frequency flicker to avoid continuous harsh strobing.
   float phase = random2d(lightningPos * 9.17) * 6.2831;
-  float flicker = 0.97 + 0.03 * sin(T * (isIC ? 4.6 : 3.2) + phase);
+  float flicker = 0.985 + 0.015 * sin(T * (isIC ? 3.6 : 2.8) + phase);
 
   return channelEnvelope * max(flicker, 0.90) * pow(absIntensity, 1.50);
 }
@@ -254,7 +256,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     pixVal *= clamp(icEnvelope, 0.0, 1.0);
   }
 
-  const float branchShowFactor = 2.4;
+  const float branchShowFactor = 1.7;
   float branchAxis = strikeTypeSign < 0.0 ? abs(lightningTexCoord.x - 0.5) * 1.4 : lightningTexCoord.y;
   float brightnessThreshold = clamp(0.95 - lightningTime * branchShowFactor + branchAxis * branchShowFactor, 0.0, 1.0);
   brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.68 : 0.60, clamp(lightningTime - 0.8, 0.0, 1.0));
