@@ -94,6 +94,48 @@ float wrappedDistX(float a, float b)
   return min(d, 1.0 - d);
 }
 
+float computeSpawnMass(float cloudWater, float supersat, float instability)
+{
+  float autoconversion = map_rangeC(kesslerAutoconversion, 0.3, 2.5, 0.60, 1.55);
+  float sizeSpectrumMass = map_rangeC(precipitationSizeSpectrum, 0.2, 2.5, 0.72, 1.60);
+  float aerosolActivation = map_rangeC(aerosolLoad, 0.1, 2.5, 0.82, 1.30);
+  float entrainmentSuppression = map_rangeC(entrainmentRate * entrainmentDilution, 0.2, 3.0, 1.18, 0.64);
+  return clamp((0.08 + cloudWater * 0.085 + supersat * 0.052) * instability * autoconversion * sizeSpectrumMass * aerosolActivation * entrainmentSuppression,
+               0.03,
+               0.55);
+}
+
+float computeHydrometeorGrowth(float cloudAccess, float supersat, float growthRate, float surfaceArea)
+{
+  float cloudAccretion = cloudAccess * map_rangeC(kesslerAutoconversion, 0.3, 2.5, 0.62, 1.65);
+  float vaporDeposition = supersat * map_rangeC(precipitationSizeSpectrum, 0.2, 2.5, 0.55, 1.40);
+  return max((cloudAccretion + vaporDeposition) * growthRate * surfaceArea, 0.0);
+}
+
+vec2 computeLightningTarget(vec2 sourcePos, vec2 seed, bool isIC, float rodAttraction, float airplaneAttraction, vec2 nearestRod, float ctgWeight)
+{
+  float anvilShift = (random2d(seed * 5.11 + vec2(iterNum * 0.004)) - 0.5) * texelSize.x * (120.0 + lightningComplexity * 80.0) * lightningAnvilDrift;
+  float shiftedX = mod(sourcePos.x + anvilShift + 1.0, 1.0);
+
+  if (isIC) {
+    float icYOffset = map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.08, 0.22);
+    vec2 icTarget = vec2(shiftedX, clamp(sourcePos.y + icYOffset, 0.30, 0.96));
+    icTarget.x = mod(icTarget.x + (random2d(seed * 4.73) - 0.5) * texelSize.x * 35.0 * lightningComplexity + 1.0, 1.0);
+    return icTarget;
+  }
+
+  float rodTargetX = mix(shiftedX, nearestRod.x, rodAttraction);
+  float planeTargetX = mix(shiftedX, airplanePosNorm.x, airplaneAttraction);
+  float targetX = mix(rodTargetX, planeTargetX, clamp(airplaneAttraction, 0.0, 1.0));
+  float groundTargetY = texelSize.y * (1.5 + random2d(seed * 6.61) * 2.0);
+  float targetY = mix(sourcePos.y, groundTargetY, clamp(0.70 + ctgWeight * 0.55, 0.0, 1.0));
+  targetY = mix(targetY, nearestRod.y + texelSize.y * 2.0, rodAttraction);
+  targetY = mix(targetY, airplanePosNorm.y, clamp(airplaneAttraction * 0.65, 0.0, 1.0));
+  vec2 cgTarget = vec2(targetX, clamp(targetY, texelSize.y, 0.98));
+  cgTarget.x = mod(cgTarget.x + (random2d(seed * 8.27) - 0.5) * texelSize.x * 18.0 * lightningComplexity + 1.0, 1.0);
+  return cgTarget;
+}
+
 
 void disableDroplet()
 {
@@ -128,14 +170,12 @@ void main()
     // check if position is okay to spawn
     realTemp = potentialToRealT(base[TEMPERATURE]); // in Kelvin
 
-    const float nominalSpawnMass = 0.12;
     float threshold = (realTemp > CtoK(0.0) ? aboveZeroThreshold : subZeroThreshold) * drizzleThresholdShift * map_rangeC(kesslerAutoconversion, 0.3, 2.5, 1.22, 0.72);
 
     float cloudExcess = max(water[CLOUD] - threshold, 0.0);
+    float supersat = max(water[TOTAL] - maxWater(realTemp), 0.0);
     float instability = map_rangeC(-base[PRESSURE], -0.05, 0.15, 0.6, 1.35);
-    float sizeSpectrumMass = map_rangeC(precipitationSizeSpectrum, 0.2, 2.5, 0.75, 1.45);
-    float entrainmentSuppression = map_rangeC(entrainmentRate * entrainmentDilution, 0.2, 3.0, 1.20, 0.68);
-    float baseSpawnMass = clamp((nominalSpawnMass + cloudExcess * 0.07) * instability * sizeSpectrumMass * entrainmentSuppression, 0.04, 0.42);
+    float baseSpawnMass = computeSpawnMass(cloudExcess, supersat, instability);
 
     if (water[CLOUD] > threshold && base[TEMPERATURE] < 2500.0) {
       float inactiveFrac = clamp(inactiveDroplets / max(numDroplets, 1.0), 0.0, 1.0);
@@ -240,27 +280,7 @@ void main()
             float icProbability = clamp(icProb * icModeBoost, 0.05, 0.95);
             bool isIC = !forceCG && canBeIC && random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity)) < icProbability;
 
-            float icYOffset = map_rangeC(random2d(spawnSeed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.08, 0.22);
-            float anvilShift = (random2d(spawnSeed * 5.11 + vec2(iterNum * 0.004)) - 0.5) * texelSize.x * (120.0 + lightningComplexity * 80.0) * lightningAnvilDrift;
-            float shiftedX = mod(texCoord.x + anvilShift + 1.0, 1.0);
-
-            if (isIC) {
-              vec2 icTarget = vec2(shiftedX, clamp(texCoord.y + icYOffset, 0.30, 0.96));
-              icTarget.x = mod(icTarget.x + (random2d(spawnSeed * 4.73) - 0.5) * texelSize.x * 35.0 * lightningComplexity + 1.0, 1.0);
-              feedback.xy = icTarget;
-            } else {
-              float rodX = nearestRod.x;
-              float rodTargetX = mix(shiftedX, rodX, rodAttraction);
-              float planeTargetX = mix(shiftedX, airplanePosNorm.x, airplaneAttraction);
-              float targetX = mix(rodTargetX, planeTargetX, clamp(airplaneAttraction, 0.0, 1.0));
-              float groundTargetY = texelSize.y * (1.5 + random2d(spawnSeed * 6.61) * 2.0);
-              float targetY = mix(texCoord.y, groundTargetY, clamp(0.70 + ctgWeight * 0.55, 0.0, 1.0));
-              targetY = mix(targetY, nearestRod.y + texelSize.y * 2.0, rodAttraction);
-              targetY = mix(targetY, airplanePosNorm.y, clamp(airplaneAttraction * 0.65, 0.0, 1.0));
-              vec2 cgTarget = vec2(targetX, clamp(targetY, texelSize.y, 0.98));
-              cgTarget.x = mod(cgTarget.x + (random2d(spawnSeed * 8.27) - 0.5) * texelSize.x * 18.0 * lightningComplexity + 1.0, 1.0);
-              feedback.xy = cgTarget;
-            }
+            feedback.xy = computeLightningTarget(texCoord, spawnSeed, isIC, rodAttraction, airplaneAttraction, nearestRod, ctgWeight);
 
             feedback[START_ITERNUM] = iterNum;
 
@@ -358,7 +378,7 @@ void main()
 
       float supersat = max(water[TOTAL] - maxWater(realTemp), 0.0);
       float cloudAccess = max(water[CLOUD], 0.0);
-      float growth = (cloudAccess * 0.72 + supersat * 0.55) * growthRate * surfaceArea * map_rangeC(kesslerAutoconversion, 0.3, 2.5, 0.65, 1.55);
+      float growth = computeHydrometeorGrowth(cloudAccess, supersat, growthRate, surfaceArea);
 
       // Hail growth enhancement:
       if (realTemp < CtoK(0.0) && water[CLOUD] > 0.0 && newDensity >= 1.0) { // below freezing

@@ -144,6 +144,23 @@ float calcLightningTime(float startIterNum)
   return lightningTime / (3.8 * lightningFlashPersistence);
 }
 
+float lightningChannelEnvelope(float T, bool isIC)
+{
+  float fastRise = exp(-pow(T * (isIC ? 2.9 : 4.4), 2.0)) * (isIC ? 1.95 : 3.15);
+  float afterGlow = max((1.0 / (0.05 + pow(T * (isIC ? 1.45 : 2.45), 3.0))) - 0.01, 0.0);
+  float strokeSecondary = exp(-pow(max(T - (isIC ? 0.42 : 0.28), 0.0) * (isIC ? 3.8 : 5.4), 2.0)) * (isIC ? 0.42 : 0.58);
+  return fastRise + afterGlow + strokeSecondary;
+}
+
+vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTypeSign)
+{
+  float meander = sin(uv.y * 38.0 + lightningTime * 2.0 + random2d(seed * 17.1) * 6.2831) * 0.0095;
+  meander += sin(uv.y * 86.0 + lightningTime * 1.45 + random2d(seed * 7.3) * 6.2831) * 0.0038;
+  float filament = sin((uv.y * 124.0 + lightningTime * 8.5) + uv.x * 23.0) * 0.0019;
+  float horizontalSweep = sin(uv.y * 6.5 + lightningTime * 1.6) * 0.003 * (strikeTypeSign < 0.0 ? 1.55 : 0.85);
+  return vec2((meander + filament) * (strikeTypeSign < 0.0 ? 1.45 : 1.0) + horizontalSweep, 0.0);
+}
+
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 {
   float T0 = Tin - 1.0;
@@ -152,8 +169,7 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
   float absIntensity = abs(intensity);
   float T = max(T0, 0.0);
 
-  float peak = exp(-pow(T * (isIC ? 3.1 : 4.8), 2.0)) * (isIC ? 2.1 : 3.3);
-  float tail = max((1.0 / (0.05 + pow(T * (isIC ? 1.55 : 2.6), 3.0))) - 0.01, 0.0);
+  float channelEnvelope = lightningChannelEnvelope(T, isIC);
 
   // IC keeps mild internal pulsing; CG stays mostly single-strike to avoid flicker.
   float pulse = 1.0;
@@ -162,7 +178,7 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
   else
     pulse = 0.96 + 0.04 * sin(T * 3.4 + random2d(lightningPos * 5.37) * 6.2831);
 
-  return (peak + tail) * pulse * pow(absIntensity, 1.55);
+  return channelEnvelope * pulse * pow(absIntensity, 1.55);
 }
 
 vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningIntensity)
@@ -187,11 +203,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68)
     return vec3(0.0);
 
-  // New channel model: texture-guided trunk + procedural filament meander + staged multi-stroke envelope.
-  float branchWarp = sin(lightningTexCoord.y * 39.0 + lightningTime * 2.1 + random2d(pos * 17.1) * 6.2831) * 0.009;
-  branchWarp += sin(lightningTexCoord.y * 84.0 + lightningTime * 1.3 + random2d(pos * 7.3) * 6.2831) * 0.0035;
-  float filament = sin((lightningTexCoord.y * 120.0 + lightningTime * 8.0) + lightningTexCoord.x * 22.0) * 0.0018;
-  lightningTexCoord.x += (branchWarp + filament) * (strikeTypeSign < 0.0 ? 1.4 : 1.0);
+  // Channel model: texture-guided trunk + procedural meander + IC horizontal sweep.
+  lightningTexCoord += lightningWarpOffset(lightningTexCoord, lightningTime, pos, strikeTypeSign);
 
   float trunk = texture(lightningTex, lightningTexCoord).r;
   vec2 px = vec2(1.0 / lightningTexRes.x, 1.0 / lightningTexRes.y);

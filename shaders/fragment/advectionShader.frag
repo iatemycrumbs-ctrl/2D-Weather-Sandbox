@@ -62,6 +62,22 @@ float getRealWorldSounding_Vel(int y) { return (realWorldSounding_Velv[y / 4][y 
 
 #include "common.glsl"
 
+float cloudGrowthPotential(float supersat, float cloudWater, float updraft)
+{
+  float supersatDrive = smoothstep(0.0, 1.8, supersat) * map_rangeC(supersat, 0.0, 2.2, 0.9, 1.9);
+  float reservoirBoost = map_rangeC(cloudWater, 0.0, 1.8, 1.20, 0.86);
+  float verticalSupport = map_rangeC(max(updraft, -0.02), -0.02, 0.08, 0.75, 1.45);
+  return supersatDrive * reservoirBoost * verticalSupport;
+}
+
+float cloudErosionResistance(float cloudWater, float precipitation, float updraft)
+{
+  float cloudShield = map_rangeC(cloudWater, 0.0, 2.4, 0.45, 1.0);
+  float precipDrag = map_rangeC(precipitation, 0.0, 1.6, 0.0, 0.28);
+  float updraftRecovery = map_rangeC(max(updraft, -0.02), -0.02, 0.06, 0.84, 1.15);
+  return clamp(cloudShield * updraftRecovery - precipDrag, 0.22, 1.0);
+}
+
 void main()
 {
   wall = texture(wallTex, texCoord);
@@ -119,14 +135,13 @@ void main()
     float condensation;
 
     if (overSaturation < 0.) {                          // evaporation
-      // Slower cloud erosion to keep mature cloud decks from collapsing too fast.
-      float cloudBuffer = map_rangeC(water[CLOUD], 0.0, 1.8, 1.0, 0.55);
-      condensation = overSaturation * 0.12 * cloudBuffer;
+      float erosionResistance = cloudErosionResistance(water[CLOUD], water[PRECIPITATION], base[VY]);
+      float subSatMagnitude = abs(overSaturation);
+      float slowEvap = map_rangeC(subSatMagnitude, 0.0, 1.8, 0.10, 0.22);
+      condensation = -subSatMagnitude * slowEvap * erosionResistance;
     } else {                                            // condensation
-      // Boost cloud growth when supersaturation is strong and existing cloud reservoir is weak.
-      float cloudDeficitBoost = map_rangeC(water[CLOUD], 0.0, 1.2, 1.35, 1.0);
-      float saturationBoost = map_rangeC(overSaturation, 0.0, 1.8, 1.0, 1.45);
-      condensation = overSaturation * condensationRate * cloudDeficitBoost * saturationBoost;
+      float growthPotential = cloudGrowthPotential(overSaturation, water[CLOUD], base[VY]);
+      condensation = overSaturation * condensationRate * growthPotential;
     }
     condensation = max(condensation, -water[CLOUD]);    // Prevent cloudwater from going negative
 
