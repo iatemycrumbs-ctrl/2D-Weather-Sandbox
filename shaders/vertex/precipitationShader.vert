@@ -149,6 +149,27 @@ float sampleCloudStrength(vec2 p)
   return max(localWater[CLOUD] + localWater[PRECIPITATION] * 0.60, 0.0);
 }
 
+vec2 snapToNearbyCloud(vec2 p, vec2 seed, float spanX, float spanY)
+{
+  vec2 best = vec2(mod(p.x + 1.0, 1.0), clamp(p.y, 0.30, 0.88));
+  float bestCloud = sampleCloudStrength(best);
+
+  for (int i = 0; i < 10; i++) {
+    float t = float(i) / 9.0;
+    float j = random2d(seed * (2.13 + t) + vec2(iterNum * 0.001));
+    float offX = mix(-spanX, spanX, t);
+    float offY = (j - 0.5) * spanY;
+    vec2 probe = vec2(mod(p.x + offX + 1.0, 1.0), clamp(p.y + offY, 0.30, 0.88));
+    float cloud = sampleCloudStrength(probe);
+    if (cloud > bestCloud) {
+      bestCloud = cloud;
+      best = probe;
+    }
+  }
+
+  return best;
+}
+
 vec2 buildICLightningTarget(vec2 sourcePos, vec2 seed)
 {
   // Purple IC: chain across nearby cloud cells instead of collapsing to short stubs.
@@ -196,6 +217,7 @@ vec2 buildICLightningTarget(vec2 sourcePos, vec2 seed)
   // realistic chained sheets instead of pinning to a single endpoint.
   float blend = 0.5 + (random2d(seed * 6.83 + vec2(iterNum * 0.0011)) - 0.5) * 0.18;
   vec2 anchor = vec2(mix(sourcePos.x, bestTarget.x, blend), mix(sourcePos.y, bestTarget.y, blend));
+  anchor = snapToNearbyCloud(anchor, seed * 1.91 + vec2(0.7), texelSize.x * 36.0, texelSize.y * 10.0);
   anchor.y = clamp(anchor.y, 0.34, 0.86);
   return anchor;
 }
@@ -227,9 +249,10 @@ vec2 buildCGLightningSource(vec2 sourcePos, vec2 seed, float rodAttraction, floa
   }
 
   float cloudMin = 0.10 + ctgWeight * 0.05;
-  if (bestCloud < cloudMin) {
-    bestSource = vec2(targetX, clamp(sourcePos.y, 0.34, 0.82));
-  }
+  if (bestCloud < cloudMin)
+    bestSource = snapToNearbyCloud(vec2(targetX, clamp(sourcePos.y, 0.42, 0.78)), seed * 2.37 + vec2(0.5), texelSize.x * 46.0, texelSize.y * 14.0);
+
+  bestSource.y = clamp(bestSource.y, 0.34, 0.82);
 
   return bestSource;
 }

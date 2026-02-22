@@ -281,14 +281,16 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     float icEnvelope = smoothstep(0.12, 0.46, lightningTexCoord.y) * (1.0 - smoothstep(0.62, 0.90, lightningTexCoord.y));
     float icCloudBand = smoothstep(0.28, 0.38, texCoord.y) * (1.0 - smoothstep(0.86, 0.94, texCoord.y));
     float icCenterFalloff = 1.0 - smoothstep(0.26, 0.52, abs(lightningTexCoord.y - 0.5));
-    pixVal *= clamp(icEnvelope * icCloudBand * icCenterFalloff, 0.0, 1.0);
+    float localCloudMask = smoothstep(0.035, 0.18, water[CLOUD] + water[PRECIPITATION] * 0.35);
+    pixVal *= clamp(icEnvelope * icCloudBand * icCenterFalloff * localCloudMask, 0.0, 1.0);
   } else {
     // CG (blue): keep the origin inside cloud and maintain continuous channel reach toward terrain.
+    float sourceCloudMask = smoothstep(0.06, 0.22, texture(waterTex, vec2(mod(pos.x + 1.0, 1.0), clamp(pos.y, 0.26, 0.86))).r);
     float cgAboveCloudFade = 1.0 - smoothstep(0.84, 0.97, texCoord.y);
     float cgBelowSource = smoothstep(pos.y + 0.03, pos.y - 0.03, texCoord.y);
-    float cgGroundReach = smoothstep(0.56, 0.00, texCoord.y);
+    float cgGroundReach = smoothstep(0.70, 0.00, texCoord.y);
     float cgLongChannel = smoothstep(pos.y, max(pos.y - 0.60, 0.0), texCoord.y);
-    pixVal *= clamp(cgAboveCloudFade * cgBelowSource, 0.0, 1.0);
+    pixVal *= clamp(cgAboveCloudFade * cgBelowSource * sourceCloudMask, 0.0, 1.0);
     pixVal += trunk * max(cgGroundReach * 0.52, cgLongChannel * 0.40);
   }
 
