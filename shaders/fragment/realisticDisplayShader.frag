@@ -210,12 +210,12 @@ vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
 vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
 {
   vec2 uv = vec2(0.5);
-  uv.x = 0.5 + baseCoord.x * scaleMult * aspectRatios[0] / lightningTexAspect;
+  uv.x = 0.5 + baseCoord.x * scaleMult * aspectRatios[0] / lightningTexAspect * 1.08;
   // Normalize vertical texture traversal so the channel head starts near the cloud source
   // and can continue all the way down to terrain instead of collapsing into short stubs.
   float sourceToGround = max(pos.y, 0.08);
   float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
-  uv.y = verticalTravel * 1.10;
+  uv.y = verticalTravel * 1.26;
   return uv;
 }
 
@@ -255,7 +255,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   } else {
     // CG structural remap: origin in cloud, strong downward propagation toward ground.
     float cgSourceY = clamp(pos.y, 0.26, 0.72);
-    scaleMult = 1.0 / max(cgSourceY, 0.18);
+    scaleMult = 1.0 / max(cgSourceY * 0.88, 0.14);
     lightningTexCoord = remapCGLightningUV(lightningTexCoord, pos, scaleMult);
   }
 
@@ -286,15 +286,21 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     // CG (blue): keep the origin inside cloud and maintain continuous channel reach toward terrain.
     float cgAboveCloudFade = 1.0 - smoothstep(0.84, 0.97, texCoord.y);
     float cgBelowSource = smoothstep(pos.y + 0.03, pos.y - 0.03, texCoord.y);
-    float cgGroundReach = smoothstep(0.36, 0.00, texCoord.y);
+    float cgGroundReach = smoothstep(0.56, 0.00, texCoord.y);
+    float cgLongChannel = smoothstep(pos.y, max(pos.y - 0.60, 0.0), texCoord.y);
     pixVal *= clamp(cgAboveCloudFade * cgBelowSource, 0.0, 1.0);
-    pixVal += trunk * cgGroundReach * 0.34;
+    pixVal += trunk * max(cgGroundReach * 0.52, cgLongChannel * 0.40);
   }
 
   const float branchShowFactor = 2.4;
   float branchAxis = strikeTypeSign < 0.0 ? abs(lightningTexCoord.x - 0.5) * 1.4 : lightningTexCoord.y;
-  float brightnessThreshold = clamp((strikeTypeSign < 0.0 ? 0.82 : 0.74) - lightningTime * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.82 : 0.74)) + branchAxis * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.62 : 0.58)), 0.0, 1.0);
+  float brightnessThreshold = clamp((strikeTypeSign < 0.0 ? 0.82 : 0.66) - lightningTime * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.82 : 0.60)) + branchAxis * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.62 : 0.46)), 0.0, 1.0);
   brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.68 : 0.60, clamp(lightningTime - 0.8, 0.0, 1.0));
+
+  if (strikeTypeSign > 0.0) {
+    float cgMinCore = trunk * smoothstep(pos.y + 0.02, 0.00, texCoord.y) * 0.22;
+    pixVal = max(pixVal, cgMinCore);
+  }
 
   pixVal = max(pixVal - brightnessThreshold, 0.0);
   pixVal *= mix(84000.0, 154000.0, strikeTypeSign > 0.0 ? 1.0 : 0.52);
