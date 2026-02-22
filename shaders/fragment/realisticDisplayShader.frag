@@ -251,7 +251,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   pixVal += branchGhost * (strikeTypeSign < 0.0 ? 0.42 : 0.30);
 
   if (strikeTypeSign < 0.0) {
-    float icEnvelope = smoothstep(-0.30, -0.02, lightningTexCoord.y) * (1.0 - smoothstep(0.36, 0.86, lightningTexCoord.y));
+    // Keep IC (purple) illumination confined to the cloud deck band.
+    float icEnvelope = smoothstep(-0.18, -0.01, lightningTexCoord.y) * (1.0 - smoothstep(0.24, 0.62, lightningTexCoord.y));
     pixVal *= clamp(icEnvelope, 0.0, 1.0);
   }
 
