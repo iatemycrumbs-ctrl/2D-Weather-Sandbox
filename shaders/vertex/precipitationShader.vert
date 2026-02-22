@@ -148,10 +148,10 @@ vec2 computeLightningTarget(vec2 sourcePos, vec2 seed, bool isIC, float rodAttra
   float shiftedX = mod(sourcePos.x + anvilShift + 1.0, 1.0);
 
   if (isIC) {
-    // Cloud-to-cloud (purple): keep both endpoints in the cloud deck and favor longer horizontal reach.
-    float icYOffset = map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, -0.05, 0.11);
-    vec2 icTarget = vec2(shiftedX, clamp(sourcePos.y + icYOffset, 0.30, 0.95));
-    icTarget.x = mod(icTarget.x + (random2d(seed * 4.73) - 0.5) * texelSize.x * 190.0 * lightningComplexity + 1.0, 1.0);
+    // Cloud-to-cloud (purple): keep the strike centered within the main cloud deck so it does not render into clear sky.
+    float icYOffset = map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, -0.03, 0.08);
+    vec2 icTarget = vec2(shiftedX, clamp(sourcePos.y + icYOffset, 0.34, 0.86));
+    icTarget.x = mod(icTarget.x + (random2d(seed * 4.73) - 0.5) * texelSize.x * 130.0 * lightningComplexity + 1.0, 1.0);
     return icTarget;
   }
 
@@ -165,10 +165,8 @@ vec2 computeLightningTarget(vec2 sourcePos, vec2 seed, bool isIC, float rodAttra
   vec2 cgTarget = vec2(targetX, clamp(targetY, texelSize.y, 0.98));
   cgTarget.x = mod(cgTarget.x + (random2d(seed * 8.27) - 0.5) * texelSize.x * 18.0 * lightningComplexity + 1.0, 1.0);
 
-  // Cloud-to-ground (blue): keep origin attached to lower cloud deck so channel visibly reaches ground.
-  float cloudBaseY = clamp(min(sourcePos.y, 0.58), 0.24, 0.62);
-  vec2 cgSource = vec2(sourcePos.x, cloudBaseY);
-  return cgSource;
+  // Cloud-to-ground (blue): anchor to a near-surface endpoint so the rendered channel always reaches the ground.
+  return cgTarget;
 }
 
 
