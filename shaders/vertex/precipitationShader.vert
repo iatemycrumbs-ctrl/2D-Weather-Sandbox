@@ -182,6 +182,14 @@ vec2 buildICLightningTarget(vec2 sourcePos, vec2 seed)
     bestTarget.x = mod(sourcePos.x + forcedDir * minTravel + 1.0, 1.0);
   }
 
+  float sourceCloud = sampleCloudStrength(sourcePos);
+  float minCloudForChain = max(0.08, sourceCloud * 0.55);
+  if (bestCloud < minCloudForChain) {
+    float forcedDir = random2d(seed * 4.41 + vec2(iterNum * 0.0017)) < 0.5 ? -1.0 : 1.0;
+    bestTarget.x = mod(sourcePos.x + forcedDir * minTravel + 1.0, 1.0);
+    bestTarget.y = clamp(sourcePos.y + map_rangeC(random2d(seed * 1.29 + vec2(1.0)), 0.0, 1.0, -0.04, 0.05), 0.34, 0.86);
+  }
+
   bestTarget.y = clamp(bestTarget.y + map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, -0.02, 0.06), 0.34, 0.86);
   return bestTarget;
 }
