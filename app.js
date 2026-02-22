@@ -1645,6 +1645,11 @@ async function loadData()
   applyIntroShaderSettings();
   let file = document.getElementById('fileInput').files[0];
 
+  // ensure stale objects from previous attempts do not leak into a new load
+  weatherStations = [];
+  weatherBalloons = [];
+  lightningRods = [];
+
   try {
 
   if (file) {                                                    // load data from save file
@@ -1753,8 +1758,16 @@ async function loadData()
         let weatherStationArray = new Int16Array(weatherStationBuf);
 
 
-        for (i = 0; i < numWeatherStations; i++) {
-          weatherStations.push(new Weatherstation(weatherStationArray[i * 2], weatherStationArray[i * 2 + 1]));
+        for (let i = 0; i < numWeatherStations; i++) {
+          const stationX = weatherStationArray[i * 2];
+          const stationY = weatherStationArray[i * 2 + 1];
+
+          if (!Number.isFinite(stationX) || !Number.isFinite(stationY))
+            continue;
+
+          const clampedX = clamp(Math.round(stationX), 0, sim_res_x - 1);
+          const clampedY = clamp(Math.round(stationY), 1, sim_res_y - 1);
+          weatherStations.push(new Weatherstation(clampedX, clampedY));
         }
 
         sliceStart = sliceEnd;
@@ -4190,7 +4203,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   function setupDatGui(strGuiControls)
   {
     datGui = new dat.GUI();
-    const loadedGuiControls = JSON.parse(strGuiControls); // load settings object
+    let loadedGuiControls = {};
+    try {
+      loadedGuiControls = JSON.parse(strGuiControls); // load settings object
+    } catch (err) {
+      console.warn('Save settings could not be parsed, using defaults.', err);
+    }
     guiControls = Object.assign({}, guiControls_default, loadedGuiControls); // backfill missing keys from older savefiles
 
     function applyGraphicsPresetSettings(preset)
