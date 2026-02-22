@@ -148,9 +148,10 @@ vec2 computeLightningTarget(vec2 sourcePos, vec2 seed, bool isIC, float rodAttra
   float shiftedX = mod(sourcePos.x + anvilShift + 1.0, 1.0);
 
   if (isIC) {
-    float icYOffset = map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.03, 0.12);
-    vec2 icTarget = vec2(shiftedX, clamp(sourcePos.y + icYOffset, 0.26, 0.94));
-    icTarget.x = mod(icTarget.x + (random2d(seed * 4.73) - 0.5) * texelSize.x * 140.0 * lightningComplexity + 1.0, 1.0);
+    // Cloud-to-cloud (purple): keep both endpoints in the cloud deck and favor longer horizontal reach.
+    float icYOffset = map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, -0.05, 0.11);
+    vec2 icTarget = vec2(shiftedX, clamp(sourcePos.y + icYOffset, 0.30, 0.95));
+    icTarget.x = mod(icTarget.x + (random2d(seed * 4.73) - 0.5) * texelSize.x * 190.0 * lightningComplexity + 1.0, 1.0);
     return icTarget;
   }
 
@@ -163,8 +164,11 @@ vec2 computeLightningTarget(vec2 sourcePos, vec2 seed, bool isIC, float rodAttra
   targetY = mix(targetY, airplanePosNorm.y, clamp(airplaneAttraction * 0.65, 0.0, 1.0));
   vec2 cgTarget = vec2(targetX, clamp(targetY, texelSize.y, 0.98));
   cgTarget.x = mod(cgTarget.x + (random2d(seed * 8.27) - 0.5) * texelSize.x * 18.0 * lightningComplexity + 1.0, 1.0);
-  // Keep visible bolt origin in-cloud while still choosing a ground endpoint for physics/selection.
-  return vec2(sourcePos.x, max(sourcePos.y, 0.16));
+
+  // Cloud-to-ground (blue): keep origin attached to lower cloud deck so channel visibly reaches ground.
+  float cloudBaseY = clamp(min(sourcePos.y, 0.58), 0.24, 0.62);
+  vec2 cgSource = vec2(sourcePos.x, cloudBaseY);
+  return cgSource;
 }
 
 
@@ -377,10 +381,12 @@ void main()
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
           float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.25, 0.58), 7.0 + abs(lightningData[INTENSITY]) * (2.8 + multiStrokeLightning * 2.1));
           bool lightningChannelFree = lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
+          bool cloudAnchoredSource = water[CLOUD] > threshold * 1.30 && texCoord.y >= 0.20 && texCoord.y <= 0.95;
           bool overdueStormRecharge = lightningChannelFree && previousLightningAge > (120.0 + 40.0 * lightningMinInterval)
                                     && cloudPlusPrecipDensity > lightningCloudDensityThreshold + 0.22
-                                    && electricPotential > 0.20;
-          if ((lightningChannelFree && strikeRand < lightningSpawnChance) || overdueStormRecharge) {
+                                    && electricPotential > 0.20
+                                    && cloudAnchoredSource;
+          if (cloudAnchoredSource && ((lightningChannelFree && strikeRand < lightningSpawnChance) || overdueStormRecharge)) {
             lightningSpawned = true;
             isActive = false;
             gl_PointSize = 1.0;
