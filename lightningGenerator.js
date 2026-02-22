@@ -28,7 +28,8 @@ function getQualityConfig(quality)
       haloAlpha : 0.20,
       glowAlpha : 0.44,
       bloomAlpha : 0.0,
-      branchDecay : 0.968
+      branchDecay : 0.968,
+      minTrunkCoverage : 0.90
     };
   }
 
@@ -45,7 +46,8 @@ function getQualityConfig(quality)
       haloAlpha : 0.24,
       glowAlpha : 0.52,
       bloomAlpha : 0.06,
-      branchDecay : 0.972
+      branchDecay : 0.972,
+      minTrunkCoverage : 0.93
     };
   }
 
@@ -61,7 +63,8 @@ function getQualityConfig(quality)
     haloAlpha : 0.29,
     glowAlpha : 0.60,
     bloomAlpha : 0.10,
-    branchDecay : 0.976
+    branchDecay : 0.976,
+    minTrunkCoverage : 0.96
   };
 }
 
@@ -105,6 +108,9 @@ function generateLightningTexture(width, height, seed, quality)
     list : trunk,
     maxSteps : cfg.trunkSteps
   });
+
+
+  ensureGroundConnection(trunk, startX, width, height, cfg, rand);
 
   drawSegments(ctx, trunk, `rgba(160, 205, 255, ${cfg.haloAlpha})`, cfg.haloWidth, 'screen');
   drawSegments(ctx, trunk, `rgba(208, 232, 255, ${cfg.glowAlpha})`, cfg.glowWidth, 'screen');
@@ -178,6 +184,44 @@ function generateLightningTexture(width, height, seed, quality)
     }
   }
 }
+
+
+function ensureGroundConnection(trunk, startX, width, height, cfg, rand)
+{
+  if (!trunk.length)
+    return;
+
+  const last = trunk[trunk.length - 1];
+  const minCoverage = Math.floor(height * (cfg.minTrunkCoverage || 0.92));
+
+  if (last.y1 >= minCoverage)
+    return;
+
+  let x = last.x1;
+  let y = last.y1;
+  let widthNow = Math.max(last.w * 0.96, 0.75);
+  let angle = 0.0;
+  const step = Math.max(1.20, height / 1700);
+  const maxSteps = Math.ceil((height - y) / step) + 8;
+
+  for (let i = 0; i < maxSteps && y < height; i++) {
+    const centerPull = (startX - x) / width * 0.10;
+    const wiggle = (rand() - 0.5) * 0.08;
+    angle = angle * 0.82 + centerPull + wiggle;
+
+    const dx = Math.sin(angle) * step * 0.75;
+    const dy = Math.max(0.65, Math.cos(angle) * step + step * 0.70);
+
+    const x2 = clamp(x + dx, 0, width - 1);
+    const y2 = Math.min(height, y + dy);
+    trunk.push({x0 : x, y0 : y, x1 : x2, y1 : y2, w : widthNow});
+
+    x = x2;
+    y = y2;
+    widthNow = Math.max(widthNow * 0.985, 0.55);
+  }
+}
+
 
 function drawSegments(ctx, segments, color, widthScale, mode)
 {

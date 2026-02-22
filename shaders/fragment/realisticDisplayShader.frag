@@ -294,7 +294,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   const float branchShowFactor = 2.4;
   float branchAxis = strikeTypeSign < 0.0 ? abs(lightningTexCoord.x - 0.5) * 1.4 : lightningTexCoord.y;
-  float brightnessThreshold = clamp((strikeTypeSign < 0.0 ? 0.82 : 0.66) - lightningTime * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.82 : 0.60)) + branchAxis * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.62 : 0.46)), 0.0, 1.0);
+  float brightnessThreshold = clamp((strikeTypeSign < 0.0 ? 0.80 : 0.54) - lightningTime * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.80 : 0.50)) + branchAxis * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.58 : 0.34)), 0.0, 1.0);
   brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.68 : 0.60, clamp(lightningTime - 0.8, 0.0, 1.0));
 
   if (strikeTypeSign > 0.0) {
@@ -306,8 +306,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   pixVal *= mix(84000.0, 154000.0, strikeTypeSign > 0.0 ? 1.0 : 0.52);
 
   // Dissipate visible channel energy over time instead of leaving a static/frozen bolt imprint.
-  float channelFade = clamp(currentLightningIntensity * 0.12, 0.0, 1.0);
-  float tailFade = 1.0 - smoothstep(1.30, 3.25, lightningTime);
+  float channelFade = clamp(currentLightningIntensity * (strikeTypeSign > 0.0 ? 0.17 : 0.12), 0.0, 1.0);
+  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.55 : 1.30, strikeTypeSign > 0.0 ? 3.70 : 3.25, lightningTime);
   pixVal *= channelFade * tailFade;
 
   float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
