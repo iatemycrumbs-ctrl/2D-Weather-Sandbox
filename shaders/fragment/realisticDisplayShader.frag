@@ -211,11 +211,15 @@ vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   return uv;
 }
 
-vec2 remapCGLightningUV(vec2 baseCoord, float scaleMult)
+vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
 {
   vec2 uv = baseCoord;
   uv.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
-  uv.y *= -scaleMult * 1.28;
+  // Normalize vertical texture traversal so the channel head starts near the cloud source
+  // and can continue all the way down to terrain instead of collapsing into short stubs.
+  float sourceToGround = max(pos.y, 0.08);
+  float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
+  uv.y = verticalTravel * 1.16;
   uv.x += 0.5;
   return uv;
 }
@@ -257,7 +261,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     // CG structural remap: origin in cloud, strong downward propagation toward ground.
     float cgSourceY = clamp(pos.y, 0.26, 0.72);
     scaleMult = 1.0 / max(cgSourceY, 0.18);
-    lightningTexCoord = remapCGLightningUV(lightningTexCoord, scaleMult);
+    lightningTexCoord = remapCGLightningUV(lightningTexCoord, pos, scaleMult);
   }
 
   if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68)
@@ -283,11 +287,12 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     float icCloudBand = smoothstep(0.30, 0.40, texCoord.y) * (1.0 - smoothstep(0.84, 0.92, texCoord.y));
     pixVal *= clamp(icEnvelope * icCloudBand, 0.0, 1.0);
   } else {
-    // CG (blue): suppress visible channel above cloud cap and fade near source so channel reads cloud->ground.
+    // CG (blue): keep the origin inside cloud and maintain continuous channel reach toward terrain.
     float cgAboveCloudFade = 1.0 - smoothstep(0.84, 0.97, texCoord.y);
-    float cgSourceFade = smoothstep(pos.y + 0.03, pos.y - 0.02, texCoord.y);
-    float cgGroundReach = smoothstep(0.24, 0.02, texCoord.y);
-    pixVal *= clamp(cgAboveCloudFade * max(cgSourceFade, cgGroundReach * 0.78), 0.0, 1.0);
+    float cgBelowSource = smoothstep(pos.y + 0.03, pos.y - 0.03, texCoord.y);
+    float cgGroundReach = smoothstep(0.36, 0.00, texCoord.y);
+    pixVal *= clamp(cgAboveCloudFade * cgBelowSource, 0.0, 1.0);
+    pixVal += trunk * cgGroundReach * 0.34;
   }
 
   const float branchShowFactor = 2.4;
