@@ -148,9 +148,10 @@ vec2 computeLightningTarget(vec2 sourcePos, vec2 seed, bool isIC, float rodAttra
   float shiftedX = mod(sourcePos.x + anvilShift + 1.0, 1.0);
 
   if (isIC) {
-    float icYOffset = map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, 0.03, 0.12);
-    vec2 icTarget = vec2(shiftedX, clamp(sourcePos.y + icYOffset, 0.26, 0.94));
-    icTarget.x = mod(icTarget.x + (random2d(seed * 4.73) - 0.5) * texelSize.x * 140.0 * lightningComplexity + 1.0, 1.0);
+    // Cloud-to-cloud (purple): keep both endpoints in the cloud deck and favor longer horizontal reach.
+    float icYOffset = map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, -0.05, 0.11);
+    vec2 icTarget = vec2(shiftedX, clamp(sourcePos.y + icYOffset, 0.30, 0.95));
+    icTarget.x = mod(icTarget.x + (random2d(seed * 4.73) - 0.5) * texelSize.x * 190.0 * lightningComplexity + 1.0, 1.0);
     return icTarget;
   }
 
@@ -163,8 +164,10 @@ vec2 computeLightningTarget(vec2 sourcePos, vec2 seed, bool isIC, float rodAttra
   targetY = mix(targetY, airplanePosNorm.y, clamp(airplaneAttraction * 0.65, 0.0, 1.0));
   vec2 cgTarget = vec2(targetX, clamp(targetY, texelSize.y, 0.98));
   cgTarget.x = mod(cgTarget.x + (random2d(seed * 8.27) - 0.5) * texelSize.x * 18.0 * lightningComplexity + 1.0, 1.0);
-  // Keep visible bolt origin in-cloud while still choosing a ground endpoint for physics/selection.
-  return vec2(sourcePos.x, max(sourcePos.y, 0.16));
+
+  // Cloud-to-ground (blue): anchor visible origin in cloud with slight downwind lean while endpoint remains ground-biased.
+  vec2 cgSource = vec2(mod(mix(sourcePos.x, cgTarget.x, 0.22) + 1.0, 1.0), clamp(sourcePos.y, 0.28, 0.95));
+  return cgSource;
 }
 
 
