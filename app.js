@@ -1666,8 +1666,19 @@ async function loadData()
       let resBlob = dataBlob.slice(sliceStart, sliceEnd); // extract first 4 bytes containing resolution
       let resBuf = await resBlob.arrayBuffer();
       resArray = new Uint16Array(resBuf);
+      if (resArray.length < 2)
+        throw new Error('Save file missing resolution header');
       sim_res_x = resArray[0];
       sim_res_y = resArray[1];
+
+      if (!Number.isFinite(sim_res_x) || !Number.isFinite(sim_res_y) || sim_res_x < 16 || sim_res_y < 16 || sim_res_x > 4096 || sim_res_y > 4096)
+        throw new Error('Save file has invalid simulation resolution');
+
+      const decompressedBytes = decompressed.byteLength;
+      const requireSliceBytes = (byteCount, label) => {
+        if (sliceEnd + byteCount > decompressedBytes)
+          throw new Error('Save file truncated while reading ' + label);
+      };
 
       NUM_DROPLETS = computeNumDroplets(sim_res_x, sim_res_y);
 
@@ -1684,42 +1695,61 @@ async function loadData()
 
 
       sliceStart = sliceEnd;
+      requireSliceBytes(sim_res_x * sim_res_y * 4 * 4, 'base texture');
       sliceEnd += sim_res_x * sim_res_y * 4 * 4;
       let baseTexBlob = dataBlob.slice(sliceStart, sliceEnd);
       let baseTexBuf = await baseTexBlob.arrayBuffer();
+      if (baseTexBuf.byteLength != sim_res_x * sim_res_y * 4 * 4)
+        throw new Error('Save file base texture has invalid length');
       let baseTexF32 = new Float32Array(baseTexBuf);
 
       sliceStart = sliceEnd;
+      requireSliceBytes(sim_res_x * sim_res_y * 4 * 4, 'water texture');
       sliceEnd += sim_res_x * sim_res_y * 4 * 4; // 4 * float
       let waterTexBlob = dataBlob.slice(sliceStart, sliceEnd);
       let waterTexBuf = await waterTexBlob.arrayBuffer();
+      if (waterTexBuf.byteLength != sim_res_x * sim_res_y * 4 * 4)
+        throw new Error('Save file water texture has invalid length');
       let waterTexF32 = new Float32Array(waterTexBuf);
 
       sliceStart = sliceEnd;
+      requireSliceBytes(sim_res_x * sim_res_y * 4 * 1, 'wall texture');
       sliceEnd += sim_res_x * sim_res_y * 4 * 1; // 4 * byte
       let wallTexBlob = dataBlob.slice(sliceStart, sliceEnd);
       let wallTexBuf = await wallTexBlob.arrayBuffer();
+      if (wallTexBuf.byteLength != sim_res_x * sim_res_y * 4 * 1)
+        throw new Error('Save file wall texture has invalid length');
       let wallTexI8 = new Int8Array(wallTexBuf);
 
       sliceStart = sliceEnd;
+      requireSliceBytes(NUM_DROPLETS * Float32Array.BYTES_PER_ELEMENT * 5, 'precipitation array');
       sliceEnd += NUM_DROPLETS * Float32Array.BYTES_PER_ELEMENT * 5;
       let precipArrayBlob = dataBlob.slice(sliceStart, sliceEnd);
       let precipArrayBuf = await precipArrayBlob.arrayBuffer();
+      if (precipArrayBuf.byteLength != NUM_DROPLETS * Float32Array.BYTES_PER_ELEMENT * 5)
+        throw new Error('Save file precipitation array has invalid length');
       let precipArray = new Float32Array(precipArrayBuf);
 
       if (version == saveFileVersionID) {             // only load settings and weather stations from save file if it's the newest version with all the settings included
         sliceStart = sliceEnd;
+        requireSliceBytes(1 * Int16Array.BYTES_PER_ELEMENT, 'weather station count');
         sliceEnd += 1 * Int16Array.BYTES_PER_ELEMENT; // one 16 bit int indicates number of weather stations
         let numWeatherStationsArrayBlob = dataBlob.slice(sliceStart, sliceEnd);
         let numWeatherStationsBuf = await numWeatherStationsArrayBlob.arrayBuffer();
         let numWeatherStations = new Int16Array(numWeatherStationsBuf)[0];
 
+        if (!Number.isFinite(numWeatherStations) || numWeatherStations < 0 || numWeatherStations > 2000)
+          throw new Error('Save file weather station count invalid');
+
         console.log('numWeatherStations', numWeatherStations);
 
         sliceStart = sliceEnd;
+        requireSliceBytes(numWeatherStations * 2 * Int16Array.BYTES_PER_ELEMENT, 'weather station array');
         sliceEnd += numWeatherStations * 2 * Int16Array.BYTES_PER_ELEMENT;
         let weatherStationArrayBlob = dataBlob.slice(sliceStart, sliceEnd);
         let weatherStationBuf = await weatherStationArrayBlob.arrayBuffer();
+        if (weatherStationBuf.byteLength != numWeatherStations * 2 * Int16Array.BYTES_PER_ELEMENT)
+          throw new Error('Save file weather station array has invalid length');
         let weatherStationArray = new Int16Array(weatherStationBuf);
 
 
