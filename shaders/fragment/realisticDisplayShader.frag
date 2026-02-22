@@ -287,9 +287,9 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     // CG (blue): keep the origin inside cloud and maintain continuous channel reach toward terrain.
     float sourceCloudMask = smoothstep(0.06, 0.22, texture(waterTex, vec2(mod(pos.x + 1.0, 1.0), clamp(pos.y, 0.26, 0.86))).r);
     float cgAboveCloudFade = 1.0 - smoothstep(0.84, 0.97, texCoord.y);
-    float cgBelowSource = smoothstep(pos.y + 0.03, pos.y - 0.03, texCoord.y);
-    float cgGroundReach = smoothstep(0.70, 0.00, texCoord.y);
-    float cgLongChannel = smoothstep(pos.y, max(pos.y - 0.60, 0.0), texCoord.y);
+    float cgBelowSource = 1.0 - smoothstep(pos.y - 0.03, pos.y + 0.03, texCoord.y);
+    float cgGroundReach = 1.0 - smoothstep(0.00, 0.70, texCoord.y);
+    float cgLongChannel = 1.0 - smoothstep(max(pos.y - 0.60, 0.0), pos.y, texCoord.y);
     pixVal *= clamp(cgAboveCloudFade * cgBelowSource * sourceCloudMask, 0.0, 1.0);
     pixVal += trunk * max(cgGroundReach * 0.52, cgLongChannel * 0.40);
   }
@@ -300,7 +300,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.68 : 0.60, clamp(lightningTime - 0.8, 0.0, 1.0));
 
   if (strikeTypeSign > 0.0) {
-    float cgMinCore = trunk * smoothstep(pos.y + 0.02, 0.00, texCoord.y) * 0.22;
+    float cgMinCore = trunk * (1.0 - smoothstep(0.00, pos.y + 0.02, texCoord.y)) * 0.22;
     pixVal = max(pixVal, cgMinCore);
   }
 
