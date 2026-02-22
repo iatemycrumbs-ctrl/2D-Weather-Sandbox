@@ -181,12 +181,20 @@ float lightningChannelEnvelope(float T, bool isIC)
 
 vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTypeSign)
 {
-  float axis = strikeTypeSign < 0.0 ? uv.x : uv.y;
-  float meander = sin(axis * 34.0 + lightningTime * 2.1 + random2d(seed * 17.1) * 6.2831) * 0.0085;
-  meander += sin(axis * 82.0 + lightningTime * 1.5 + random2d(seed * 7.3) * 6.2831) * 0.0035;
-  float filament = sin((axis * 120.0 + lightningTime * 7.0) + (strikeTypeSign < 0.0 ? uv.y : uv.x) * 19.0) * 0.0016;
-  if (strikeTypeSign < 0.0)
-    return vec2(0.0, (meander + filament) * 0.45);
+  if (strikeTypeSign < 0.0) {
+    // IC (purple): broader horizontal filament sweep constrained in vertical drift.
+    float axis = uv.x;
+    float meander = sin(axis * 31.0 + lightningTime * 1.8 + random2d(seed * 17.1) * 6.2831) * 0.0075;
+    meander += sin(axis * 74.0 + lightningTime * 1.3 + random2d(seed * 7.3) * 6.2831) * 0.0030;
+    float filament = sin((axis * 108.0 + lightningTime * 6.0) + uv.y * 15.0) * 0.0013;
+    return vec2(0.0, (meander + filament) * 0.36);
+  }
+
+  // CG (blue): stronger side-to-side channel jaggedness while propagating downward.
+  float axis = uv.y;
+  float meander = sin(axis * 42.0 + lightningTime * 2.5 + random2d(seed * 13.2) * 6.2831) * 0.0100;
+  meander += sin(axis * 89.0 + lightningTime * 1.9 + random2d(seed * 5.6) * 6.2831) * 0.0042;
+  float filament = sin((axis * 142.0 + lightningTime * 7.8) + uv.x * 22.0) * 0.0018;
   return vec2(meander + filament, 0.0);
 }
 
@@ -217,20 +225,25 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   lightningTexCoord.x -= mod(pos.x, 1.0);
   lightningTexCoord.y -= pos.y;
 
-  bool upwardGroundArc = strikeTypeSign > 0.0 && pos.y < 0.14;
-  float anchorY = strikeTypeSign < 0.0 ? max(pos.y + 0.18, 0.25) : max(pos.y, 0.05);
-  float scaleMult = 1.0 / anchorY;
-  if (strikeTypeSign < 0.0)
-    scaleMult *= 0.72;
-
-  lightningTexCoord.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
-  lightningTexCoord.y *= upwardGroundArc ? scaleMult : -scaleMult;
-  lightningTexCoord.x += 0.5;
-
+  float scaleMult = 1.0;
   if (strikeTypeSign < 0.0) {
+    // IC structural remap: horizontal channel sheet centered in-cloud.
+    float icAnchorY = clamp(pos.y, 0.36, 0.84);
+    scaleMult = 1.0 / max(icAnchorY + 0.12, 0.30);
+    lightningTexCoord.x *= scaleMult * aspectRatios[0] / lightningTexAspect * 0.92;
+    lightningTexCoord.y *= -scaleMult * 0.72;
+    lightningTexCoord.x += 0.5;
+
     vec2 icSwap = lightningTexCoord;
-    lightningTexCoord.x = icSwap.y * 0.90 + 0.5;
-    lightningTexCoord.y = (icSwap.x - 0.5) * 0.95 + 0.46;
+    lightningTexCoord.x = icSwap.y * 0.88 + 0.5;
+    lightningTexCoord.y = (icSwap.x - 0.5) * 0.92 + 0.45;
+  } else {
+    // CG structural remap: origin in cloud, strong downward propagation toward ground.
+    float cgSourceY = clamp(pos.y, 0.26, 0.72);
+    scaleMult = 1.0 / max(cgSourceY, 0.18);
+    lightningTexCoord.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
+    lightningTexCoord.y *= -scaleMult;
+    lightningTexCoord.x += 0.5;
   }
 
   if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68)
@@ -251,8 +264,14 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   pixVal += branchGhost * (strikeTypeSign < 0.0 ? 0.42 : 0.30);
 
   if (strikeTypeSign < 0.0) {
-    float icEnvelope = smoothstep(-0.30, -0.02, lightningTexCoord.y) * (1.0 - smoothstep(0.36, 0.86, lightningTexCoord.y));
-    pixVal *= clamp(icEnvelope, 0.0, 1.0);
+    // Keep IC (purple) illumination confined to the cloud deck band in both texture-space and world-space.
+    float icEnvelope = smoothstep(-0.18, -0.01, lightningTexCoord.y) * (1.0 - smoothstep(0.24, 0.60, lightningTexCoord.y));
+    float icCloudBand = smoothstep(0.30, 0.40, texCoord.y) * (1.0 - smoothstep(0.84, 0.92, texCoord.y));
+    pixVal *= clamp(icEnvelope * icCloudBand, 0.0, 1.0);
+  } else {
+    // CG (blue): suppress visible channel above main cloud cap so strike reads cloud-to-ground.
+    float cgAboveCloudFade = 1.0 - smoothstep(0.82, 0.95, texCoord.y);
+    pixVal *= clamp(cgAboveCloudFade, 0.0, 1.0);
   }
 
   const float branchShowFactor = 2.4;
