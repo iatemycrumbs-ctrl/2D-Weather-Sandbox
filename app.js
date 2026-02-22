@@ -1736,7 +1736,7 @@ async function loadData()
         alert('Save File from older version, settings will not be loaded');
       }
 
-      mainScript(baseTexF32, waterTexF32, wallTexI8, precipArray);
+      await mainScript(baseTexF32, waterTexF32, wallTexI8, precipArray);
     } else {
       // wrong id
       alert('Incompatible file!');
@@ -1752,7 +1752,7 @@ async function loadData()
     NUM_DROPLETS = computeNumDroplets(sim_res_x, sim_res_y);
     SETUP_MODE = true;
 
-    mainScript(null); // run without initial textures
+    await mainScript(null); // run without initial textures
   }
   } catch (err) {
     console.error('Failed to load simulation:', err);
