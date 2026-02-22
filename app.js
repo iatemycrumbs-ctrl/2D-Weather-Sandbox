@@ -1645,6 +1645,8 @@ async function loadData()
   applyIntroShaderSettings();
   let file = document.getElementById('fileInput').files[0];
 
+  try {
+
   if (file) {                                                    // load data from save file
     let versionBlob = file.slice(0, 4);                          // extract first 4 bytes containing version id
     let versionBuf = await versionBlob.arrayBuffer();
@@ -1751,6 +1753,11 @@ async function loadData()
     SETUP_MODE = true;
 
     mainScript(null); // run without initial textures
+  }
+  } catch (err) {
+    console.error('Failed to load simulation:', err);
+    alert('Failed to load this simulation file. It may be corrupted or incompatible.');
+    document.getElementById('fileInput').value = '';
   }
 }
 
