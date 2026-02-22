@@ -198,6 +198,28 @@ vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTy
   return vec2(meander + filament, 0.0);
 }
 
+vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
+{
+  vec2 uv = baseCoord;
+  uv.x *= scaleMult * aspectRatios[0] / lightningTexAspect * 0.92;
+  uv.y *= -scaleMult * 0.72;
+  uv.x += 0.5;
+
+  vec2 swapped = uv;
+  uv.x = swapped.y * 0.88 + 0.5;
+  uv.y = (swapped.x - 0.5) * 0.92 + 0.45;
+  return uv;
+}
+
+vec2 remapCGLightningUV(vec2 baseCoord, float scaleMult)
+{
+  vec2 uv = baseCoord;
+  uv.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
+  uv.y *= -scaleMult;
+  uv.x += 0.5;
+  return uv;
+}
+
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 {
   float T0 = Tin - 1.0;
@@ -230,20 +252,12 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     // IC structural remap: horizontal channel sheet centered in-cloud.
     float icAnchorY = clamp(pos.y, 0.36, 0.84);
     scaleMult = 1.0 / max(icAnchorY + 0.12, 0.30);
-    lightningTexCoord.x *= scaleMult * aspectRatios[0] / lightningTexAspect * 0.92;
-    lightningTexCoord.y *= -scaleMult * 0.72;
-    lightningTexCoord.x += 0.5;
-
-    vec2 icSwap = lightningTexCoord;
-    lightningTexCoord.x = icSwap.y * 0.88 + 0.5;
-    lightningTexCoord.y = (icSwap.x - 0.5) * 0.92 + 0.45;
+    lightningTexCoord = remapICLightningUV(lightningTexCoord, pos, scaleMult);
   } else {
     // CG structural remap: origin in cloud, strong downward propagation toward ground.
     float cgSourceY = clamp(pos.y, 0.26, 0.72);
     scaleMult = 1.0 / max(cgSourceY, 0.18);
-    lightningTexCoord.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
-    lightningTexCoord.y *= -scaleMult;
-    lightningTexCoord.x += 0.5;
+    lightningTexCoord = remapCGLightningUV(lightningTexCoord, scaleMult);
   }
 
   if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68)
@@ -269,9 +283,10 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     float icCloudBand = smoothstep(0.30, 0.40, texCoord.y) * (1.0 - smoothstep(0.84, 0.92, texCoord.y));
     pixVal *= clamp(icEnvelope * icCloudBand, 0.0, 1.0);
   } else {
-    // CG (blue): suppress visible channel above main cloud cap so strike reads cloud-to-ground.
+    // CG (blue): suppress visible channel above cloud cap and fade near source so channel reads cloud->ground.
     float cgAboveCloudFade = 1.0 - smoothstep(0.82, 0.95, texCoord.y);
-    pixVal *= clamp(cgAboveCloudFade, 0.0, 1.0);
+    float cgSourceFade = smoothstep(pos.y + 0.04, pos.y - 0.01, texCoord.y);
+    pixVal *= clamp(cgAboveCloudFade * cgSourceFade, 0.0, 1.0);
   }
 
   const float branchShowFactor = 2.4;

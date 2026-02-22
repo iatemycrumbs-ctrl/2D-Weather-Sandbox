@@ -142,33 +142,57 @@ float computeSedimentationVelocity(float totalMass, float surfaceArea, float loc
   return max(baseTerminal + altitudeSettlingFloor + downdraftAssist - cappedUpdraftAssist, fallSpeed * 0.35);
 }
 
-vec2 computeLightningTarget(vec2 sourcePos, vec2 seed, bool isIC, float rodAttraction, float airplaneAttraction, vec2 nearestRod, float ctgWeight)
+float sampleCloudStrength(vec2 p)
+{
+  vec2 samplePos = clamp(p, texelSize * 2.0, vec2(1.0) - texelSize * 2.0);
+  vec4 localWater = texture(waterTex, samplePos);
+  return max(localWater[CLOUD] + localWater[PRECIPITATION] * 0.60, 0.0);
+}
+
+vec2 buildICLightningTarget(vec2 sourcePos, vec2 seed)
+{
+  // Purple IC: keep both origin and target inside cloud altitudes.
+  float anvilShift = (random2d(seed * 5.11 + vec2(iterNum * 0.004)) - 0.5) * texelSize.x * (120.0 + lightningComplexity * 80.0) * lightningAnvilDrift;
+  float shiftedX = mod(sourcePos.x + anvilShift + 1.0, 1.0);
+
+  float icYOffset = map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, -0.02, 0.07);
+  vec2 icTarget = vec2(shiftedX, clamp(sourcePos.y + icYOffset, 0.36, 0.84));
+  icTarget.x = mod(icTarget.x + (random2d(seed * 4.73) - 0.5) * texelSize.x * 118.0 * lightningComplexity + 1.0, 1.0);
+  return icTarget;
+}
+
+vec2 buildCGLightningSource(vec2 sourcePos, vec2 seed, float rodAttraction, float airplaneAttraction, vec2 nearestRod, float ctgWeight)
 {
   float anvilShift = (random2d(seed * 5.11 + vec2(iterNum * 0.004)) - 0.5) * texelSize.x * (120.0 + lightningComplexity * 80.0) * lightningAnvilDrift;
   float shiftedX = mod(sourcePos.x + anvilShift + 1.0, 1.0);
 
-  if (isIC) {
-    // Cloud-to-cloud (purple): keep both anchor and reach inside the cloud deck while retaining broad horizontal spread.
-    float icYOffset = map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, -0.02, 0.07);
-    vec2 icTarget = vec2(shiftedX, clamp(sourcePos.y + icYOffset, 0.36, 0.84));
-    icTarget.x = mod(icTarget.x + (random2d(seed * 4.73) - 0.5) * texelSize.x * 118.0 * lightningComplexity + 1.0, 1.0);
-    return icTarget;
-  }
-
   float rodTargetX = mix(shiftedX, nearestRod.x, rodAttraction);
   float planeTargetX = mix(shiftedX, airplanePosNorm.x, airplaneAttraction);
   float targetX = mix(rodTargetX, planeTargetX, clamp(airplaneAttraction, 0.0, 1.0));
-  float groundTargetY = texelSize.y * (1.5 + random2d(seed * 6.61) * 2.0);
-  float targetY = mix(sourcePos.y, groundTargetY, clamp(0.70 + ctgWeight * 0.55, 0.0, 1.0));
-  targetY = mix(targetY, nearestRod.y + texelSize.y * 2.0, rodAttraction);
-  targetY = mix(targetY, airplanePosNorm.y, clamp(airplaneAttraction * 0.65, 0.0, 1.0));
-  vec2 cgTarget = vec2(targetX, clamp(targetY, texelSize.y, 0.98));
-  cgTarget.x = mod(cgTarget.x + (random2d(seed * 8.27) - 0.5) * texelSize.x * 18.0 * lightningComplexity + 1.0, 1.0);
+  targetX = mod(targetX + (random2d(seed * 8.27) - 0.5) * texelSize.x * 18.0 * lightningComplexity + 1.0, 1.0);
 
-  // Cloud-to-ground (blue): always originate in the lower cloud deck (not clear air), while rendering extends to ground.
-  float cloudBaseY = clamp(min(sourcePos.y, 0.64) - texelSize.y * (2.0 + random2d(seed * 9.13) * 7.0), 0.28, 0.70);
-  vec2 cgSource = vec2(cgTarget.x, cloudBaseY);
-  return cgSource;
+  // Blue CG: force the visible origin to be an actual cloud-bearing cell near cloud base.
+  float candidateY = clamp(min(sourcePos.y, 0.68) - texelSize.y * (2.0 + random2d(seed * 9.13) * 7.0), 0.20, 0.76);
+  vec2 bestSource = vec2(targetX, candidateY);
+  float bestCloud = sampleCloudStrength(bestSource);
+
+  for (int i = 0; i < 6; i++) {
+    float t = float(i) / 5.0;
+    float probeY = clamp(sourcePos.y - texelSize.y * (2.0 + 20.0 * t), 0.18, 0.82);
+    vec2 probe = vec2(targetX, probeY);
+    float cloudStrength = sampleCloudStrength(probe);
+    if (cloudStrength > bestCloud) {
+      bestCloud = cloudStrength;
+      bestSource = probe;
+    }
+  }
+
+  float cloudMin = 0.10 + ctgWeight * 0.05;
+  if (bestCloud < cloudMin) {
+    bestSource = vec2(targetX, clamp(sourcePos.y, 0.28, 0.76));
+  }
+
+  return bestSource;
 }
 
 
@@ -398,7 +422,9 @@ void main()
             float icProbability = clamp(icProb * icModeBoost, 0.05, 0.95);
             bool isIC = !forceCG && canBeIC && random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity)) < icProbability;
 
-            feedback.xy = computeLightningTarget(texCoord, spawnSeed, isIC, rodAttraction, airplaneAttraction, nearestRod, ctgWeight);
+            feedback.xy = isIC
+              ? buildICLightningTarget(texCoord, spawnSeed)
+              : buildCGLightningSource(texCoord, spawnSeed, rodAttraction, airplaneAttraction, nearestRod, ctgWeight);
 
             feedback[START_ITERNUM] = iterNum;
 
