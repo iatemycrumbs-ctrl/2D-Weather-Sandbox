@@ -270,8 +270,9 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
   float thermalColorMix = map_rangeC(lightningTemp, lightningTempMinK, lightningTempMaxK, 0.0, 1.0) * lightningColorTempMult;
-  vec3 coolLightningCol = strikeTypeSign < 0.0 ? vec3(0.52, 0.66, 1.0) : vec3(0.70, 0.60, 1.0);
-  vec3 hotLightningCol = strikeTypeSign < 0.0 ? vec3(0.82, 0.93, 1.00) : vec3(1.00, 0.93, 0.78);
+  // Requested palette: IC (negative intensity) appears purple, CG (positive intensity) appears blue.
+  vec3 coolLightningCol = strikeTypeSign < 0.0 ? vec3(0.68, 0.46, 1.0) : vec3(0.48, 0.74, 1.0);
+  vec3 hotLightningCol = strikeTypeSign < 0.0 ? vec3(0.94, 0.78, 1.00) : vec3(0.78, 0.92, 1.00);
   vec3 lightningCol = mix(coolLightningCol, hotLightningCol, clamp(thermalColorMix, 0.0, 1.0));
 
   float strikeContrast = strikeTypeSign < 0.0 ? 0.82 : 1.08;
