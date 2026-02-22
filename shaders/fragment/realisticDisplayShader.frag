@@ -200,23 +200,22 @@ vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTy
 
 vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
 {
-  vec2 uv = baseCoord;
-  uv.x *= scaleMult * aspectRatios[0] / lightningTexAspect * 1.22;
-  uv.y *= -scaleMult * 0.56;
-  uv.x += 0.5;
-
-  vec2 swapped = uv;
-  uv.x = swapped.y * 0.88 + 0.5;
-  uv.y = (swapped.x - 0.5) * 0.92 + 0.45;
+  vec2 uv = vec2(0.5);
+  float wrappedDx = mod((texCoord.x - pos.x) + 1.5, 1.0) - 0.5;
+  uv.x = 0.5 + wrappedDx * scaleMult * aspectRatios[0] * 2.25;
+  uv.y = 0.46 + (texCoord.y - pos.y) * scaleMult * 0.95;
   return uv;
 }
 
-vec2 remapCGLightningUV(vec2 baseCoord, float scaleMult)
+vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
 {
-  vec2 uv = baseCoord;
-  uv.x *= scaleMult * aspectRatios[0] / lightningTexAspect;
-  uv.y *= -scaleMult * 1.28;
-  uv.x += 0.5;
+  vec2 uv = vec2(0.5);
+  uv.x = 0.5 + baseCoord.x * scaleMult * aspectRatios[0] / lightningTexAspect;
+  // Normalize vertical texture traversal so the channel head starts near the cloud source
+  // and can continue all the way down to terrain instead of collapsing into short stubs.
+  float sourceToGround = max(pos.y, 0.08);
+  float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
+  uv.y = verticalTravel * 1.10;
   return uv;
 }
 
@@ -250,14 +249,14 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   float scaleMult = 1.0;
   if (strikeTypeSign < 0.0) {
     // IC structural remap: horizontal channel sheet centered in-cloud.
-    float icAnchorY = clamp(pos.y, 0.36, 0.84);
-    scaleMult = 1.0 / max(icAnchorY + 0.12, 0.30);
+    float icAnchorY = clamp(pos.y, 0.34, 0.88);
+    scaleMult = 1.0 / max(0.22 + abs(icAnchorY - 0.50), 0.30);
     lightningTexCoord = remapICLightningUV(lightningTexCoord, pos, scaleMult);
   } else {
     // CG structural remap: origin in cloud, strong downward propagation toward ground.
     float cgSourceY = clamp(pos.y, 0.26, 0.72);
     scaleMult = 1.0 / max(cgSourceY, 0.18);
-    lightningTexCoord = remapCGLightningUV(lightningTexCoord, scaleMult);
+    lightningTexCoord = remapCGLightningUV(lightningTexCoord, pos, scaleMult);
   }
 
   if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68)
@@ -279,15 +278,17 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   if (strikeTypeSign < 0.0) {
     // Keep IC (purple) illumination confined to the cloud deck band in both texture-space and world-space.
-    float icEnvelope = smoothstep(-0.18, -0.01, lightningTexCoord.y) * (1.0 - smoothstep(0.24, 0.60, lightningTexCoord.y));
-    float icCloudBand = smoothstep(0.30, 0.40, texCoord.y) * (1.0 - smoothstep(0.84, 0.92, texCoord.y));
-    pixVal *= clamp(icEnvelope * icCloudBand, 0.0, 1.0);
+    float icEnvelope = smoothstep(0.12, 0.46, lightningTexCoord.y) * (1.0 - smoothstep(0.62, 0.90, lightningTexCoord.y));
+    float icCloudBand = smoothstep(0.28, 0.38, texCoord.y) * (1.0 - smoothstep(0.86, 0.94, texCoord.y));
+    float icCenterFalloff = 1.0 - smoothstep(0.26, 0.52, abs(lightningTexCoord.y - 0.5));
+    pixVal *= clamp(icEnvelope * icCloudBand * icCenterFalloff, 0.0, 1.0);
   } else {
-    // CG (blue): suppress visible channel above cloud cap and fade near source so channel reads cloud->ground.
+    // CG (blue): keep the origin inside cloud and maintain continuous channel reach toward terrain.
     float cgAboveCloudFade = 1.0 - smoothstep(0.84, 0.97, texCoord.y);
-    float cgSourceFade = smoothstep(pos.y + 0.03, pos.y - 0.02, texCoord.y);
-    float cgGroundReach = smoothstep(0.24, 0.02, texCoord.y);
-    pixVal *= clamp(cgAboveCloudFade * max(cgSourceFade, cgGroundReach * 0.78), 0.0, 1.0);
+    float cgBelowSource = smoothstep(pos.y + 0.03, pos.y - 0.03, texCoord.y);
+    float cgGroundReach = smoothstep(0.36, 0.00, texCoord.y);
+    pixVal *= clamp(cgAboveCloudFade * cgBelowSource, 0.0, 1.0);
+    pixVal += trunk * cgGroundReach * 0.34;
   }
 
   const float branchShowFactor = 2.4;
