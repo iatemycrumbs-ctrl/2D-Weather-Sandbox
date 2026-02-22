@@ -1614,6 +1614,32 @@ let weatherStations = []; // array holding all weather stations
 let weatherBalloons = [];
 let lightningRods = [];
 
+function resetTransientSimulationObjects()
+{
+  for (const station of weatherStations) {
+    if (station && typeof station.destroy == 'function') {
+      try {
+        station.destroy();
+      } catch (err) {
+        console.warn('Could not destroy weather station cleanly.', err);
+      }
+    }
+  }
+
+  for (const balloon of weatherBalloons) {
+    if (balloon && typeof balloon.destroy == 'function') {
+      try {
+        balloon.destroy();
+      } catch (err) {
+        console.warn('Could not destroy weather balloon cleanly.', err);
+      }
+    }
+  }
+
+  weatherStations = [];
+  weatherBalloons = [];
+  lightningRods = [];
+}
 
 
 
@@ -1644,6 +1670,10 @@ async function loadData()
 {
   applyIntroShaderSettings();
   let file = document.getElementById('fileInput').files[0];
+
+  // ensure stale objects/settings from previous attempts do not leak into a new load
+  resetTransientSimulationObjects();
+  guiControlsFromSaveFile = null;
 
   try {
 
@@ -1753,8 +1783,16 @@ async function loadData()
         let weatherStationArray = new Int16Array(weatherStationBuf);
 
 
-        for (i = 0; i < numWeatherStations; i++) {
-          weatherStations.push(new Weatherstation(weatherStationArray[i * 2], weatherStationArray[i * 2 + 1]));
+        for (let i = 0; i < numWeatherStations; i++) {
+          const stationX = weatherStationArray[i * 2];
+          const stationY = weatherStationArray[i * 2 + 1];
+
+          if (!Number.isFinite(stationX) || !Number.isFinite(stationY))
+            continue;
+
+          const clampedX = clamp(Math.round(stationX), 0, sim_res_x - 1);
+          const clampedY = clamp(Math.round(stationY), 1, sim_res_y - 1);
+          weatherStations.push(new Weatherstation(clampedX, clampedY));
         }
 
         sliceStart = sliceEnd;
@@ -4190,8 +4228,33 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   function setupDatGui(strGuiControls)
   {
     datGui = new dat.GUI();
-    const loadedGuiControls = JSON.parse(strGuiControls); // load settings object
-    guiControls = Object.assign({}, guiControls_default, loadedGuiControls); // backfill missing keys from older savefiles
+    let loadedGuiControls = {};
+    try {
+      const parsedSettings = JSON.parse(strGuiControls); // load settings object
+      if (parsedSettings && typeof parsedSettings == 'object' && !Array.isArray(parsedSettings))
+        loadedGuiControls = parsedSettings;
+      else
+        console.warn('Save settings JSON is not an object, using defaults.');
+    } catch (err) {
+      console.warn('Save settings could not be parsed, using defaults.', err);
+    }
+
+    const sanitizedGuiControls = {};
+    for (const [key, defaultValue] of Object.entries(guiControls_default)) {
+      const loadedValue = loadedGuiControls[key];
+
+      if (typeof defaultValue == 'number') {
+        sanitizedGuiControls[key] = (typeof loadedValue == 'number' && Number.isFinite(loadedValue)) ? loadedValue : defaultValue;
+      } else if (typeof defaultValue == 'boolean') {
+        sanitizedGuiControls[key] = (typeof loadedValue == 'boolean') ? loadedValue : defaultValue;
+      } else if (typeof defaultValue == 'string') {
+        sanitizedGuiControls[key] = (typeof loadedValue == 'string') ? loadedValue : defaultValue;
+      } else {
+        sanitizedGuiControls[key] = (loadedValue !== undefined) ? loadedValue : defaultValue;
+      }
+    }
+
+    guiControls = Object.assign({}, guiControls_default, sanitizedGuiControls); // backfill missing/invalid keys from older or corrupted savefiles
 
     function applyGraphicsPresetSettings(preset)
     {
