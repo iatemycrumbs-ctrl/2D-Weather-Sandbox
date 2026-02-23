@@ -19,7 +19,7 @@ function getQualityConfig(quality)
     return {
       trunkSteps : 340,
       branchSteps : 95,
-      splitChance : 0.085,
+      splitChance : 0.11,
       maxDepth : 2,
       haloWidth : 3.1,
       glowWidth : 1.7,
@@ -38,7 +38,7 @@ function getQualityConfig(quality)
     return {
       trunkSteps : 490,
       branchSteps : 140,
-      splitChance : 0.115,
+      splitChance : 0.145,
       maxDepth : 3,
       haloWidth : 3.8,
       glowWidth : 1.95,
@@ -56,7 +56,7 @@ function getQualityConfig(quality)
   return {
     trunkSteps : 680,
     branchSteps : 185,
-    splitChance : 0.14,
+    splitChance : 0.175,
     maxDepth : 4,
     haloWidth : 4.5,
     glowWidth : 2.25,
@@ -147,8 +147,10 @@ function generateLightningTexture(width, height, seed, quality)
       const descendBias = 0.20 + current.depth * 0.02;
       const wiggle = (rand() - 0.5) * (0.28 + current.depth * 0.08);
       const centerPull = (startX - current.x) / width * 0.12;
+      const curvature = Math.sin((current.y / height) * Math.PI * (1.25 + current.depth * 0.35) + rand() * 0.6) * (0.075 + current.depth * 0.028);
+      const kink = (rand() < 0.06) ? ((rand() < 0.5 ? -1 : 1) * (0.10 + rand() * 0.16)) : 0.0;
 
-      current.angle = current.angle * 0.86 + wiggle + centerPull;
+      current.angle = current.angle * 0.82 + wiggle + centerPull + curvature + kink;
 
       const dx = Math.sin(current.angle) * current.step;
       const dy = Math.max(0.48, Math.cos(current.angle) * current.step + descendBias * current.step);
@@ -223,6 +225,14 @@ function seedFallbackBranches(trunk, branches, cfg, rand, width, height)
       const y2 = Math.min(height, y + dy);
 
       branches.push({x0 : x, y0 : y, x1 : x2, y1 : y2, w : widthNow});
+
+      if (j > 2 && rand() < 0.12) {
+        const twigAngle = angle + dir * (0.35 + rand() * 0.42);
+        const twigStep = step * (0.55 + rand() * 0.30);
+        const tx = clamp(x2 + Math.sin(twigAngle) * twigStep, 0, width - 1);
+        const ty = Math.min(height, y2 + Math.max(0.22, Math.cos(twigAngle) * twigStep));
+        branches.push({x0 : x2, y0 : y2, x1 : tx, y1 : ty, w : Math.max(widthNow * 0.62, 0.20)});
+      }
 
       x = x2;
       y = y2;

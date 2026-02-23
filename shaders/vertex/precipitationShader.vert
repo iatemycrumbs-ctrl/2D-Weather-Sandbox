@@ -347,6 +347,64 @@ void main()
     }
   }
 
+
+  // Independent storm-lightning probe: decouples lightning generation from droplet spawn state so
+  // electrified storms keep striking even when few droplets are currently in inactive respawn pool.
+  if (gl_VertexID == 0) {
+    vec4 lightningDataNow = texture(lightningDataTex, vec2(0.5));
+    float previousLightningAge = iterNum - lightningDataNow[START_ITERNUM];
+    float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.95, 0.48),
+                                 3.8 + abs(lightningDataNow[INTENSITY]) * (1.6 + multiStrokeLightning * 1.1));
+    bool lightningChannelFree = lightningDataNow[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
+
+    if (lightningChannelFree) {
+      vec2 probeSeed = vec2(iterNum * 0.0137 + 0.231, iterNum * 0.0091 + 0.719);
+      vec2 probePos = vec2(random2d(probeSeed), random2d(probeSeed.yx + 7.31));
+      probePos.y = clamp(probePos.y, 0.18, 0.96);
+
+      vec2 bestPos = probePos;
+      float bestScore = 0.0;
+      for (int i = 0; i < 6; i++) {
+        float t = float(i) / 5.0;
+        vec2 samplePos = vec2(mod(probePos.x + (t - 0.5) * 0.16 + 1.0, 1.0), clamp(probePos.y + (t - 0.5) * 0.20, 0.12, 0.98));
+        vec4 sampleWater = texture(waterTex, samplePos);
+        vec4 sampleBase = texture(baseTex, samplePos);
+        float sampleTemp = potentialToRealT(sampleBase[TEMPERATURE]);
+        float mixedPhaseGate = smoothstep(CtoK(-36.0), CtoK(-2.0), sampleTemp);
+        float cloudCharge = sampleWater[CLOUD] * 1.45 + sampleWater[PRECIPITATION] * 1.25;
+        float updraftBoost = map_rangeC(sampleBase[VY], -0.01, 0.025, 0.45, 1.45);
+        float score = cloudCharge * mixedPhaseGate * updraftBoost;
+        if (score > bestScore) {
+          bestScore = score;
+          bestPos = samplePos;
+        }
+      }
+
+      float stormSpawnChance = max(bestScore - 0.014, 0.0) * lightningChanceMult * 3.8;
+      stormSpawnChance *= map_rangeC(lightningFrequencyBoost * stormOrganization, 0.2, 4.0, 0.75, 1.85);
+      stormSpawnChance = clamp(stormSpawnChance, 0.0, 0.86);
+
+      float stormRand = random2d(probeSeed * 2.13 + vec2(bestScore * 17.0, previousLightningAge * 0.001));
+      bool overdueStormRecharge = previousLightningAge > (58.0 + 20.0 * lightningMinInterval) && bestScore > 0.040;
+
+      if (stormSpawnChance > stormRand || overdueStormRecharge) {
+        bool isIC = bestPos.y > 0.34 && random2d(bestPos * 37.1 + probeSeed) < clamp(icLightningRatio, 0.15, 0.90);
+        feedback.xy = isIC ? buildICLightningTarget(bestPos, probeSeed) : buildCGLightningSource(bestPos, probeSeed, 0.0, 0.0, vec2(0.0), 1.0);
+        feedback[START_ITERNUM] = iterNum;
+        float flashIntensity = clamp(0.24 + bestScore * 22.0 + lightningFlashRate * 0.25, 0.10, 8.0);
+        feedback[INTENSITY] = isIC ? -flashIntensity * 0.74 : flashIntensity * 1.06;
+
+        isActive = false;
+        gl_PointSize = 1.0;
+        gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
+        position_out = newPos;
+        mass_out = newMass;
+        density_out = max(newDensity, 0.0);
+        return;
+      }
+    }
+  }
+
   if (mass[WATER] < 0.) { // inactive
     // Reworked spawn system:
     // - seed from gl_VertexID to avoid state-collapse patterns (mobile precision friendly)
