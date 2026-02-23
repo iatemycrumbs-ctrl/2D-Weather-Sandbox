@@ -167,8 +167,8 @@ const float lightningTexAspect = lightningTexRes.x / lightningTexRes.y;
 
 float calcLightningTime(float startIterNum)
 {
-  float lightningTime = lightningAnimIter - startIterNum;
-  return lightningTime / (2.55 * lightningFlashPersistence);
+  float lightningTime = max(lightningAnimIter - startIterNum, 0.0);
+  return lightningTime / max(2.55 * lightningFlashPersistence, 0.01);
 }
 
 float lightningChannelEnvelope(float T, bool isIC)
@@ -277,8 +277,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   float branchWide = texture(lightningTex, lightningTexCoord + vec2(px.x * 5.5, -px.y * 7.5)).r;
   branchWide = max(branchWide, texture(lightningTex, lightningTexCoord + vec2(-px.x * 6.0, -px.y * 8.0)).r);
   float branchSpark = max(branchGhost, branchWide);
-  pixVal += branchGhost * (strikeTypeSign < 0.0 ? 0.64 : 0.54);
-  pixVal += branchWide * (strikeTypeSign < 0.0 ? 0.36 : 0.32);
+  float branchBase = branchGhost * (strikeTypeSign < 0.0 ? 0.64 : 0.54) + branchWide * (strikeTypeSign < 0.0 ? 0.36 : 0.32);
+  pixVal += branchBase;
 
   if (strikeTypeSign < 0.0) {
     // Keep IC (purple) illumination confined to the cloud deck band in both texture-space and world-space.
@@ -311,11 +311,14 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   }
 
   pixVal = max(pixVal - brightnessThreshold, 0.0);
+  float persistentBranchFloor = branchBase * (strikeTypeSign < 0.0 ? 0.82 : 0.74);
+  pixVal = max(pixVal, persistentBranchFloor);
   pixVal *= mix(84000.0, 154000.0, strikeTypeSign > 0.0 ? 1.0 : 0.52);
 
-  // Dissipate visible channel energy over time instead of leaving a static/frozen bolt imprint.
+  // Keep channel visible for the full event life; avoid mid-event disappearing bolts/branches.
   float channelFade = clamp(currentLightningIntensity * (strikeTypeSign > 0.0 ? 0.17 : 0.12), 0.0, 1.0);
-  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.55 : 1.30, strikeTypeSign > 0.0 ? 3.70 : 3.25, lightningTime);
+  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 2.55 : 2.35, strikeTypeSign > 0.0 ? 6.30 : 5.90, lightningTime);
+  tailFade = max(tailFade, strikeTypeSign > 0.0 ? 0.34 : 0.30);
   pixVal *= channelFade * tailFade;
 
   float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
