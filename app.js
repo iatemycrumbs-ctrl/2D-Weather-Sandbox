@@ -509,11 +509,11 @@ const guiControls_default = {
   lightningFlashPersistence : 0.72,
   lightningTempMinK : 9000.0,
   lightningTempMaxK : 33000.0,
-  precipitationVisualBoost : 1.0,
-  precipitationTint : 1.0,
-  precipitationContrast : 1.0,
+  precipitationShaftStrength : 1.0,
+  precipitationMistStrength : 0.9,
+  precipitationSparkle : 0.75,
   renderScale : 1.0,
-  pixelRatioScale : 0.5,
+  pixelRatioScale : 0.1,
   graphicsPreset : 'High',
   simulationProfile : 'Balanced',
   ambientScattering : 1.0,
@@ -649,9 +649,9 @@ function isMobileLikeDevice()
 
 function getEffectivePixelRatio()
 {
-  const sliderScale = clamp(guiControls?.pixelRatioScale ?? 1.0, 0.5, 1.5);
+  const sliderScale = clamp(guiControls?.pixelRatioScale ?? 1.0, 0.05, 1.5);
   const dpr = window.devicePixelRatio || 1.0;
-  return clamp(dpr * sliderScale, 0.75, 2.5);
+  return clamp(dpr * sliderScale, 0.2, 2.5);
 }
 
 function getDeviceInfoSummary()
@@ -1646,7 +1646,9 @@ function resetTransientSimulationObjects()
 function applyIntroShaderSettings()
 {
   guiControls_default.lightningBloomStrength = readNumericInput('introLightningFxSel', guiControls_default.lightningBloomStrength ?? 1.0);
-  guiControls_default.precipitationVisualBoost = readNumericInput('introPrecipFxSel', guiControls_default.precipitationVisualBoost ?? 1.0);
+  guiControls_default.precipitationShaftStrength = readNumericInput('introPrecipFxSel', guiControls_default.precipitationShaftStrength ?? 1.0);
+  guiControls_default.precipitationMistStrength = clamp(guiControls_default.precipitationShaftStrength * 0.9, 0.35, 2.2);
+  guiControls_default.precipitationSparkle = clamp(0.55 + guiControls_default.precipitationShaftStrength * 0.25, 0.1, 2.0);
   guiControls_default.radiationHaze = readNumericInput('introShaderQualitySel', guiControls_default.radiationHaze ?? 1.0);
 
   const introGraphicsPreset = getEl('introGraphicsPreset');
@@ -1658,7 +1660,7 @@ function applyIntroShaderSettings()
     guiControls_default.simulationProfile = introSimulationProfile.value;
   guiControls_default.introShaderQuality = guiControls_default.radiationHaze;
   guiControls_default.introLightningVisualStrength = guiControls_default.lightningBloomStrength;
-  guiControls_default.introPrecipVisualStrength = guiControls_default.precipitationVisualBoost;
+  guiControls_default.introPrecipVisualStrength = guiControls_default.precipitationShaftStrength;
 
   const introCloudLayerSel = getEl('introCloudLayerSel');
   if (introCloudLayerSel && introCloudLayerSel.value)
@@ -4184,9 +4186,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationTint'), guiControls.precipitationTint);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationContrast'), guiControls.precipitationContrast);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
@@ -4261,22 +4263,22 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       if (preset == 'Low') {
         guiControls.renderScale = 0.75;
         guiControls.lightningBloomStrength = 0.70;
-        guiControls.precipitationVisualBoost = 0.85;
+        guiControls.precipitationShaftStrength = 0.85;
         guiControls.ambientScattering = 0.80;
       } else if (preset == 'Medium') {
         guiControls.renderScale = 0.90;
         guiControls.lightningBloomStrength = 0.90;
-        guiControls.precipitationVisualBoost = 1.0;
+        guiControls.precipitationShaftStrength = 1.0;
         guiControls.ambientScattering = 0.92;
       } else if (preset == 'High') {
         guiControls.renderScale = 1.0;
         guiControls.lightningBloomStrength = 1.0;
-        guiControls.precipitationVisualBoost = 1.0;
+        guiControls.precipitationShaftStrength = 1.0;
         guiControls.ambientScattering = 1.0;
       } else {
         guiControls.renderScale = 1.15;
         guiControls.lightningBloomStrength = 1.15;
-        guiControls.precipitationVisualBoost = 1.15;
+        guiControls.precipitationShaftStrength = 1.15;
         guiControls.ambientScattering = 1.10;
       }
     }
@@ -5059,7 +5061,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Microburst Strength');
 
-    precipitation_folder.add(guiControls, 'lightningBranching', 0.2, 3.0, 0.01)
+    precipitation_folder.add(guiControls, 'lightningBranching', 0.5, 6.0, 0.01)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningBranching'), guiControls.lightningBranching);
@@ -5244,9 +5246,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       applyGraphicsPresetSettings(guiControls.graphicsPreset);
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
-      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationTint'), guiControls.precipitationTint);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationContrast'), guiControls.precipitationContrast);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
       resizeCanvasAndPostFx();
@@ -5254,7 +5256,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     graphicsQuality_folder.add(guiControls, 'renderScale', 0.5, 1.5, 0.01).name('Render Scale').onChange(function() {
       resizeCanvasAndPostFx();
     });
-    graphicsQuality_folder.add(guiControls, 'pixelRatioScale', 0.5, 1.5, 0.01).name('Pixel Ratio Scale').onChange(function() {
+    graphicsQuality_folder.add(guiControls, 'pixelRatioScale', 0.05, 1.5, 0.01).name('Pixel Ratio Scale').onChange(function() {
       resizeCanvasAndPostFx();
     });
     graphicsQuality_folder.add(guiControls, 'simulationProfile', ['Calm', 'Balanced', 'Dynamic', 'Extreme']).name('Simulation Profile').onChange(function() {
@@ -5305,19 +5307,19 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
       })
       .name('Exposure');
-    display_folder.add(guiControls, 'precipitationVisualBoost', 0.5, 2.0, 0.01).name('Precip Lighting Boost').onChange(function() {
+    display_folder.add(guiControls, 'precipitationShaftStrength', 0.2, 3.0, 0.01).name('Precip Shaft Strength').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
-      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationTint'), guiControls.precipitationTint);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationContrast'), guiControls.precipitationContrast);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle);
     });
-    display_folder.add(guiControls, 'precipitationTint', 0.4, 1.8, 0.01).name('Precipitation Tint').onChange(function() {
+    display_folder.add(guiControls, 'precipitationMistStrength', 0.2, 2.5, 0.01).name('Precip Mist Density').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
-      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationTint'), guiControls.precipitationTint);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);
     });
-    display_folder.add(guiControls, 'precipitationContrast', 0.6, 1.6, 0.01).name('Precipitation Contrast').onChange(function() {
+    display_folder.add(guiControls, 'precipitationSparkle', 0.1, 2.2, 0.01).name('Precip Specular Sparkle').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
-      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationContrast'), guiControls.precipitationContrast);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle);
     });
     display_folder.add(guiControls, 'ambientScattering', 0.3, 2.5, 0.01).name('Ambient Scattering').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
@@ -5498,9 +5500,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationVisualBoost'), guiControls.precipitationVisualBoost);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationTint'), guiControls.precipitationTint);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationContrast'), guiControls.precipitationContrast);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);

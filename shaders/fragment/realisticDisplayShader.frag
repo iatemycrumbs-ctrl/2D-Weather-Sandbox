@@ -47,9 +47,9 @@ uniform float lightningColorTempMult;
 uniform float lightningFlashPersistence;
 uniform float lightningTempMinK;
 uniform float lightningTempMaxK;
-uniform float precipitationVisualBoost;
-uniform float precipitationTint;
-uniform float precipitationContrast;
+uniform float precipitationShaftStrength;
+uniform float precipitationMistStrength;
+uniform float precipitationSparkle;
 uniform float ambientScattering;
 uniform float cloudLayerComplexity;
 uniform float lightningBloomStrength;
@@ -274,7 +274,11 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   float pixVal = max(trunk, max(side, upDown) * (0.50 + 0.22 * lightningBloomStrength));
   float branchGhost = texture(lightningTex, lightningTexCoord + vec2(px.x * 2.0, -px.y * 3.0)).r;
   branchGhost = max(branchGhost, texture(lightningTex, lightningTexCoord + vec2(-px.x * 2.5, -px.y * 4.0)).r);
-  pixVal += branchGhost * (strikeTypeSign < 0.0 ? 0.42 : 0.30);
+  float branchWide = texture(lightningTex, lightningTexCoord + vec2(px.x * 5.5, -px.y * 7.5)).r;
+  branchWide = max(branchWide, texture(lightningTex, lightningTexCoord + vec2(-px.x * 6.0, -px.y * 8.0)).r);
+  float branchSpark = max(branchGhost, branchWide);
+  pixVal += branchGhost * (strikeTypeSign < 0.0 ? 0.64 : 0.54);
+  pixVal += branchWide * (strikeTypeSign < 0.0 ? 0.36 : 0.32);
 
   if (strikeTypeSign < 0.0) {
     // Keep IC (purple) illumination confined to the cloud deck band in both texture-space and world-space.
@@ -294,10 +298,12 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     pixVal += trunk * max(cgGroundReach * 0.52, cgLongChannel * 0.40);
   }
 
-  const float branchShowFactor = 2.4;
-  float branchAxis = strikeTypeSign < 0.0 ? abs(lightningTexCoord.x - 0.5) * 1.4 : lightningTexCoord.y;
-  float brightnessThreshold = clamp((strikeTypeSign < 0.0 ? 0.80 : 0.54) - lightningTime * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.80 : 0.50)) + branchAxis * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.58 : 0.34)), 0.0, 1.0);
-  brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.68 : 0.60, clamp(lightningTime - 0.8, 0.0, 1.0));
+  const float branchShowFactor = 2.1;
+  float branchAxis = strikeTypeSign < 0.0 ? abs(lightningTexCoord.x - 0.5) * 1.1 : lightningTexCoord.y * 0.86;
+  float brightnessThreshold = clamp((strikeTypeSign < 0.0 ? 0.68 : 0.44) - lightningTime * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.72 : 0.46)) + branchAxis * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.46 : 0.28)), 0.0, 1.0);
+  brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.56 : 0.50, clamp(lightningTime - 0.85, 0.0, 1.0));
+  brightnessThreshold -= branchSpark * (strikeTypeSign < 0.0 ? 0.24 : 0.20);
+  brightnessThreshold = max(brightnessThreshold, 0.0);
 
   if (strikeTypeSign > 0.0) {
     float cgMinCore = trunk * (1.0 - smoothstep(0.00, pos.y + 0.02, texCoord.y)) * 0.22;
@@ -366,26 +372,46 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   float cloudwater = water[CLOUD];
 
-  float cloudShade = clamp(1.0 / (cloudwater * 0.0046 + 1.0), 0.18, 1.0);
-  float precipPresence = clamp(water[PRECIPITATION] * 2.2 * precipitationVisualBoost, 0.0, 1.0);
-  vec3 precipTintCol = mix(vec3(0.88, 0.92, 1.0), vec3(0.62, 0.74, 1.0), clamp(precipitationTint, 0.0, 2.0));
-  vec3 cloudCol = mix(vec3(cloudShade), precipTintCol * cloudShade, precipPresence * 0.55);
+  float cloudShade = clamp(1.0 / (cloudwater * 0.0044 + 1.0), 0.20, 1.0);
 
-  float cloudDensity = max(cloudwater * (8.8 + cloudLayerComplexity * 4.4), 0.0);
+  // Brand-new precipitation visual model: shafts + mist + sparkle highlights.
+  float precipMass = max(water[PRECIPITATION], 0.0);
+  float precipShaft = clamp(precipMass * (2.3 * precipitationShaftStrength), 0.0, 1.0);
+  float precipMist = clamp(precipMass * (1.55 * precipitationMistStrength) + cloudwater * 0.22, 0.0, 1.0);
+
+  vec2 precipNoiseUv = vec2(texCoord.x * resolution.x * 0.035 + iterNum * 0.010,
+                            texCoord.y * resolution.y * 0.090 - iterNum * 0.060);
+  float streakNoise = texture(noiseTex, precipNoiseUv).r;
+  float streakMask = smoothstep(0.52, 0.98, streakNoise + precipShaft * 0.30);
+  float shaftEnvelope = smoothstep(0.14, 0.88, texCoord.y) * (1.0 - smoothstep(0.84, 1.0, texCoord.y));
+  float precipShaftOpacity = precipShaft * streakMask * shaftEnvelope;
+
+  float sparkleNoise = texture(noiseTex, vec2(texCoord.x * resolution.x * 0.11 - iterNum * 0.022,
+                                              texCoord.y * resolution.y * 0.16 + iterNum * 0.015)).r;
+  float precipSparkleMask = smoothstep(0.80, 1.0, sparkleNoise + precipShaft * 0.24);
+  float precipSparkleGlow = precipSparkleMask * precipShaft * precipitationSparkle;
+
+  vec3 precipShaftCol = mix(vec3(0.58, 0.72, 0.98), vec3(0.80, 0.90, 1.0), clamp(precipitationSparkle * 0.8, 0.0, 1.0));
+  vec3 precipMistCol = mix(vec3(0.72, 0.80, 0.92), vec3(0.54, 0.66, 0.86), clamp(precipitationMistStrength * 0.7, 0.0, 1.0));
+
+  vec3 cloudCol = vec3(cloudShade);
+  cloudCol = mix(cloudCol, precipMistCol * cloudShade, precipMist * 0.46);
+  cloudCol += precipShaftCol * (precipShaftOpacity * 0.55 + precipSparkleGlow * 0.35);
+
+  float cloudDensity = max(cloudwater * (8.6 + cloudLayerComplexity * 4.2), 0.0);
   float cloudLayerA = smoothstep(0.18, 0.52, texCoord.y) * cloudLayerComplexity;
-  float cloudLayerB = smoothstep(0.48, 0.86, texCoord.y) * (0.65 + 0.35 * cloudLayerComplexity);
-  float cloudLayerC = smoothstep(0.70, 0.97, texCoord.y) * (0.45 + cloudLayerComplexity * 0.25);
-  cloudDensity *= (0.80 + cloudLayerA * 0.30 + cloudLayerB * 0.24 + cloudLayerC * 0.18);
+  float cloudLayerB = smoothstep(0.46, 0.86, texCoord.y) * (0.62 + 0.38 * cloudLayerComplexity);
+  float cloudLayerC = smoothstep(0.70, 0.97, texCoord.y) * (0.40 + cloudLayerComplexity * 0.28);
+  cloudDensity *= (0.80 + cloudLayerA * 0.30 + cloudLayerB * 0.26 + cloudLayerC * 0.20);
 
-  // Keep rendered cloud opacity bounded even during extreme cloud-water bursts.
   float cloudVisualLimiter = 1.0 / (1.0 + max(cloudDensity - 2.8, 0.0) * 0.26);
   cloudDensity *= cloudVisualLimiter;
 
-  float totalDensity = cloudDensity + water[PRECIPITATION] * (0.8 * precipitationVisualBoost); // visualize precipitation
+  float precipDensity = precipMass * (0.95 * precipitationShaftStrength + 0.60 * precipitationMistStrength);
+  float totalDensity = cloudDensity + precipDensity;
 
-
-  // float cloudOpacity = clamp(cloudwater * 4.0, 0.0, 1.0);
-  float cloudOpacity = clamp((1.0 - (1.0 / (1. + totalDensity))) * mix(0.82, 1.16, clamp(precipitationContrast, 0.5, 1.8) - 0.5), 0.0, 0.92);
+  float cloudOpacity = clamp((1.0 - (1.0 / (1. + totalDensity))) * (0.86 + 0.22 * precipitationMistStrength), 0.0, 0.95);
+  cloudOpacity = max(cloudOpacity, clamp(precipShaftOpacity * 0.44 + precipMist * 0.24, 0.0, 0.70));
 
   const vec3 smokeThinCol = vec3(0.8, 0.51, 0.26);
   const vec3 smokeThickCol = vec3(0., 0., 0.);

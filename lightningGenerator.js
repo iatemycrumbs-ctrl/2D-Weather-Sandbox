@@ -29,7 +29,8 @@ function getQualityConfig(quality)
       glowAlpha : 0.44,
       bloomAlpha : 0.0,
       branchDecay : 0.968,
-      minTrunkCoverage : 0.90
+      minTrunkCoverage : 0.90,
+      minVisibleBranches : 28
     };
   }
 
@@ -47,7 +48,8 @@ function getQualityConfig(quality)
       glowAlpha : 0.52,
       bloomAlpha : 0.06,
       branchDecay : 0.972,
-      minTrunkCoverage : 0.93
+      minTrunkCoverage : 0.93,
+      minVisibleBranches : 40
     };
   }
 
@@ -64,7 +66,8 @@ function getQualityConfig(quality)
     glowAlpha : 0.60,
     bloomAlpha : 0.10,
     branchDecay : 0.976,
-    minTrunkCoverage : 0.96
+    minTrunkCoverage : 0.96,
+    minVisibleBranches : 56
   };
 }
 
@@ -111,6 +114,7 @@ function generateLightningTexture(width, height, seed, quality)
 
 
   ensureGroundConnection(trunk, startX, width, height, cfg, rand);
+  seedFallbackBranches(trunk, branches, cfg, rand, width, height);
 
   drawSegments(ctx, trunk, `rgba(160, 205, 255, ${cfg.haloAlpha})`, cfg.haloWidth, 'screen');
   drawSegments(ctx, trunk, `rgba(208, 232, 255, ${cfg.glowAlpha})`, cfg.glowWidth, 'screen');
@@ -184,6 +188,50 @@ function generateLightningTexture(width, height, seed, quality)
     }
   }
 }
+
+
+function seedFallbackBranches(trunk, branches, cfg, rand, width, height)
+{
+  const minVisibleBranches = cfg.minVisibleBranches || 32;
+  if (branches.length >= minVisibleBranches || trunk.length < 12)
+    return;
+
+  const attempts = Math.min(120, trunk.length);
+  for (let i = 0; i < attempts && branches.length < minVisibleBranches; i++) {
+    const idx = Math.floor(rand() * (trunk.length - 8)) + 4;
+    const src = trunk[idx];
+    const dir = rand() < 0.5 ? -1 : 1;
+    const branchLen = Math.floor(cfg.branchSteps * (0.16 + rand() * 0.24));
+
+    let x = src.x1;
+    let y = src.y1;
+    let angle = dir * (0.65 + rand() * 0.42);
+    let step = Math.max(0.7, (height / 1750) * (0.75 + rand() * 0.55));
+    let widthNow = Math.max(src.w * (0.48 + rand() * 0.28), 0.34);
+
+    for (let j = 0; j < branchLen; j++) {
+      if (y >= height || widthNow < 0.24)
+        break;
+
+      const lateralDrift = dir * (0.11 + rand() * 0.16);
+      const meander = (rand() - 0.5) * 0.28;
+      angle = angle * 0.84 + lateralDrift + meander;
+
+      const dx = Math.sin(angle) * step;
+      const dy = Math.max(0.33, Math.cos(angle) * step + step * 0.30);
+      const x2 = clamp(x + dx, 0, width - 1);
+      const y2 = Math.min(height, y + dy);
+
+      branches.push({x0 : x, y0 : y, x1 : x2, y1 : y2, w : widthNow});
+
+      x = x2;
+      y = y2;
+      widthNow *= 0.955;
+      step *= 0.995;
+    }
+  }
+}
+
 
 
 function ensureGroundConnection(trunk, startX, width, height, cfg, rand)
