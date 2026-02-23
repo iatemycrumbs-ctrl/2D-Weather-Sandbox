@@ -375,46 +375,64 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   float cloudwater = water[CLOUD];
 
-  float cloudShade = clamp(1.0 / (cloudwater * 0.0044 + 1.0), 0.20, 1.0);
+  // Reworked cloud visual model: layered billows + anvil shearing + silver lining.
+  float cloudShade = clamp(1.0 / (cloudwater * 0.0040 + 1.0), 0.16, 1.0);
 
-  // Brand-new precipitation visual model: shafts + mist + sparkle highlights.
-  float precipMass = max(water[PRECIPITATION], 0.0);
-  float precipShaft = clamp(precipMass * (2.3 * precipitationShaftStrength), 0.0, 1.0);
-  float precipMist = clamp(precipMass * (1.55 * precipitationMistStrength) + cloudwater * 0.22, 0.0, 1.0);
+  float cloudBody = max(cloudwater, 0.0);
+  float cloudLayerA = smoothstep(0.14, 0.46, texCoord.y) * (0.65 + 0.35 * cloudLayerComplexity);
+  float cloudLayerB = smoothstep(0.34, 0.82, texCoord.y) * (0.70 + 0.45 * cloudLayerComplexity);
+  float cloudLayerC = smoothstep(0.62, 0.98, texCoord.y) * (0.42 + 0.36 * cloudLayerComplexity);
 
-  vec2 precipNoiseUv = vec2(texCoord.x * resolution.x * 0.035 + iterNum * 0.010,
-                            texCoord.y * resolution.y * 0.090 - iterNum * 0.060);
-  float streakNoise = texture(noiseTex, precipNoiseUv).r;
-  float streakMask = smoothstep(0.52, 0.98, streakNoise + precipShaft * 0.30);
-  float shaftEnvelope = smoothstep(0.14, 0.88, texCoord.y) * (1.0 - smoothstep(0.84, 1.0, texCoord.y));
-  float precipShaftOpacity = precipShaft * streakMask * shaftEnvelope;
+  vec2 cloudNoiseUv0 = vec2(texCoord.x * resolution.x * 0.009 + iterNum * 0.0022,
+                            texCoord.y * resolution.y * 0.014 - iterNum * 0.0016);
+  vec2 cloudNoiseUv1 = vec2(texCoord.x * resolution.x * 0.022 - iterNum * 0.0048,
+                            texCoord.y * resolution.y * 0.031 + iterNum * 0.0031);
+  float cloudNoiseBroad = texture(noiseTex, cloudNoiseUv0).r;
+  float cloudNoiseDetail = texture(noiseTex, cloudNoiseUv1).r;
+  float billow = mix(cloudNoiseBroad, cloudNoiseDetail, 0.46);
+  float anvilShear = smoothstep(0.60, 0.96, texCoord.y) * (0.85 + 0.55 * abs(base[VX]));
 
-  float sparkleNoise = texture(noiseTex, vec2(texCoord.x * resolution.x * 0.11 - iterNum * 0.022,
-                                              texCoord.y * resolution.y * 0.16 + iterNum * 0.015)).r;
-  float precipSparkleMask = smoothstep(0.80, 1.0, sparkleNoise + precipShaft * 0.24);
-  float precipSparkleGlow = precipSparkleMask * precipShaft * precipitationSparkle;
+  float cloudDensity = cloudBody * (6.7 + cloudLayerComplexity * 5.8);
+  cloudDensity *= (0.72 + cloudLayerA * 0.34 + cloudLayerB * 0.31 + cloudLayerC * 0.29);
+  cloudDensity *= mix(0.72, 1.28, billow);
+  cloudDensity *= (1.0 + anvilShear * 0.24);
 
-  vec3 precipShaftCol = mix(vec3(0.58, 0.72, 0.98), vec3(0.80, 0.90, 1.0), clamp(precipitationSparkle * 0.8, 0.0, 1.0));
-  vec3 precipMistCol = mix(vec3(0.72, 0.80, 0.92), vec3(0.54, 0.66, 0.86), clamp(precipitationMistStrength * 0.7, 0.0, 1.0));
-
-  vec3 cloudCol = vec3(cloudShade);
-  cloudCol = mix(cloudCol, precipMistCol * cloudShade, precipMist * 0.46);
-  cloudCol += precipShaftCol * (precipShaftOpacity * 0.55 + precipSparkleGlow * 0.35);
-
-  float cloudDensity = max(cloudwater * (8.6 + cloudLayerComplexity * 4.2), 0.0);
-  float cloudLayerA = smoothstep(0.18, 0.52, texCoord.y) * cloudLayerComplexity;
-  float cloudLayerB = smoothstep(0.46, 0.86, texCoord.y) * (0.62 + 0.38 * cloudLayerComplexity);
-  float cloudLayerC = smoothstep(0.70, 0.97, texCoord.y) * (0.40 + cloudLayerComplexity * 0.28);
-  cloudDensity *= (0.80 + cloudLayerA * 0.30 + cloudLayerB * 0.26 + cloudLayerC * 0.20);
-
-  float cloudVisualLimiter = 1.0 / (1.0 + max(cloudDensity - 2.8, 0.0) * 0.26);
+  float cloudVisualLimiter = 1.0 / (1.0 + max(cloudDensity - 3.2, 0.0) * 0.22);
   cloudDensity *= cloudVisualLimiter;
 
-  float precipDensity = precipMass * (0.95 * precipitationShaftStrength + 0.60 * precipitationMistStrength);
+  // Precipitation overlays into the cloud field (shafts + mist + sparkle highlights).
+  float precipMass = max(water[PRECIPITATION], 0.0);
+  float precipShaft = clamp(precipMass * (2.4 * precipitationShaftStrength), 0.0, 1.0);
+  float precipMist = clamp(precipMass * (1.65 * precipitationMistStrength) + cloudBody * 0.24, 0.0, 1.0);
+
+  vec2 precipNoiseUv = vec2(texCoord.x * resolution.x * 0.038 + iterNum * 0.010,
+                            texCoord.y * resolution.y * 0.094 - iterNum * 0.062);
+  float streakNoise = texture(noiseTex, precipNoiseUv).r;
+  float streakMask = smoothstep(0.50, 0.98, streakNoise + precipShaft * 0.34);
+  float shaftEnvelope = smoothstep(0.10, 0.90, texCoord.y) * (1.0 - smoothstep(0.90, 1.0, texCoord.y));
+  float precipShaftOpacity = precipShaft * streakMask * shaftEnvelope;
+
+  float sparkleNoise = texture(noiseTex, vec2(texCoord.x * resolution.x * 0.12 - iterNum * 0.024,
+                                              texCoord.y * resolution.y * 0.18 + iterNum * 0.016)).r;
+  float precipSparkleMask = smoothstep(0.78, 1.0, sparkleNoise + precipShaft * 0.27);
+  float precipSparkleGlow = precipSparkleMask * precipShaft * precipitationSparkle;
+
+  float silverLining = smoothstep(0.40, 0.95, cloudNoiseDetail) * smoothstep(0.25, 0.85, cloudBody) * (0.35 + 0.65 * lightIntensity);
+  vec3 cloudCoreCol = mix(vec3(0.62, 0.66, 0.72), vec3(0.90, 0.94, 1.0), clamp(cloudShade * 1.15, 0.0, 1.0));
+  vec3 cloudShadowCol = vec3(0.38, 0.44, 0.52);
+  vec3 precipShaftCol = mix(vec3(0.56, 0.70, 0.96), vec3(0.82, 0.92, 1.0), clamp(precipitationSparkle * 0.85, 0.0, 1.0));
+  vec3 precipMistCol = mix(vec3(0.70, 0.79, 0.90), vec3(0.52, 0.63, 0.84), clamp(precipitationMistStrength * 0.75, 0.0, 1.0));
+
+  vec3 cloudCol = mix(cloudShadowCol, cloudCoreCol, clamp(cloudShade * (0.82 + 0.25 * billow), 0.0, 1.0));
+  cloudCol += vec3(0.10, 0.14, 0.22) * silverLining;
+  cloudCol = mix(cloudCol, precipMistCol, precipMist * 0.48);
+  cloudCol += precipShaftCol * (precipShaftOpacity * 0.52 + precipSparkleGlow * 0.36);
+
+  float precipDensity = precipMass * (1.02 * precipitationShaftStrength + 0.72 * precipitationMistStrength);
   float totalDensity = cloudDensity + precipDensity;
 
-  float cloudOpacity = clamp((1.0 - (1.0 / (1. + totalDensity))) * (0.86 + 0.22 * precipitationMistStrength), 0.0, 0.95);
-  cloudOpacity = max(cloudOpacity, clamp(precipShaftOpacity * 0.44 + precipMist * 0.24, 0.0, 0.70));
+  float cloudOpacity = clamp((1.0 - (1.0 / (1.0 + totalDensity))) * (0.92 + 0.24 * precipitationMistStrength), 0.0, 0.97);
+  cloudOpacity = max(cloudOpacity, clamp(precipShaftOpacity * 0.46 + precipMist * 0.28, 0.0, 0.76));
 
   const vec3 smokeThinCol = vec3(0.8, 0.51, 0.26);
   const vec3 smokeThickCol = vec3(0., 0., 0.);

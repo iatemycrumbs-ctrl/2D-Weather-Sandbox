@@ -409,9 +409,9 @@ void main()
           newDensity = mix(snowDensity, 1.22, graupelization);
 
           vec4 lightningData = texture(lightningDataTex, vec2(0.5));
-          const float lightningCloudDensityThreshold = 0.10;
+          const float lightningCloudDensityThreshold = 0.07;
 
-          float cloudPlusPrecipDensity = water[CLOUD] + water[PRECIPITATION] * 1.25 + dryLightningAllowance * 0.12;
+          float cloudPlusPrecipDensity = water[CLOUD] * 1.18 + water[PRECIPITATION] * 1.45 + dryLightningAllowance * 0.18;
           float graupelNegativeCharge = mixedPhaseFactor * (0.55 + downdraftFactor) * map_rangeC(newDensity, snowDensity, 1.3, 0.25, 1.45) * graupelChargeGain;
           float icePositiveCharge = mixedPhaseFactor * updraftFactor * map_rangeC(1.0 - min(newDensity, 1.0), 0.0, 1.0, 0.2, 1.4) * iceCrystalChargeGain;
 
@@ -420,9 +420,9 @@ void main()
           float electricPotential = chargeDipole * pressureFactor * map_rangeC(base[VY], -0.01, 0.02, 0.6, 1.25);
 
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
-          lightningSpawnChance *= (0.18 + electricPotential * 1.9);
-          lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.0, 0.50) * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.75, 1.55);
-          lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.42) * lightningFrequencyBoost;
+          lightningSpawnChance *= (0.28 + electricPotential * 2.45);
+          lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.12, 0.60) * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.85, 1.75);
+          lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.55) * lightningFrequencyBoost;
 
           float icWeight = max(icLightningRatio, 0.0);
           float ctgWeight = max(ctgLightningRatio, 0.0);
@@ -434,7 +434,7 @@ void main()
           float aerosolElectric = map_rangeC(aerosolLoad, 0.2, 2.5, 0.7, 1.25);
           lightningSpawnChance *= cgBoost * organizationElectric * aerosolElectric;
           lightningSpawnChance *= map_rangeC(lightningBranching * lightningComplexity, 0.2, 4.0, 0.68, 1.95);
-          float stratiformFloor = max(cloudPlusPrecipDensity - (lightningCloudDensityThreshold + 0.06), 0.0) * 0.015;
+          float stratiformFloor = max(cloudPlusPrecipDensity - (lightningCloudDensityThreshold + 0.04), 0.0) * 0.030;
           lightningSpawnChance = max(lightningSpawnChance, stratiformFloor * lightningFrequencyBoost);
 
           float rodAttraction = 0.0;
@@ -461,14 +461,14 @@ void main()
           float airplaneAttraction = smoothstep(0.30, 0.0, planeDist) * airplaneLightningAttractor;
           lightningSpawnChance *= mix(1.0, 1.55, airplaneAttraction);
           lightningSpawnChance *= map_rangeC(mobileLightningVisibility, 0.8, 2.2, 0.92, 1.28);
-          lightningSpawnChance = clamp(lightningSpawnChance, 0.0, 0.88);
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.00002, 0.92);
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
-          float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.25, 0.58), 7.0 + abs(lightningData[INTENSITY]) * (2.8 + multiStrokeLightning * 2.1));
+          float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.05, 0.52), 4.5 + abs(lightningData[INTENSITY]) * (1.9 + multiStrokeLightning * 1.35));
           bool lightningChannelFree = lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
-          bool cloudAnchoredSource = water[CLOUD] > threshold * 1.30 && texCoord.y >= 0.20 && texCoord.y <= 0.95;
-          bool overdueStormRecharge = lightningChannelFree && previousLightningAge > (120.0 + 40.0 * lightningMinInterval)
+          bool cloudAnchoredSource = water[CLOUD] > threshold * 1.10 && texCoord.y >= 0.14 && texCoord.y <= 0.97;
+          bool overdueStormRecharge = lightningChannelFree && previousLightningAge > (72.0 + 24.0 * lightningMinInterval)
                                     && cloudPlusPrecipDensity > lightningCloudDensityThreshold + 0.22
                                     && electricPotential > 0.20
                                     && cloudAnchoredSource;
