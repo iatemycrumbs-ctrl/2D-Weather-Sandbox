@@ -496,7 +496,7 @@ const guiControls_default = {
   enablePrecipitation : true,
   showDrops : false,
   cameraShake : true,
-  shakeFrequency : 1.45,
+  shakeFrequency : 6.0,
   shakeDecay : 0.78,
   lightningTempShakeMult : 1.20,
   lightningMotionBlur : 0.0,
@@ -527,6 +527,7 @@ const guiControls_default = {
   downdraftCoolingMult : 1.0,
   microburstStrength : 1.0,
   lightningBranching : 1.0,
+  lightningShapeType : 'Forked Classic',
   lightningAnvilDrift : 1.0,
   precipitationSizeSpectrum : 1.0,
   hailShatterFactor : 1.0,
@@ -608,6 +609,7 @@ var lightningShakeHFOffsetX = 0.0;
 var lightningShakeHFOffsetY = 0.0;
 var lightningShakePhaseX = 0.0;
 var lightningShakePhaseY = 0.0;
+var lightningShakeBurstTimerFrames = 0;
 var pendingLightningShakeEvents = [];
 
 // global framebuffers for measurements
@@ -671,6 +673,21 @@ function getAdaptiveEvapRate()
   return baseRate * tempFactor * windFactor;
 }
 
+
+
+function getLightningShapeMode()
+{
+  switch (guiControls?.lightningShapeType) {
+  case 'Ribbon Arc':
+    return 1;
+  case 'Branch Spider':
+    return 2;
+  case 'Chaotic Fractal':
+    return 3;
+  default:
+    return 0;
+  }
+}
 
 function getMobileLightningVisibility()
 {
@@ -2074,6 +2091,7 @@ function triggerLightningEffects(lightningX, lightningY, intensity)
     distance : distance,
     intensity : Math.max(intensity, 0.01),
     temperature : lightningTemperature,
+    burstDelayFrames : 0,
   });
 
   if (pendingLightningShakeEvents.length > 64)
@@ -2088,6 +2106,7 @@ function updateLightningShakePhysics()
     lightningShakeVelocityX = lightningShakeVelocityY = 0.0;
     lightningShakeHFAmplitude = 0.0;
     lightningShakePhaseX = lightningShakePhaseY = 0.0;
+    lightningShakeBurstTimerFrames = 0;
     pendingLightningShakeEvents.length = 0;
     return;
   }
@@ -2098,39 +2117,47 @@ function updateLightningShakePhysics()
     if (event.delayFrames <= 0) {
       let distanceMult = map_range_C(event.distance, 500.0, 30000.0, 1.0, 0.0);
       let thermalBoost = map_range_C(event.temperature, 9000.0, 32000.0, 0.85, 1.45) * guiControls.lightningTempShakeMult;
-      let impulse = clamp(Math.pow(event.intensity, 0.60) * 0.030 * distanceMult * thermalBoost, 0.0, 0.028);
+      let impulse = clamp(Math.pow(event.intensity, 0.58) * 0.020 * distanceMult * thermalBoost, 0.0, 0.018);
 
       // apply shock mostly horizontal with slight random vertical jitter
       lightningShakeVelocityX += event.horizontalSign * impulse;
       lightningShakeVelocityY += (Math.random() - 0.5) * impulse * 0.35;
 
       // high frequency shake burst for close/intense lightning
-      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 4.2, 0.0, 0.034);
+      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 2.2, 0.0, 0.020);
+      lightningShakeBurstTimerFrames = 0;
 
       pendingLightningShakeEvents.splice(i, 1);
     }
   }
 
-  // disable low-frequency/glide shake so lightning camera motion stays high-frequency only
+  // disable low-frequency/glide shake so lightning camera motion stays short burst pulses.
   lightningShakeVelocityX = 0.0;
   lightningShakeVelocityY = 0.0;
   lightningShakeOffsetX = 0.0;
   lightningShakeOffsetY = 0.0;
 
-  // high-frequency lightning jitter with configurable frequency and faster decay
   lightningShakeHFAmplitude *= guiControls.shakeDecay;
 
-  lightningShakePhaseX += (4.8 + Math.random() * 1.8) * guiControls.shakeFrequency;
-  lightningShakePhaseY += (5.6 + Math.random() * 2.2) * guiControls.shakeFrequency;
+  const burstDelayFrames = Math.max(Math.round(guiControls.shakeFrequency), 1);
+  if (lightningShakeBurstTimerFrames <= 0 && lightningShakeHFAmplitude > 0.0002) {
+    lightningShakePhaseX += (0.55 + Math.random() * 0.35);
+    lightningShakePhaseY += (0.70 + Math.random() * 0.45);
 
-  let hfNoiseX = (Math.random() * 2.0 - 1.0) * 0.35;
-  let hfNoiseY = (Math.random() * 2.0 - 1.0) * 0.35;
+    let hfNoiseX = (Math.random() * 2.0 - 1.0) * 0.28;
+    let hfNoiseY = (Math.random() * 2.0 - 1.0) * 0.28;
 
-  lightningShakeHFOffsetX = (Math.sin(lightningShakePhaseX) + hfNoiseX) * lightningShakeHFAmplitude;
-  lightningShakeHFOffsetY = (Math.sin(lightningShakePhaseY) + hfNoiseY) * lightningShakeHFAmplitude;
+    lightningShakeHFOffsetX = (Math.sin(lightningShakePhaseX) + hfNoiseX) * lightningShakeHFAmplitude;
+    lightningShakeHFOffsetY = (Math.sin(lightningShakePhaseY) + hfNoiseY) * lightningShakeHFAmplitude;
+    lightningShakeBurstTimerFrames = burstDelayFrames;
+  } else {
+    lightningShakeBurstTimerFrames = Math.max(lightningShakeBurstTimerFrames - 1, 0);
+    lightningShakeHFOffsetX *= 0.82;
+    lightningShakeHFOffsetY *= 0.82;
+  }
 
-  lightningShakeOffsetX = clamp(lightningShakeOffsetX, -0.025, 0.025);
-  lightningShakeOffsetY = clamp(lightningShakeOffsetY, -0.020, 0.020);
+  lightningShakeOffsetX = clamp(lightningShakeOffsetX, -0.020, 0.020);
+  lightningShakeOffsetY = clamp(lightningShakeOffsetY, -0.016, 0.016);
 }
 
 
@@ -4178,6 +4205,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'airplaneLightningAttractor'), guiControls.airplaneLightningAttractor);
     gl.useProgram(realisticDisplayProgram);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
+  gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningShapeMode'), getLightningShapeMode());
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldDiffusion'), guiControls.electricFieldDiffusion);
@@ -4186,6 +4214,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
+    gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningShapeMode'), getLightningShapeMode());
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle);
@@ -5186,10 +5215,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     var lightning_folder = datGui.addFolder('Lightning & Shake');
 
     lightning_folder.add(guiControls, 'cameraShake').name('Camera Shake');
-    lightning_folder.add(guiControls, 'shakeFrequency', 0.5, 3.0, 0.01).name('Shake Frequency');
+    lightning_folder.add(guiControls, 'shakeFrequency', 1.0, 20.0, 1.0).name('Shake Delay (frames)');
     lightning_folder.add(guiControls, 'shakeDecay', 0.60, 0.92, 0.005).name('Shake Decay');
     lightning_folder.add(guiControls, 'lightningMotionBlur', 0.0, 1.0, 0.01).name('Shake Motion Blur');
     lightning_folder.add(guiControls, 'lightningTempShakeMult', 0.5, 2.5, 0.01).name('Temp -> Shake Mult');
+    lightning_folder.add(guiControls, 'lightningShapeType', ['Forked Classic', 'Ribbon Arc', 'Branch Spider', 'Chaotic Fractal']).name('Lightning Shape Type').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningShapeMode'), getLightningShapeMode());
+    });
     lightning_folder.add(guiControls, 'lightningComplexity', 0.4, 2.6, 0.01).name('Lightning Complexity').onChange(function() {
       gl.useProgram(precipitationProgram);
       gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningComplexity'), guiControls.lightningComplexity);
@@ -5500,6 +5533,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
+    gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningShapeMode'), getLightningShapeMode());
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle);

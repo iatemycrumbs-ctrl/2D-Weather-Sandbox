@@ -17,8 +17,8 @@ function getQualityConfig(quality)
 {
   if (quality == 'low') {
     return {
-      trunkSteps : 3400,
-      branchSteps : 950,
+      trunkSteps : 420,
+      branchSteps : 120,
       splitChance : 0.11,
       maxDepth : 2,
       haloWidth : 3.1,
@@ -36,8 +36,8 @@ function getQualityConfig(quality)
 
   if (quality == 'medium') {
     return {
-      trunkSteps : 4900,
-      branchSteps : 1400,
+      trunkSteps : 620,
+      branchSteps : 175,
       splitChance : 0.145,
       maxDepth : 3,
       haloWidth : 3.8,
@@ -54,8 +54,8 @@ function getQualityConfig(quality)
   }
 
   return {
-    trunkSteps : 6800,
-    branchSteps : 1850,
+    trunkSteps : 820,
+    branchSteps : 230,
     splitChance : 0.175,
     maxDepth : 4,
     haloWidth : 4.5,
@@ -91,6 +91,9 @@ function generateLightningTexture(width, height, seed, quality)
 {
   const cfg = getQualityConfig(quality);
   const rand = createRng(seed);
+  const detailScale = clamp(Math.sqrt((width * height) / (2200.0 * 4400.0)), 0.55, 1.0);
+  const trunkSteps = Math.max(180, Math.floor(cfg.trunkSteps * detailScale));
+  const branchSteps = Math.max(64, Math.floor(cfg.branchSteps * detailScale));
 
   const canvas = new OffscreenCanvas(width, height);
   const ctx = canvas.getContext('2d', {alpha : true, desynchronized : true});
@@ -109,12 +112,12 @@ function generateLightningTexture(width, height, seed, quality)
     energy : 1.0,
     depth : 0,
     list : trunk,
-    maxSteps : cfg.trunkSteps
+    maxSteps : trunkSteps
   });
 
 
   ensureGroundConnection(trunk, startX, width, height, cfg, rand);
-  seedFallbackBranches(trunk, branches, cfg, rand, width, height);
+  seedFallbackBranches(trunk, branches, cfg, rand, width, height, branchSteps);
 
   drawSegments(ctx, trunk, `rgba(160, 205, 255, ${cfg.haloAlpha})`, cfg.haloWidth, 'screen');
   drawSegments(ctx, trunk, `rgba(208, 232, 255, ${cfg.glowAlpha})`, cfg.glowWidth, 'screen');
@@ -184,7 +187,7 @@ function generateLightningTexture(width, height, seed, quality)
           energy : current.energy * 0.84,
           depth : current.depth + 1,
           list : branches,
-          maxSteps : Math.floor(cfg.branchSteps * (0.45 + rand() * 0.65))
+          maxSteps : Math.floor(branchSteps * (0.45 + rand() * 0.65))
         });
       }
     }
@@ -192,7 +195,7 @@ function generateLightningTexture(width, height, seed, quality)
 }
 
 
-function seedFallbackBranches(trunk, branches, cfg, rand, width, height)
+function seedFallbackBranches(trunk, branches, cfg, rand, width, height, branchSteps)
 {
   const minVisibleBranches = cfg.minVisibleBranches || 32;
   if (branches.length >= minVisibleBranches || trunk.length < 12)
@@ -203,7 +206,7 @@ function seedFallbackBranches(trunk, branches, cfg, rand, width, height)
     const idx = Math.floor(rand() * (trunk.length - 8)) + 4;
     const src = trunk[idx];
     const dir = rand() < 0.5 ? -1 : 1;
-    const branchLen = Math.floor(cfg.branchSteps * (0.16 + rand() * 0.24));
+    const branchLen = Math.floor(branchSteps * (0.16 + rand() * 0.24));
 
     let x = src.x1;
     let y = src.y1;

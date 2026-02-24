@@ -72,6 +72,7 @@ uniform float displayVectorField;
 
 uniform float iterNum;
 uniform float lightningAnimIter;
+uniform int lightningShapeMode;
 
 out vec4 fragmentColor;
 
@@ -181,20 +182,26 @@ float lightningChannelEnvelope(float T, bool isIC)
 
 vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTypeSign)
 {
+  float shapeWarpMult = 1.0;
+  if (lightningShapeMode == 1)
+    shapeWarpMult = 0.75; // Ribbon Arc
+  else if (lightningShapeMode == 2)
+    shapeWarpMult = 1.28; // Branch Spider
+  else if (lightningShapeMode == 3)
+    shapeWarpMult = 1.55; // Chaotic Fractal
+
   if (strikeTypeSign < 0.0) {
-    // IC (purple): broader horizontal filament sweep constrained in vertical drift.
     float axis = uv.x;
-    float meander = sin(axis * 31.0 + lightningTime * 1.8 + random2d(seed * 17.1) * 6.2831) * 0.0075;
-    meander += sin(axis * 74.0 + lightningTime * 1.3 + random2d(seed * 7.3) * 6.2831) * 0.0030;
-    float filament = sin((axis * 108.0 + lightningTime * 6.0) + uv.y * 15.0) * 0.0013;
+    float meander = sin(axis * 31.0 + lightningTime * 1.8 + random2d(seed * 17.1) * 6.2831) * 0.0075 * shapeWarpMult;
+    meander += sin(axis * 74.0 + lightningTime * 1.3 + random2d(seed * 7.3) * 6.2831) * 0.0030 * shapeWarpMult;
+    float filament = sin((axis * 108.0 + lightningTime * 6.0) + uv.y * 15.0) * 0.0013 * shapeWarpMult;
     return vec2(0.0, (meander + filament) * 0.36);
   }
 
-  // CG (blue): stronger side-to-side channel jaggedness while propagating downward.
   float axis = uv.y;
-  float meander = sin(axis * 42.0 + lightningTime * 2.5 + random2d(seed * 13.2) * 6.2831) * 0.0100;
-  meander += sin(axis * 89.0 + lightningTime * 1.9 + random2d(seed * 5.6) * 6.2831) * 0.0042;
-  float filament = sin((axis * 142.0 + lightningTime * 7.8) + uv.x * 22.0) * 0.0018;
+  float meander = sin(axis * 42.0 + lightningTime * 2.5 + random2d(seed * 13.2) * 6.2831) * 0.0100 * shapeWarpMult;
+  meander += sin(axis * 89.0 + lightningTime * 1.9 + random2d(seed * 5.6) * 6.2831) * 0.0042 * shapeWarpMult;
+  float filament = sin((axis * 142.0 + lightningTime * 7.8) + uv.x * 22.0) * 0.0018 * shapeWarpMult;
   return vec2(meander + filament, 0.0);
 }
 
@@ -286,7 +293,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   float branchFan = texture(lightningTex, lightningTexCoord + vec2(px.x * 8.0, -px.y * 11.0)).r;
   branchFan = max(branchFan, texture(lightningTex, lightningTexCoord + vec2(-px.x * 8.6, -px.y * 10.5)).r);
   float branchSpark = max(max(branchGhost, branchWide), branchFan);
-  float branchBase = branchGhost * (strikeTypeSign < 0.0 ? 0.70 : 0.60) + branchWide * (strikeTypeSign < 0.0 ? 0.44 : 0.38) + branchFan * (strikeTypeSign < 0.0 ? 0.30 : 0.28);
+  float branchShapeMult = lightningShapeMode == 2 ? 1.35 : (lightningShapeMode == 3 ? 1.55 : (lightningShapeMode == 1 ? 0.82 : 1.0));
+  float branchBase = (branchGhost * (strikeTypeSign < 0.0 ? 0.70 : 0.60) + branchWide * (strikeTypeSign < 0.0 ? 0.44 : 0.38) + branchFan * (strikeTypeSign < 0.0 ? 0.30 : 0.28)) * branchShapeMult;
   pixVal += branchBase;
 
   if (strikeTypeSign < 0.0) {
