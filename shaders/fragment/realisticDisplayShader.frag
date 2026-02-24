@@ -209,10 +209,22 @@ vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
 {
   vec2 uv = vec2(0.5);
   float wrappedDx = mod((texCoord.x - pos.x) + 1.5, 1.0) - 0.5;
+  vec2 rel = vec2(wrappedDx, texCoord.y - pos.y);
+
+  float branchAngle = (random2d(pos * 27.9) - 0.5) * 0.80;
+  float driftAngle = (random2d(pos * 41.7 + vec2(1.0)) - 0.5) * 0.40;
+  float angle = branchAngle + driftAngle;
+
+  vec2 dir = normalize(vec2(cos(angle), sin(angle) * 0.32));
+  vec2 perp = vec2(-dir.y, dir.x);
+
+  float along = dot(rel, dir);
+  float across = dot(rel, perp);
   float cloudDrift = sin((texCoord.y - pos.y) * 18.0 + random2d(pos * 21.7) * 6.2831) * 0.08;
-  float anvilShear = (texCoord.y - pos.y) * 0.22;
-  uv.x = 0.5 + (wrappedDx + cloudDrift + anvilShear) * scaleMult * aspectRatios[0] * 2.05;
-  uv.y = 0.50 + (texCoord.y - pos.y) * scaleMult * 0.88;
+  float anvilShear = (texCoord.y - pos.y) * 0.20;
+
+  uv.x = 0.5 + (along + cloudDrift + anvilShear) * scaleMult * aspectRatios[0] * 2.12;
+  uv.y = 0.5 + across * scaleMult * 1.18;
   return uv;
 }
 
@@ -276,6 +288,11 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68)
     return vec3(0.0);
 
+  float variantHash = random2d(pos * 83.13 + vec2(floor(lightningAnimIter * 0.017), floor(lightningAnimIter * 0.013)));
+  float variantMirror = variantHash > 0.5 ? -1.0 : 1.0;
+  lightningTexCoord.x = 0.5 + (lightningTexCoord.x - 0.5) * variantMirror;
+  lightningTexCoord.x += (variantHash - 0.5) * 0.14;
+
   // Channel model: texture-guided trunk + procedural meander + IC horizontal sweep.
   lightningTexCoord += lightningWarpOffset(lightningTexCoord, lightningTime, pos, strikeTypeSign);
 
@@ -306,6 +323,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     float localCloudMask = smoothstep(0.028, 0.16, water[CLOUD] + water[PRECIPITATION] * 0.42);
     pixVal *= clamp(icEnvelope * icCloudBand * max(icCenterFalloff, icLateralBranches * 0.65) * localCloudMask, 0.0, 1.0);
     pixVal += branchBase * 0.42 * icCloudBand;
+    float nonVerticalBias = 1.0 - smoothstep(0.25, 0.90, abs(lightningTexCoord.x - 0.5));
+    pixVal *= mix(0.85, 1.0, nonVerticalBias);
   } else {
     // CG (blue): keep the origin inside cloud and maintain continuous channel reach toward terrain.
     float sourceCloudMask = smoothstep(0.06, 0.22, texture(waterTex, vec2(mod(pos.x + 1.0, 1.0), clamp(pos.y, 0.26, 0.86))).r);

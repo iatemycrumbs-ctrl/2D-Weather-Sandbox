@@ -2124,37 +2124,31 @@ function updateLightningShakePhysics()
       lightningShakeVelocityY += (Math.random() - 0.5) * impulse * 0.35;
 
       // high frequency shake burst for close/intense lightning
-      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 2.2, 0.0, 0.020);
+      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 1.7, 0.0, 0.016);
       lightningShakeBurstTimerFrames = 0;
 
       pendingLightningShakeEvents.splice(i, 1);
     }
   }
 
-  // disable low-frequency/glide shake so lightning camera motion stays short burst pulses.
+  // disable low-frequency/glide shake so lightning camera motion stays high-frequency only.
   lightningShakeVelocityX = 0.0;
   lightningShakeVelocityY = 0.0;
   lightningShakeOffsetX = 0.0;
   lightningShakeOffsetY = 0.0;
 
-  lightningShakeHFAmplitude *= guiControls.shakeDecay;
+  lightningShakeHFAmplitude *= clamp(guiControls.shakeDecay, 0.65, 0.95);
 
-  const burstDelayFrames = Math.max(Math.round(guiControls.shakeFrequency), 1);
-  if (lightningShakeBurstTimerFrames <= 0 && lightningShakeHFAmplitude > 0.0002) {
-    lightningShakePhaseX += (0.55 + Math.random() * 0.35);
-    lightningShakePhaseY += (0.70 + Math.random() * 0.45);
+  const rapidRate = map_rangeC(guiControls.shakeFrequency, 1.0, 20.0, 0.95, 2.85);
+  lightningShakePhaseX += rapidRate + (Math.random() - 0.5) * 0.32;
+  lightningShakePhaseY += rapidRate * 1.22 + (Math.random() - 0.5) * 0.38;
 
-    let hfNoiseX = (Math.random() * 2.0 - 1.0) * 0.28;
-    let hfNoiseY = (Math.random() * 2.0 - 1.0) * 0.28;
+  let hfNoiseX = (Math.random() * 2.0 - 1.0) * 0.20;
+  let hfNoiseY = (Math.random() * 2.0 - 1.0) * 0.20;
 
-    lightningShakeHFOffsetX = (Math.sin(lightningShakePhaseX) + hfNoiseX) * lightningShakeHFAmplitude;
-    lightningShakeHFOffsetY = (Math.sin(lightningShakePhaseY) + hfNoiseY) * lightningShakeHFAmplitude;
-    lightningShakeBurstTimerFrames = burstDelayFrames;
-  } else {
-    lightningShakeBurstTimerFrames = Math.max(lightningShakeBurstTimerFrames - 1, 0);
-    lightningShakeHFOffsetX *= 0.82;
-    lightningShakeHFOffsetY *= 0.82;
-  }
+  lightningShakeHFOffsetX = (Math.sin(lightningShakePhaseX * 1.9) + Math.sin(lightningShakePhaseX * 3.7) * 0.45 + hfNoiseX) * lightningShakeHFAmplitude;
+  lightningShakeHFOffsetY = (Math.sin(lightningShakePhaseY * 1.6) + Math.sin(lightningShakePhaseY * 3.1) * 0.40 + hfNoiseY) * lightningShakeHFAmplitude;
+  lightningShakeBurstTimerFrames = 0;
 
   lightningShakeOffsetX = clamp(lightningShakeOffsetX, -0.020, 0.020);
   lightningShakeOffsetY = clamp(lightningShakeOffsetY, -0.016, 0.016);
@@ -5215,7 +5209,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     var lightning_folder = datGui.addFolder('Lightning & Shake');
 
     lightning_folder.add(guiControls, 'cameraShake').name('Camera Shake');
-    lightning_folder.add(guiControls, 'shakeFrequency', 1.0, 20.0, 1.0).name('Shake Delay (frames)');
+    lightning_folder.add(guiControls, 'shakeFrequency', 1.0, 20.0, 1.0).name('Shake Frequency');
     lightning_folder.add(guiControls, 'shakeDecay', 0.60, 0.92, 0.005).name('Shake Decay');
     lightning_folder.add(guiControls, 'lightningMotionBlur', 0.0, 1.0, 0.01).name('Shake Motion Blur');
     lightning_folder.add(guiControls, 'lightningTempShakeMult', 0.5, 2.5, 0.01).name('Temp -> Shake Mult');
