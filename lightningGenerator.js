@@ -17,8 +17,8 @@ function getQualityConfig(quality)
 {
   if (quality == 'low') {
     return {
-      trunkSteps : 340,
-      branchSteps : 95,
+      trunkSteps : 3400,
+      branchSteps : 950,
       splitChance : 0.11,
       maxDepth : 2,
       haloWidth : 3.1,
@@ -36,8 +36,8 @@ function getQualityConfig(quality)
 
   if (quality == 'medium') {
     return {
-      trunkSteps : 490,
-      branchSteps : 140,
+      trunkSteps : 4900,
+      branchSteps : 1400,
       splitChance : 0.145,
       maxDepth : 3,
       haloWidth : 3.8,
@@ -54,8 +54,8 @@ function getQualityConfig(quality)
   }
 
   return {
-    trunkSteps : 680,
-    branchSteps : 185,
+    trunkSteps : 6800,
+    branchSteps : 1850,
     splitChance : 0.175,
     maxDepth : 4,
     haloWidth : 4.5,

@@ -177,7 +177,7 @@ vec2 buildICLightningTarget(vec2 sourcePos, vec2 seed)
   float chainShift = (random2d(seed * 5.11 + vec2(iterNum * 0.004)) - 0.5) * chainSpan * lightningAnvilDrift;
   float targetX = mod(sourcePos.x + chainShift + 1.0, 1.0);
 
-  vec2 bestTarget = vec2(targetX, clamp(sourcePos.y, 0.34, 0.86));
+  vec2 bestTarget = vec2(targetX, clamp(sourcePos.y, 0.52, 0.94));
   float bestCloud = sampleCloudStrength(bestTarget);
 
   // Probe a local anvil neighborhood so IC links nearby cloud pockets, not clear-air points.
@@ -185,7 +185,7 @@ vec2 buildICLightningTarget(vec2 sourcePos, vec2 seed)
     float t = float(i) / 6.0;
     float probeOffsetX = mix(-1.0, 1.0, t) * chainSpan;
     float probeX = mod(sourcePos.x + probeOffsetX + 1.0, 1.0);
-    float probeY = clamp(sourcePos.y + (random2d(seed * (3.37 + t)) - 0.5) * texelSize.y * 18.0, 0.34, 0.86);
+    float probeY = clamp(sourcePos.y + (random2d(seed * (3.37 + t)) - 0.5) * texelSize.y * 18.0, 0.52, 0.94);
     vec2 probe = vec2(probeX, probeY);
     float cloudStrength = sampleCloudStrength(probe);
     if (cloudStrength > bestCloud) {
@@ -208,17 +208,17 @@ vec2 buildICLightningTarget(vec2 sourcePos, vec2 seed)
   if (bestCloud < minCloudForChain) {
     float forcedDir = random2d(seed * 4.41 + vec2(iterNum * 0.0017)) < 0.5 ? -1.0 : 1.0;
     bestTarget.x = mod(sourcePos.x + forcedDir * minTravel + 1.0, 1.0);
-    bestTarget.y = clamp(sourcePos.y + map_rangeC(random2d(seed * 1.29 + vec2(1.0)), 0.0, 1.0, -0.04, 0.05), 0.34, 0.86);
+    bestTarget.y = clamp(sourcePos.y + map_rangeC(random2d(seed * 1.29 + vec2(1.0)), 0.0, 1.0, -0.03, 0.04), 0.52, 0.94);
   }
 
-  bestTarget.y = clamp(bestTarget.y + map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, -0.02, 0.06), 0.34, 0.86);
+  bestTarget.y = clamp(bestTarget.y + map_rangeC(random2d(seed * 2.67 + vec2(3.0)), 0.0, 1.0, -0.02, 0.05), 0.52, 0.94);
 
   // Return a cloud-band anchor between source and linked target so IC rendering forms
   // realistic chained sheets instead of pinning to a single endpoint.
   float blend = 0.5 + (random2d(seed * 6.83 + vec2(iterNum * 0.0011)) - 0.5) * 0.18;
   vec2 anchor = vec2(mix(sourcePos.x, bestTarget.x, blend), mix(sourcePos.y, bestTarget.y, blend));
   anchor = snapToNearbyCloud(anchor, seed * 1.91 + vec2(0.7), texelSize.x * 36.0, texelSize.y * 10.0);
-  anchor.y = clamp(anchor.y, 0.34, 0.86);
+  anchor.y = clamp(anchor.y, 0.52, 0.94);
   return anchor;
 }
 
@@ -388,7 +388,7 @@ void main()
       bool overdueStormRecharge = previousLightningAge > (58.0 + 20.0 * lightningMinInterval) && bestScore > 0.040;
 
       if (stormSpawnChance > stormRand || overdueStormRecharge) {
-        bool isIC = bestPos.y > 0.34 && random2d(bestPos * 37.1 + probeSeed) < clamp(icLightningRatio, 0.15, 0.90);
+        bool isIC = bestPos.y > 0.52 && random2d(bestPos * 37.1 + probeSeed) < clamp(icLightningRatio, 0.18, 0.92);
         feedback.xy = isIC ? buildICLightningTarget(bestPos, probeSeed) : buildCGLightningSource(bestPos, probeSeed, 0.0, 0.0, vec2(0.0), 1.0);
         feedback[START_ITERNUM] = iterNum;
         float flashIntensity = clamp(0.24 + bestScore * 22.0 + lightningFlashRate * 0.25, 0.10, 8.0);

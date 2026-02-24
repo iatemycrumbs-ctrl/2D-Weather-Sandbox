@@ -292,7 +292,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   if (strikeTypeSign < 0.0) {
     // Keep IC (purple) illumination confined to the cloud deck band in both texture-space and world-space.
     float icEnvelope = smoothstep(0.08, 0.44, lightningTexCoord.y) * (1.0 - smoothstep(0.66, 0.94, lightningTexCoord.y));
-    float icCloudBand = smoothstep(0.22, 0.34, texCoord.y) * (1.0 - smoothstep(0.90, 0.98, texCoord.y));
+    float icCloudBand = smoothstep(0.46, 0.58, texCoord.y) * (1.0 - smoothstep(0.92, 0.99, texCoord.y));
     float icCenterFalloff = 1.0 - smoothstep(0.34, 0.66, abs(lightningTexCoord.y - 0.5));
     float icLateralBranches = 1.0 - smoothstep(0.32, 0.92, abs(lightningTexCoord.x - 0.5));
     float localCloudMask = smoothstep(0.028, 0.16, water[CLOUD] + water[PRECIPITATION] * 0.42);
@@ -315,6 +315,11 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.56 : 0.50, clamp(lightningTime - 0.85, 0.0, 1.0));
   brightnessThreshold -= branchSpark * (strikeTypeSign < 0.0 ? 0.24 : 0.20);
   brightnessThreshold = max(brightnessThreshold, 0.0);
+
+  if (strikeTypeSign < 0.0) {
+    float icGroundCutoff = smoothstep(0.44, 0.58, texCoord.y);
+    pixVal *= icGroundCutoff;
+  }
 
   if (strikeTypeSign > 0.0) {
     float cgMinCore = trunk * (1.0 - smoothstep(0.00, pos.y + 0.02, texCoord.y)) * 0.22;
