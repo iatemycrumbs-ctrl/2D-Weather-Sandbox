@@ -323,13 +323,15 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
   float thermalColorMix = map_rangeC(lightningTemp, lightningTempMinK, lightningTempMaxK, 0.0, 1.0) * lightningColorTempMult;
-  // Requested palette: IC (negative intensity) appears purple, CG (positive intensity) appears blue.
-  vec3 coolLightningCol = strikeTypeSign < 0.0 ? vec3(0.68, 0.46, 1.0) : vec3(0.48, 0.74, 1.0);
-  vec3 hotLightningCol = strikeTypeSign < 0.0 ? vec3(0.94, 0.78, 1.00) : vec3(0.78, 0.92, 1.00);
-  vec3 lightningCol = mix(coolLightningCol, hotLightningCol, clamp(thermalColorMix, 0.0, 1.0));
 
-  float strikeContrast = strikeTypeSign < 0.0 ? 0.82 : 1.08;
-  return max(pixVal * lightningCol * strikeContrast, vec3(0.0));
+  // Reworked lightning palette: cooler electric core + warmer ionized rim with stronger branch readability.
+  vec3 channelCoreCol = strikeTypeSign < 0.0 ? vec3(0.62, 0.44, 1.0) : vec3(0.45, 0.72, 1.0);
+  vec3 channelRimCol = strikeTypeSign < 0.0 ? vec3(0.98, 0.80, 1.0) : vec3(0.86, 0.96, 1.0);
+  vec3 lightningCol = mix(channelCoreCol, channelRimCol, clamp(thermalColorMix, 0.0, 1.0));
+
+  float branchBoost = 1.0 + branchSpark * (strikeTypeSign < 0.0 ? 0.65 : 0.52);
+  float strikeContrast = strikeTypeSign < 0.0 ? 0.92 : 1.16;
+  return max(pixVal * lightningCol * strikeContrast * branchBoost, vec3(0.0));
 }
 
 
@@ -375,64 +377,69 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   float cloudwater = water[CLOUD];
 
-  // Reworked cloud visual model: layered billows + anvil shearing + silver lining.
-  float cloudShade = clamp(1.0 / (cloudwater * 0.0040 + 1.0), 0.16, 1.0);
+  // Cloud visual rework v2: towering convection body + anvil cap + detailed billow ridges.
+  float cloudShade = clamp(1.0 / (cloudwater * 0.0036 + 1.0), 0.14, 1.0);
 
   float cloudBody = max(cloudwater, 0.0);
-  float cloudLayerA = smoothstep(0.14, 0.46, texCoord.y) * (0.65 + 0.35 * cloudLayerComplexity);
-  float cloudLayerB = smoothstep(0.34, 0.82, texCoord.y) * (0.70 + 0.45 * cloudLayerComplexity);
-  float cloudLayerC = smoothstep(0.62, 0.98, texCoord.y) * (0.42 + 0.36 * cloudLayerComplexity);
+  float cloudLayerA = smoothstep(0.10, 0.42, texCoord.y) * (0.58 + 0.42 * cloudLayerComplexity);
+  float cloudLayerB = smoothstep(0.28, 0.78, texCoord.y) * (0.66 + 0.50 * cloudLayerComplexity);
+  float cloudLayerC = smoothstep(0.56, 0.98, texCoord.y) * (0.36 + 0.44 * cloudLayerComplexity);
 
-  vec2 cloudNoiseUv0 = vec2(texCoord.x * resolution.x * 0.009 + iterNum * 0.0022,
-                            texCoord.y * resolution.y * 0.014 - iterNum * 0.0016);
-  vec2 cloudNoiseUv1 = vec2(texCoord.x * resolution.x * 0.022 - iterNum * 0.0048,
-                            texCoord.y * resolution.y * 0.031 + iterNum * 0.0031);
+  vec2 cloudNoiseUv0 = vec2(texCoord.x * resolution.x * 0.007 + iterNum * 0.0018,
+                            texCoord.y * resolution.y * 0.012 - iterNum * 0.0014);
+  vec2 cloudNoiseUv1 = vec2(texCoord.x * resolution.x * 0.019 - iterNum * 0.0042,
+                            texCoord.y * resolution.y * 0.028 + iterNum * 0.0028);
+  vec2 cloudNoiseUv2 = vec2(texCoord.x * resolution.x * 0.052 + iterNum * 0.0061,
+                            texCoord.y * resolution.y * 0.064 - iterNum * 0.0056);
   float cloudNoiseBroad = texture(noiseTex, cloudNoiseUv0).r;
   float cloudNoiseDetail = texture(noiseTex, cloudNoiseUv1).r;
-  float billow = mix(cloudNoiseBroad, cloudNoiseDetail, 0.46);
-  float anvilShear = smoothstep(0.60, 0.96, texCoord.y) * (0.85 + 0.55 * abs(base[VX]));
+  float cloudNoiseFine = texture(noiseTex, cloudNoiseUv2).r;
 
-  float cloudDensity = cloudBody * (6.7 + cloudLayerComplexity * 5.8);
-  cloudDensity *= (0.72 + cloudLayerA * 0.34 + cloudLayerB * 0.31 + cloudLayerC * 0.29);
-  cloudDensity *= mix(0.72, 1.28, billow);
-  cloudDensity *= (1.0 + anvilShear * 0.24);
+  float billow = mix(cloudNoiseBroad, cloudNoiseDetail, 0.52);
+  float cauliflowerRidge = smoothstep(0.60, 0.98, cloudNoiseFine) * smoothstep(0.24, 0.88, cloudBody);
+  float anvilShear = smoothstep(0.58, 0.97, texCoord.y) * (0.80 + 0.62 * abs(base[VX]));
 
-  float cloudVisualLimiter = 1.0 / (1.0 + max(cloudDensity - 3.2, 0.0) * 0.22);
+  float cloudDensity = cloudBody * (7.4 + cloudLayerComplexity * 6.6);
+  cloudDensity *= (0.68 + cloudLayerA * 0.36 + cloudLayerB * 0.34 + cloudLayerC * 0.31);
+  cloudDensity *= mix(0.66, 1.34, billow);
+  cloudDensity *= (1.0 + anvilShear * 0.30 + cauliflowerRidge * 0.24);
+
+  float cloudVisualLimiter = 1.0 / (1.0 + max(cloudDensity - 3.8, 0.0) * 0.20);
   cloudDensity *= cloudVisualLimiter;
 
-  // Precipitation overlays into the cloud field (shafts + mist + sparkle highlights).
   float precipMass = max(water[PRECIPITATION], 0.0);
-  float precipShaft = clamp(precipMass * (2.4 * precipitationShaftStrength), 0.0, 1.0);
-  float precipMist = clamp(precipMass * (1.65 * precipitationMistStrength) + cloudBody * 0.24, 0.0, 1.0);
+  float precipShaft = clamp(precipMass * (2.35 * precipitationShaftStrength), 0.0, 1.0);
+  float precipMist = clamp(precipMass * (1.75 * precipitationMistStrength) + cloudBody * 0.26, 0.0, 1.0);
 
-  vec2 precipNoiseUv = vec2(texCoord.x * resolution.x * 0.038 + iterNum * 0.010,
-                            texCoord.y * resolution.y * 0.094 - iterNum * 0.062);
+  vec2 precipNoiseUv = vec2(texCoord.x * resolution.x * 0.040 + iterNum * 0.010,
+                            texCoord.y * resolution.y * 0.098 - iterNum * 0.064);
   float streakNoise = texture(noiseTex, precipNoiseUv).r;
-  float streakMask = smoothstep(0.50, 0.98, streakNoise + precipShaft * 0.34);
-  float shaftEnvelope = smoothstep(0.10, 0.90, texCoord.y) * (1.0 - smoothstep(0.90, 1.0, texCoord.y));
+  float streakMask = smoothstep(0.48, 0.99, streakNoise + precipShaft * 0.36);
+  float shaftEnvelope = smoothstep(0.08, 0.92, texCoord.y) * (1.0 - smoothstep(0.92, 1.0, texCoord.y));
   float precipShaftOpacity = precipShaft * streakMask * shaftEnvelope;
 
-  float sparkleNoise = texture(noiseTex, vec2(texCoord.x * resolution.x * 0.12 - iterNum * 0.024,
-                                              texCoord.y * resolution.y * 0.18 + iterNum * 0.016)).r;
-  float precipSparkleMask = smoothstep(0.78, 1.0, sparkleNoise + precipShaft * 0.27);
+  float sparkleNoise = texture(noiseTex, vec2(texCoord.x * resolution.x * 0.125 - iterNum * 0.025,
+                                              texCoord.y * resolution.y * 0.185 + iterNum * 0.017)).r;
+  float precipSparkleMask = smoothstep(0.76, 1.0, sparkleNoise + precipShaft * 0.30);
   float precipSparkleGlow = precipSparkleMask * precipShaft * precipitationSparkle;
 
-  float silverLining = smoothstep(0.40, 0.95, cloudNoiseDetail) * smoothstep(0.25, 0.85, cloudBody) * (0.35 + 0.65 * lightIntensity);
-  vec3 cloudCoreCol = mix(vec3(0.62, 0.66, 0.72), vec3(0.90, 0.94, 1.0), clamp(cloudShade * 1.15, 0.0, 1.0));
-  vec3 cloudShadowCol = vec3(0.38, 0.44, 0.52);
-  vec3 precipShaftCol = mix(vec3(0.56, 0.70, 0.96), vec3(0.82, 0.92, 1.0), clamp(precipitationSparkle * 0.85, 0.0, 1.0));
-  vec3 precipMistCol = mix(vec3(0.70, 0.79, 0.90), vec3(0.52, 0.63, 0.84), clamp(precipitationMistStrength * 0.75, 0.0, 1.0));
+  float silverLining = smoothstep(0.44, 0.98, cloudNoiseFine) * smoothstep(0.22, 0.86, cloudBody) * (0.30 + 0.78 * lightIntensity);
+  vec3 cloudCoreCol = mix(vec3(0.60, 0.66, 0.74), vec3(0.92, 0.96, 1.0), clamp(cloudShade * 1.20, 0.0, 1.0));
+  vec3 cloudShadowCol = vec3(0.32, 0.39, 0.50);
+  vec3 precipShaftCol = mix(vec3(0.55, 0.70, 0.98), vec3(0.84, 0.94, 1.0), clamp(precipitationSparkle * 0.9, 0.0, 1.0));
+  vec3 precipMistCol = mix(vec3(0.72, 0.80, 0.92), vec3(0.50, 0.61, 0.84), clamp(precipitationMistStrength * 0.78, 0.0, 1.0));
 
-  vec3 cloudCol = mix(cloudShadowCol, cloudCoreCol, clamp(cloudShade * (0.82 + 0.25 * billow), 0.0, 1.0));
-  cloudCol += vec3(0.10, 0.14, 0.22) * silverLining;
-  cloudCol = mix(cloudCol, precipMistCol, precipMist * 0.48);
-  cloudCol += precipShaftCol * (precipShaftOpacity * 0.52 + precipSparkleGlow * 0.36);
+  vec3 cloudCol = mix(cloudShadowCol, cloudCoreCol, clamp(cloudShade * (0.78 + 0.30 * billow), 0.0, 1.0));
+  cloudCol += vec3(0.12, 0.17, 0.26) * silverLining;
+  cloudCol += vec3(0.07, 0.09, 0.12) * cauliflowerRidge;
+  cloudCol = mix(cloudCol, precipMistCol, precipMist * 0.52);
+  cloudCol += precipShaftCol * (precipShaftOpacity * 0.56 + precipSparkleGlow * 0.40);
 
-  float precipDensity = precipMass * (1.02 * precipitationShaftStrength + 0.72 * precipitationMistStrength);
+  float precipDensity = precipMass * (1.05 * precipitationShaftStrength + 0.76 * precipitationMistStrength);
   float totalDensity = cloudDensity + precipDensity;
 
-  float cloudOpacity = clamp((1.0 - (1.0 / (1.0 + totalDensity))) * (0.92 + 0.24 * precipitationMistStrength), 0.0, 0.97);
-  cloudOpacity = max(cloudOpacity, clamp(precipShaftOpacity * 0.46 + precipMist * 0.28, 0.0, 0.76));
+  float cloudOpacity = clamp((1.0 - (1.0 / (1.0 + totalDensity))) * (0.95 + 0.24 * precipitationMistStrength), 0.0, 0.98);
+  cloudOpacity = max(cloudOpacity, clamp(precipShaftOpacity * 0.48 + precipMist * 0.30, 0.0, 0.80));
 
   const vec3 smokeThinCol = vec3(0.8, 0.51, 0.26);
   const vec3 smokeThickCol = vec3(0., 0., 0.);
@@ -478,10 +485,10 @@ vec4 getAirColor(vec2 fragCoordIn)
   vec2 dist = vec2(lightningPos.x - texCoord.x, max((abs(lightningPos.y / 2. - texCoord.y) - 0.1), 0.));
   dist.x *= aspectRatios[0];
   float lightningOnLight = lightningOnLightBrightness / (pow(length(dist), 2.) + 0.03);
-  lightningOnLight *= abs(currentLightningIntensity);
+  lightningOnLight *= abs(currentLightningIntensity) * (1.0 + lightningBloomStrength * 0.32);
 
   // Electric field / dynamic charge-separation visualization
-  float electricFieldGlow = abs(currentLightningIntensity) * 0.0000035 * lightningBloomStrength / (pow(length(dist), 1.25) + 0.045);
+  float electricFieldGlow = abs(currentLightningIntensity) * 0.0000042 * lightningBloomStrength / (pow(length(dist), 1.20) + 0.040);
   float chargeGradient = length(vec2(dFdx(water[CLOUD] + water[PRECIPITATION]), dFdy(water[CLOUD] + water[PRECIPITATION])));
   float chargeShear = length(vec2(dFdx(base[VY]), dFdy(base[VX])));
   float chargeSeparation = (chargeGradient * 3.6 + chargeShear * 120.0 + abs(texture(curlTex, texCoord).r) * 2.0) * dynamicChargeSeparation;
