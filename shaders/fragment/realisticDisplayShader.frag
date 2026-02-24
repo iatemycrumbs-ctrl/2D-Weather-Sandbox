@@ -202,20 +202,27 @@ vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
 {
   vec2 uv = vec2(0.5);
   float wrappedDx = mod((texCoord.x - pos.x) + 1.5, 1.0) - 0.5;
-  uv.x = 0.5 + wrappedDx * scaleMult * aspectRatios[0] * 2.25;
-  uv.y = 0.46 + (texCoord.y - pos.y) * scaleMult * 0.95;
+  float cloudDrift = sin((texCoord.y - pos.y) * 18.0 + random2d(pos * 21.7) * 6.2831) * 0.08;
+  float anvilShear = (texCoord.y - pos.y) * 0.22;
+  uv.x = 0.5 + (wrappedDx + cloudDrift + anvilShear) * scaleMult * aspectRatios[0] * 2.05;
+  uv.y = 0.50 + (texCoord.y - pos.y) * scaleMult * 0.88;
   return uv;
 }
 
 vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
 {
   vec2 uv = vec2(0.5);
-  uv.x = 0.5 + baseCoord.x * scaleMult * aspectRatios[0] / lightningTexAspect * 1.08;
+  float wrappedDx = mod((texCoord.x - pos.x) + 1.5, 1.0) - 0.5;
+
   // Normalize vertical texture traversal so the channel head starts near the cloud source
   // and can continue all the way down to terrain instead of collapsing into short stubs.
   float sourceToGround = max(pos.y, 0.08);
   float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
-  uv.y = verticalTravel * 1.26;
+
+  float branchCurve = sin(verticalTravel * 8.4 + random2d(pos * 19.3) * 6.2831) * (0.075 + (1.0 - verticalTravel) * 0.06);
+  float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.34;
+  uv.x = 0.5 + (wrappedDx + branchCurve + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 1.22;
+  uv.y = verticalTravel * 1.32;
   return uv;
 }
 
@@ -276,17 +283,21 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   branchGhost = max(branchGhost, texture(lightningTex, lightningTexCoord + vec2(-px.x * 2.5, -px.y * 4.0)).r);
   float branchWide = texture(lightningTex, lightningTexCoord + vec2(px.x * 5.5, -px.y * 7.5)).r;
   branchWide = max(branchWide, texture(lightningTex, lightningTexCoord + vec2(-px.x * 6.0, -px.y * 8.0)).r);
-  float branchSpark = max(branchGhost, branchWide);
-  float branchBase = branchGhost * (strikeTypeSign < 0.0 ? 0.64 : 0.54) + branchWide * (strikeTypeSign < 0.0 ? 0.36 : 0.32);
+  float branchFan = texture(lightningTex, lightningTexCoord + vec2(px.x * 8.0, -px.y * 11.0)).r;
+  branchFan = max(branchFan, texture(lightningTex, lightningTexCoord + vec2(-px.x * 8.6, -px.y * 10.5)).r);
+  float branchSpark = max(max(branchGhost, branchWide), branchFan);
+  float branchBase = branchGhost * (strikeTypeSign < 0.0 ? 0.70 : 0.60) + branchWide * (strikeTypeSign < 0.0 ? 0.44 : 0.38) + branchFan * (strikeTypeSign < 0.0 ? 0.30 : 0.28);
   pixVal += branchBase;
 
   if (strikeTypeSign < 0.0) {
     // Keep IC (purple) illumination confined to the cloud deck band in both texture-space and world-space.
-    float icEnvelope = smoothstep(0.12, 0.46, lightningTexCoord.y) * (1.0 - smoothstep(0.62, 0.90, lightningTexCoord.y));
-    float icCloudBand = smoothstep(0.28, 0.38, texCoord.y) * (1.0 - smoothstep(0.86, 0.94, texCoord.y));
-    float icCenterFalloff = 1.0 - smoothstep(0.26, 0.52, abs(lightningTexCoord.y - 0.5));
-    float localCloudMask = smoothstep(0.035, 0.18, water[CLOUD] + water[PRECIPITATION] * 0.35);
-    pixVal *= clamp(icEnvelope * icCloudBand * icCenterFalloff * localCloudMask, 0.0, 1.0);
+    float icEnvelope = smoothstep(0.08, 0.44, lightningTexCoord.y) * (1.0 - smoothstep(0.66, 0.94, lightningTexCoord.y));
+    float icCloudBand = smoothstep(0.22, 0.34, texCoord.y) * (1.0 - smoothstep(0.90, 0.98, texCoord.y));
+    float icCenterFalloff = 1.0 - smoothstep(0.34, 0.66, abs(lightningTexCoord.y - 0.5));
+    float icLateralBranches = 1.0 - smoothstep(0.32, 0.92, abs(lightningTexCoord.x - 0.5));
+    float localCloudMask = smoothstep(0.028, 0.16, water[CLOUD] + water[PRECIPITATION] * 0.42);
+    pixVal *= clamp(icEnvelope * icCloudBand * max(icCenterFalloff, icLateralBranches * 0.65) * localCloudMask, 0.0, 1.0);
+    pixVal += branchBase * 0.42 * icCloudBand;
   } else {
     // CG (blue): keep the origin inside cloud and maintain continuous channel reach toward terrain.
     float sourceCloudMask = smoothstep(0.06, 0.22, texture(waterTex, vec2(mod(pos.x + 1.0, 1.0), clamp(pos.y, 0.26, 0.86))).r);
@@ -298,9 +309,9 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     pixVal += trunk * max(cgGroundReach * 0.52, cgLongChannel * 0.40);
   }
 
-  const float branchShowFactor = 2.1;
-  float branchAxis = strikeTypeSign < 0.0 ? abs(lightningTexCoord.x - 0.5) * 1.1 : lightningTexCoord.y * 0.86;
-  float brightnessThreshold = clamp((strikeTypeSign < 0.0 ? 0.68 : 0.44) - lightningTime * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.72 : 0.46)) + branchAxis * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.46 : 0.28)), 0.0, 1.0);
+  const float branchShowFactor = 2.0;
+  float branchAxis = strikeTypeSign < 0.0 ? abs(lightningTexCoord.x - 0.5) * 0.95 : lightningTexCoord.y * 0.78;
+  float brightnessThreshold = clamp((strikeTypeSign < 0.0 ? 0.62 : 0.36) - lightningTime * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.66 : 0.42)) + branchAxis * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.40 : 0.24)), 0.0, 1.0);
   brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.56 : 0.50, clamp(lightningTime - 0.85, 0.0, 1.0));
   brightnessThreshold -= branchSpark * (strikeTypeSign < 0.0 ? 0.24 : 0.20);
   brightnessThreshold = max(brightnessThreshold, 0.0);
