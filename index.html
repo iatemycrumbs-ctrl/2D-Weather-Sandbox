@@ -10,6 +10,9 @@
     <script type="text/javascript" src="libraries/chartjs-adapter-date-fns.js"></script>
     <script type="text/javascript" src="app.js"></script>
     <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --text-color: #d9ecff;
@@ -26,7 +29,7 @@
 
         body {
             margin: 0;
-            font-family: 'Segoe UI', 'Inter', 'Arial', sans-serif;
+            font-family: 'Rajdhani', 'Segoe UI', 'Inter', 'Arial', sans-serif;
             background:
                 radial-gradient(circle at 12% 15%, rgba(58, 221, 255, 0.22), transparent 40%),
                 radial-gradient(circle at 88% 8%, rgba(123, 102, 255, 0.18), transparent 35%),
@@ -37,6 +40,60 @@
             color: var(--text-color);
             line-height: 1.6;
             overflow-x: hidden;
+        }
+
+        @keyframes holoSweep {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
+        @keyframes loadingPulse {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 220% 50%; }
+        }
+
+        .dg {
+            font-family: 'Orbitron', 'Rajdhani', monospace !important;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            text-shadow: 0 0 6px rgba(90, 235, 255, 0.2);
+        }
+
+        .dg.main .close-button {
+            background: linear-gradient(120deg, rgba(15, 44, 86, 0.9), rgba(28, 105, 168, 0.9)) !important;
+            border: 1px solid rgba(84, 214, 255, 0.5);
+            color: #c8f6ff !important;
+        }
+
+        .dg.main .close-button:hover {
+            background: linear-gradient(120deg, rgba(22, 74, 128, 0.95), rgba(43, 148, 227, 0.95)) !important;
+        }
+
+        .dg li:not(.folder),
+        .dg .cr.function,
+        .dg .cr.boolean,
+        .dg .cr.number,
+        .dg .cr.string {
+            background: linear-gradient(105deg, rgba(7, 20, 46, 0.88), rgba(10, 28, 58, 0.92)) !important;
+            border-left: 2px solid rgba(83, 220, 255, 0.22);
+            border-bottom: 1px solid rgba(49, 153, 203, 0.28) !important;
+        }
+
+        .dg .cr.number input[type=text],
+        .dg .cr.string input[type=text] {
+            background: rgba(2, 8, 22, 0.86) !important;
+            color: #9fefff !important;
+            border: 1px solid rgba(81, 211, 255, 0.38);
+        }
+
+        .dg .c .slider {
+            background: rgba(15, 43, 79, 0.82) !important;
+            border: 1px solid rgba(55, 170, 255, 0.40);
+        }
+
+        .dg .c .slider-fg {
+            background: linear-gradient(90deg, #2d82ff, #3fe7ff) !important;
+            box-shadow: 0 0 8px rgba(67, 226, 255, 0.44);
         }
 
 

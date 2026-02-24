@@ -1866,6 +1866,8 @@ class LoadingBar
   #percent;
   #description;
   #title;
+  #status;
+  #frame;
 
   constructor(percentIn)
   {
@@ -1878,9 +1880,13 @@ class LoadingBar
     this.loadingBar = document.createElement('div');
     this.bar = document.createElement('div');
     this.title = document.createElement('div');
+    this.status = document.createElement('div');
     this.underBar = document.createElement('div');
+    this.frame = document.createElement('div');
 
+    this.loadingBar.appendChild(this.frame);
     this.loadingBar.appendChild(this.title);
+    this.loadingBar.appendChild(this.status);
     this.loadingBar.appendChild(this.bar);
     this.loadingBar.appendChild(this.underBar);
 
@@ -1888,17 +1894,25 @@ class LoadingBar
     this.loadingBar.style.height = '190px';
     this.loadingBar.style.color = '#d7f4ff';
     this.loadingBar.style.textAlign = 'center';
-    this.loadingBar.style.background = 'linear-gradient(180deg, rgba(6,16,40,0.84), rgba(9,12,22,0.88))';
+    this.loadingBar.style.background = 'linear-gradient(145deg, rgba(8,18,44,0.90), rgba(7,11,24,0.92))';
     this.loadingBar.style.backdropFilter = 'blur(8px)';
-    this.loadingBar.style.border = '1px solid rgba(90,225,255,0.40)';
+    this.loadingBar.style.border = '1px solid rgba(90,225,255,0.52)';
     this.loadingBar.style.borderRadius = '18px';
-    this.loadingBar.style.boxShadow = '0 14px 38px rgba(0,0,0,0.50), inset 0 0 22px rgba(41,190,255,0.12)';
+    this.loadingBar.style.boxShadow = '0 16px 44px rgba(0,0,0,0.58), inset 0 0 30px rgba(41,190,255,0.14)';
     this.loadingBar.style.position = 'fixed';
     this.loadingBar.style.left = '50%';
     this.loadingBar.style.top = '50%';
     this.loadingBar.style.transform = 'translate(-50%, -50%)';
     this.loadingBar.style.padding = '14px 16px';
     this.loadingBar.style.zIndex = '4';
+    this.loadingBar.style.overflow = 'hidden';
+
+    this.frame.style.position = 'absolute';
+    this.frame.style.inset = '0';
+    this.frame.style.pointerEvents = 'none';
+    this.frame.style.background = 'linear-gradient(90deg, rgba(71,211,255,0.07), rgba(71,211,255,0.01) 22%, rgba(107,98,255,0.08) 55%, rgba(71,211,255,0.05))';
+    this.frame.style.backgroundSize = '240% 100%';
+    this.frame.style.animation = 'holoSweep 3.2s linear infinite';
 
     this.title.style.height = '30px';
     this.title.style.lineHeight = '30px';
@@ -1906,7 +1920,19 @@ class LoadingBar
     this.title.style.letterSpacing = '1.2px';
     this.title.style.fontWeight = '700';
     this.title.style.textTransform = 'uppercase';
+    this.title.style.fontFamily = 'Orbitron, Rajdhani, monospace';
     this.title.innerHTML = 'Bootstrapping Atmospheric Engine';
+
+    this.status.style.height = '16px';
+    this.status.style.lineHeight = '16px';
+    this.status.style.marginBottom = '8px';
+    this.status.style.color = '#89f2ff';
+    this.status.style.fontFamily = 'Orbitron, Rajdhani, monospace';
+    this.status.style.fontSize = '10px';
+    this.status.style.letterSpacing = '2.8px';
+    this.status.style.textTransform = 'uppercase';
+    this.status.style.textShadow = '0 0 8px rgba(86,233,255,0.42)';
+    this.status.innerHTML = 'Neural Weather Core Online';
 
     this.underBar.style.width = '100%';
     this.underBar.style.height = '52px';
@@ -1917,10 +1943,13 @@ class LoadingBar
     this.bar.style.height = '48px';
     this.bar.style.lineHeight = '44px';
     this.bar.style.borderRadius = '12px';
-    this.bar.style.background = 'linear-gradient(90deg, #1c79ff, #27d2ff, #54f0e2)';
+    this.bar.style.background = 'linear-gradient(90deg, #1f57ff, #19a7ff, #34f2e8, #8de7ff)';
+    this.bar.style.backgroundSize = '220% 100%';
+    this.bar.style.animation = 'loadingPulse 1.3s linear infinite';
     this.bar.style.boxShadow = '0 0 20px rgba(45,215,255,0.35)';
     this.bar.style.fontSize = '20px';
     this.bar.style.fontWeight = '700';
+    this.bar.style.fontFamily = 'Orbitron, Rajdhani, monospace';
 
     this.#update();
 
@@ -1954,6 +1983,7 @@ class LoadingBar
       this.bar.style.width = this.percent + '%';
       this.bar.innerHTML = this.percent + '%';
       this.underBar.innerHTML = (this.description || 'Compiling shaders, preparing terrain, and calibrating weather physics') + '<br><span style="font-size:11px;color:#9ad0ff">Device: ' + getDeviceInfoSummary() + '</span>';
+      this.status.innerHTML = 'Render pipeline stage · ' + Math.round(this.percent) + '% synchronized';
       let timeout;
       if (this.percent == 100)
         timeout = 5;
@@ -2139,7 +2169,7 @@ function updateLightningShakePhysics()
 
   lightningShakeHFAmplitude *= clamp(guiControls.shakeDecay, 0.65, 0.95);
 
-  const rapidRate = map_rangeC(guiControls.shakeFrequency, 1.0, 20.0, 0.95, 2.85);
+  const rapidRate = map_range_C(guiControls.shakeFrequency, 1.0, 20.0, 0.95, 2.85);
   lightningShakePhaseX += rapidRate + (Math.random() - 0.5) * 0.32;
   lightningShakePhaseY += rapidRate * 1.22 + (Math.random() - 0.5) * 0.38;
 
