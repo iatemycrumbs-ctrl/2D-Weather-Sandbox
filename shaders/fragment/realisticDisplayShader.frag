@@ -293,10 +293,23 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   lightningTexCoord.x = 0.5 + (lightningTexCoord.x - 0.5) * variantMirror;
   lightningTexCoord.x += (variantHash - 0.5) * 0.14;
 
+  // Break fixed "snake" appearance by applying per-strike domain warping before sampling.
+  float strikeSeedA = random2d(pos * 61.7 + vec2(floor(lightningAnimIter * 0.031), 3.0));
+  float strikeSeedB = random2d(pos * 97.9 + vec2(7.0, floor(lightningAnimIter * 0.027)));
+  float shapeJitter = mix(0.004, 0.014, float(lightningShapeMode) / 3.0);
+  vec2 warp = vec2(
+    sin(lightningTexCoord.y * (22.0 + strikeSeedA * 45.0) + lightningTime * (1.2 + strikeSeedB * 2.6)) * shapeJitter,
+    sin(lightningTexCoord.x * (18.0 + strikeSeedB * 39.0) + lightningTime * (0.9 + strikeSeedA * 2.0)) * (shapeJitter * 0.55)
+  );
+  lightningTexCoord += warp;
+
   // Channel model: texture-guided trunk + procedural meander + IC horizontal sweep.
   lightningTexCoord += lightningWarpOffset(lightningTexCoord, lightningTime, pos, strikeTypeSign);
 
   float trunk = texture(lightningTex, lightningTexCoord).r;
+  vec2 altOffset = vec2((strikeSeedA - 0.5) * 0.10, (strikeSeedB - 0.5) * 0.14);
+  float trunkVariant = texture(lightningTex, lightningTexCoord + altOffset).r;
+  trunk = mix(trunk, max(trunk, trunkVariant), 0.45 + 0.20 * float(lightningShapeMode > 1));
   vec2 px = vec2(1.0 / lightningTexRes.x, 1.0 / lightningTexRes.y);
   float side = max(texture(lightningTex, lightningTexCoord + vec2(px.x, 0.0)).r,
                    texture(lightningTex, lightningTexCoord - vec2(px.x, 0.0)).r);
