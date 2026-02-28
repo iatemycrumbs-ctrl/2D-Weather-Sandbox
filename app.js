@@ -65,6 +65,96 @@ function updateSetupSliders()
     introDeviceInfo.textContent = getDeviceInfoSummary();
 }
 
+
+
+const introControlFxState = {
+  audioCtx : null,
+  enabled : true,
+  lastSoundAt : 0
+};
+
+function playIntroUiSound(type = 'tick', intensity = 1.0)
+{
+  if (!introControlFxState.enabled || typeof window === 'undefined')
+    return;
+
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx)
+    return;
+
+  if (!introControlFxState.audioCtx)
+    introControlFxState.audioCtx = new AudioCtx();
+
+  const nowMs = performance.now();
+  if (nowMs - introControlFxState.lastSoundAt < 22)
+    return;
+  introControlFxState.lastSoundAt = nowMs;
+
+  const ctx = introControlFxState.audioCtx;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+
+  const clampedIntensity = clamp(intensity, 0.35, 1.5);
+  const baseFreq = type == 'launch' ? 180 : type == 'select' ? 330 : 260;
+  const endFreq = type == 'launch' ? 610 : type == 'select' ? 410 : 335;
+  const duration = type == 'launch' ? 0.20 : 0.08;
+
+  osc.type = type == 'launch' ? 'sawtooth' : 'triangle';
+  osc.frequency.setValueAtTime(baseFreq, now);
+  osc.frequency.exponentialRampToValueAtTime(endFreq, now + duration);
+
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(2200 + clampedIntensity * 900, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.028 * clampedIntensity, now + 0.016);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+  osc.connect(filter).connect(gain).connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + duration + 0.01);
+}
+
+function attachSimulationControlFx()
+{
+  const controlsRoot = getEl('startBtn');
+  if (!controlsRoot)
+    return;
+
+  const sliderEls = controlsRoot.querySelectorAll('input[type="range"]');
+  const selectEls = controlsRoot.querySelectorAll('select');
+  const launchBtn = controlsRoot.querySelector('input[type="button"]');
+
+  sliderEls.forEach((slider) => {
+    slider.addEventListener('input', () => {
+      const norm = (parseFloat(slider.value) - parseFloat(slider.min || 0)) / Math.max(parseFloat(slider.max || 1) - parseFloat(slider.min || 0), 0.0001);
+      controlsRoot.classList.remove('sim-controls-pulse');
+      void controlsRoot.offsetWidth;
+      controlsRoot.classList.add('sim-controls-pulse');
+      playIntroUiSound('tick', 0.7 + norm * 0.7);
+    });
+  });
+
+  selectEls.forEach((sel) => {
+    sel.addEventListener('change', () => {
+      controlsRoot.classList.remove('sim-controls-shimmer');
+      void controlsRoot.offsetWidth;
+      controlsRoot.classList.add('sim-controls-shimmer');
+      playIntroUiSound('select', 1.0);
+    });
+  });
+
+  if (launchBtn) {
+    launchBtn.addEventListener('pointerdown', () => {
+      controlsRoot.classList.remove('sim-controls-launch');
+      void controlsRoot.offsetWidth;
+      controlsRoot.classList.add('sim-controls-launch');
+      playIntroUiSound('launch', 1.25);
+    });
+  }
+}
+
 var FPS = 60.0;
 
 
@@ -369,6 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
   createPresetSelect();
   stationSelector = createStationSelect();
   prepareSounding();
+  attachSimulationControlFx();
 });
 
 
@@ -598,6 +689,7 @@ var lastFrameNum = 0;
 
 var iterNum = 0;
 var lightningVisualClock = 0;
+var currentLightningTextureIndex = 0;
 
 var lightningShakeOffsetX = 0.0;
 var lightningShakeOffsetY = 0.0;
@@ -4245,6 +4337,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       frameNum = 0;
       iterNum = 0;
       lightningVisualClock = 0;
+      currentLightningTextureIndex = 0;
       gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT, new Float32Array([ 0.0, 0.0, -10000.0, 0.0 ]));
       lightningRods = [];
@@ -7050,6 +7143,32 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   await Promise.all(lightningTextureTasks);
   lightningGeneratorWorker.terminate();
 
+  function estimateLightningCloudSourceY(lightningX, fallbackY)
+  {
+    const sampleX = Math.floor(clamp(lightningX * (sim_res_x - 1), 0, sim_res_x - 1));
+    const samples = 44;
+    const waterPx = new Float32Array(4);
+    let bestY = clamp(fallbackY, 0.18, 0.90);
+    let bestSignal = 0.0;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_0);
+    gl.readBuffer(gl.COLOR_ATTACHMENT1);
+
+    for (let i = 0; i < samples; i++) {
+      const sampleNormY = 0.18 + (i / (samples - 1)) * 0.76;
+      const sampleY = Math.floor(sampleNormY * (sim_res_y - 1));
+      gl.readPixels(sampleX, sampleY, 1, 1, gl.RGBA, gl.FLOAT, waterPx);
+
+      const cloudSignal = waterPx[1] * 2.4 + waterPx[2] * 0.9 + waterPx[3] * 0.3;
+      if (cloudSignal > bestSignal) {
+        bestSignal = cloudSignal;
+        bestY = sampleNormY;
+      }
+    }
+
+    return bestSignal > 0.00008 ? bestY : clamp(fallbackY, 0.24, 0.78);
+  }
+
   await loadingBar.set(90, 'Setting up FBO`s');
 
   createHdrFBO();
@@ -7701,15 +7820,20 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
               if (Math.round(lightningDataValues[2]) == iterNum) {
                 const lightningSignedIntensity = lightningDataValues[3];
                 const lightningIntensity = Math.pow(Math.abs(lightningSignedIntensity), 2.0);
+                const lightningSourceY = estimateLightningCloudSourceY(lightningDataValues[0], lightningDataValues[1]);
 
                 gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
                 gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT,
-                                 new Float32Array([ lightningDataValues[0], lightningDataValues[1], lightningVisualClock, lightningSignedIntensity ]));
+                                 new Float32Array([ lightningDataValues[0], lightningSourceY, lightningVisualClock, lightningSignedIntensity ]));
 
-                triggerLightningEffects(lightningDataValues[0], lightningDataValues[1], lightningIntensity);
+                const textureHash = Math.sin((lightningDataValues[0] * 91.17 + lightningSourceY * 37.23 + iterNum * 0.61803)) * 43758.5453;
+                currentLightningTextureIndex = Math.floor((textureHash - Math.floor(textureHash)) * numLightningTextures);
+                currentLightningTextureIndex = clamp(currentLightningTextureIndex, 0, numLightningTextures - 1);
+
+                triggerLightningEffects(lightningDataValues[0], lightningSourceY, lightningIntensity);
 
                 if (guiControls.sound)
-                  soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], lightningIntensity);
+                  soundSystem.soundThunder(lightningDataValues[0], lightningSourceY, lightningIntensity);
               }
             }
 
@@ -7950,8 +8074,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       }
 
 
-      let lightningTexNum = Math.floor(lightningAnimIter / 400) % numLightningTextures;
-      // console.log(lightningTexNum)
+      const lightningTexNum = clamp(currentLightningTextureIndex, 0, numLightningTextures - 1);
 
       gl.activeTexture(gl.TEXTURE7);
       gl.bindTexture(gl.TEXTURE_2D, lightningTextures[lightningTexNum]);
