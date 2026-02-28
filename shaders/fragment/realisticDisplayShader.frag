@@ -385,7 +385,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   pixVal = max(pixVal - brightnessThreshold, 0.0);
   float persistentBranchFloor = branchBase * (strikeTypeSign < 0.0 ? 0.82 : 0.74);
   pixVal = max(pixVal, persistentBranchFloor);
-  pixVal *= mix(18000.0, 32000.0, strikeTypeSign > 0.0 ? 1.0 : 0.62);
+  pixVal *= mix(1400.0, 2600.0, strikeTypeSign > 0.0 ? 1.0 : 0.62);
 
   // Keep channel visible for the full event life; avoid mid-event disappearing bolts/branches.
   float channelFade = clamp(currentLightningIntensity * (strikeTypeSign > 0.0 ? 0.17 : 0.12), 0.0, 1.0);
@@ -571,10 +571,11 @@ vec4 getAirColor(vec2 fragCoordIn)
   bool forceMobileBoltRender = mobileLightningVisibility >= 2.0;
   if (forceMobileBoltRender || abs(lightningData[INTENSITY]) > lightningVisThreshold) { // force full bolt structure on mobile, including weaker sampled strikes
     emittedLight += displayLightning(lightningPos, lightningTime, currentLightningIntensity);
-    emittedLight /= 1. + cloudDensity * (125.0 / max(lightningBloomStrength, 0.25));
+    emittedLight /= 1. + cloudDensity * (170.0 / max(lightningBloomStrength, 0.25));
+    emittedLight = min(emittedLight, vec3(28000.0));
   }
 
-#define lightningOnLightBrightness 0.004 // 0.002
+#define lightningOnLightBrightness 0.0014
 
   vec2 dist = vec2(lightningPos.x - texCoord.x, max((abs(lightningPos.y / 2. - texCoord.y) - 0.1), 0.));
   dist.x *= aspectRatios[0];
@@ -590,7 +591,8 @@ vec4 getAirColor(vec2 fragCoordIn)
   float fieldDiffused = ambientField / (1.0 + cloudDensity * 0.35 * electricFieldDiffusion);
   vec3 coronaColor = mix(vec3(0.45, 0.65, 1.0), vec3(1.0, 0.85, 0.55), clamp(lightningColorTempMult, 0.0, 1.5));
 
-  onLight += vec3(lightningOnLight) + coronaColor * (electricFieldGlow * electricFieldVizStrength + fieldDiffused * 0.018);
+  onLight += vec3(lightningOnLight) + coronaColor * (electricFieldGlow * electricFieldVizStrength + fieldDiffused * 0.012);
+  onLight = min(onLight, vec3(14.0));
 
   // Rainbow rework: sun-opposed arc with rain curtain gating, broad glow and subtle secondary inversion.
   float rainRich = clamp(water[PRECIPITATION] * 2.1 + cloudOpacity * 0.42, 0.0, 1.0);

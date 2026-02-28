@@ -602,10 +602,13 @@ var iterNum = 0;
 var lightningVisualClock = 0;
 var lightningStartupWarmupIterations = 1200;
 var lightningStartupWarmupVisualFrames = 300;
-var lightningRenderCooldownFrames = 80;
+var lightningRenderCooldownFrames = 160;
 var lightningMaxVisualLifetimeFrames = 90;
 var lastAcceptedLightningStartIter = -1;
 var lastAcceptedLightningVisualClock = -10000;
+var lightningTextureRequestInFlight = false;
+var lightningTextureLastRequestFrame = -10000;
+var lightningTextureMinRequestSpacingFrames = 120;
 
 var lightningShakeOffsetX = 0.0;
 var lightningShakeOffsetY = 0.0;
@@ -4489,6 +4492,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       lightningVisualClock = 0;
       lastAcceptedLightningStartIter = -1;
       lastAcceptedLightningVisualClock = -10000;
+      lightningTextureRequestInFlight = false;
+      lightningTextureLastRequestFrame = -10000;
       gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT, new Float32Array([ 0.0, 0.0, -10000.0, 0.0 ]));
       gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
@@ -7311,7 +7316,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     if (payload.id == latestLightningTextureRequestId)
       generateLightningTexture(pending.textureIndex, width, height, lumData);
 
-    pending.resolve();
+    lightningTextureRequestInFlight = false;
+    pending.resolve(true);
   };
 
   lightningGeneratorWorker.onerror = () => {
@@ -7322,6 +7328,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       pending.resolve();
     });
     pendingLightningTextureRequests.clear();
+    lightningTextureRequestInFlight = false;
   };
 
   const lightningTexturePlan = getLightningTexturePlan();
@@ -7329,6 +7336,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   function requestLightningTextureRefresh(seed)
   {
+    if (lightningTextureRequestInFlight)
+      return Promise.resolve(false);
+    if ((lightningVisualClock - lightningTextureLastRequestFrame) < lightningTextureMinRequestSpacingFrames)
+      return Promise.resolve(false);
+
+    lightningTextureRequestInFlight = true;
+    lightningTextureLastRequestFrame = lightningVisualClock;
+
     const reqId = lightningTextureRequestCounter++;
     latestLightningTextureRequestId = reqId;
 
@@ -7338,9 +7353,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         if (!pending)
           return;
         pendingLightningTextureRequests.delete(reqId);
+        lightningTextureRequestInFlight = false;
         generateLightningTexture(0, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height));
-        pending.resolve();
-      }, 2000);
+        pending.resolve(true);
+      }, 1800);
 
       pendingLightningTextureRequests.set(reqId, {
         resolve,
@@ -8035,7 +8051,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
                 if (validStrike && warmupDone && newStrikeIter && cooldownDone) {
                   lastAcceptedLightningStartIter = lightningStartIter;
                   lastAcceptedLightningVisualClock = lightningVisualClock;
-                  const lightningIntensity = Math.pow(clamp(Math.abs(lightningSignedIntensity), 0.0, 1.6), 2.0);
+                  const lightningIntensity = Math.pow(clamp(Math.abs(lightningSignedIntensity), 0.0, 1.1), 2.0);
 
                   gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
                   gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT,
