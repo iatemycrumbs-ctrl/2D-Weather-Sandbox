@@ -17,7 +17,6 @@ function generateLightningBolt(width, height, seed)
 {
   const lightningCanvas = new OffscreenCanvas(width, height);
   const ctx = lightningCanvas.getContext('2d', {alpha : true, desynchronized : true});
-
   ctx.clearRect(0, 0, width, height);
 
   let rngState = ((seed ?? Date.now()) >>> 0) || 1;
@@ -29,104 +28,91 @@ function generateLightningBolt(width, height, seed)
 
   function genLightningColor(lineWidth)
   {
-    // Force-visible brightness curve for mobile and low-light scenes.
-    const base = Math.min(Math.pow(Math.max(lineWidth, 0.1), 1.65) * 30.0, 255.0);
+    const base = Math.min(Math.pow(Math.max(lineWidth, 0.1), 1.60) * 28.0, 255.0);
     const col = Math.floor(base);
     return `rgb(${col}, ${col}, ${col})`;
   }
 
-  function drawCoreChannel()
-  {
-    ctx.beginPath();
+  const coreSegments = [];
+  const branchSegments = [];
 
-    let startX = width / 2.0 + (rand() - 0.5) * width * 0.08;
-    let startY = 0;
-    let angle = (rand() - 0.5) * 0.5;
-    let lineWidth = Math.max(5.2, width / 220.0);
-    const targetAngle = 0.0;
-
-    ctx.moveTo(startX, startY);
-    ctx.lineWidth = lineWidth;
-
-    while (startY < height) {
-      const nextX = startX + Math.sin(angle) * 1.25;
-      const nextY = startY + Math.cos(angle) * 1.45;
-
-      angle += (rand() - 0.5) * 1.1;
-      angle -= (angle - targetAngle) * 0.075;
-
-      ctx.lineTo(nextX, nextY);
-      startX = nextX;
-      startY = nextY;
-
-      if (rand() < 0.018 * (1.0 - nextY / height)) {
-        ctx.strokeStyle = genLightningColor(lineWidth);
-        ctx.stroke();
-        drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 2.4, lineWidth * (0.38 + rand() * 0.20));
-        ctx.beginPath();
-        ctx.moveTo(nextX, nextY);
-        ctx.lineWidth = lineWidth;
-      }
-    }
-
-    ctx.strokeStyle = genLightningColor(lineWidth);
-    ctx.stroke();
-  }
-
-  function drawBranch(startX, startY, targetAngle, lineWidth)
+  function traceBolt(startX, startY, targetAngle, lineWidth, isBranch)
   {
     let angle = targetAngle;
+    let x = startX;
+    let y = startY;
+    let w = lineWidth;
+    const segmentList = isBranch ? branchSegments : coreSegments;
 
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineWidth = lineWidth;
+    while (y < height) {
+      const stepScale = isBranch ? 1.05 : 1.25;
+      const nextX = x + Math.sin(angle) * stepScale;
+      const nextY = y + Math.cos(angle) * (isBranch ? 1.15 : 1.45);
 
-    while (startY < height) {
-      const nextX = startX + Math.sin(angle) * 1.05;
-      const nextY = startY + Math.cos(angle) * 1.15;
-
-      angle += (rand() - 0.5) * 0.65;
+      angle += (rand() - 0.5) * (isBranch ? 0.65 : 1.05);
       angle -= (angle - targetAngle) * 0.08;
 
-      ctx.lineTo(nextX, nextY);
+      const cx = Math.min(Math.max(nextX, 0.0), width - 1.0);
+      const cy = Math.min(Math.max(nextY, 0.0), height);
 
-      startX = nextX;
-      startY = nextY;
+      segmentList.push({x0 : x, y0 : y, x1 : cx, y1 : cy, w});
 
-      if (rand() < 0.020) {
-        ctx.strokeStyle = genLightningColor(lineWidth);
-        ctx.stroke();
-        lineWidth -= 0.18;
+      x = cx;
+      y = cy;
 
-        if (lineWidth < 0.1)
+      if (isBranch && rand() < 0.020) {
+        w -= 0.18;
+        if (w < 0.1)
           return;
-
         if (rand() < 0.12)
-          drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 1.4, lineWidth * 0.86);
-
-        ctx.beginPath();
-        ctx.moveTo(nextX, nextY);
-        ctx.lineWidth = lineWidth;
+          traceBolt(x, y, targetAngle + (rand() - 0.5) * 1.4, w * 0.86, true);
       }
-    }
 
-    ctx.strokeStyle = genLightningColor(lineWidth);
-    ctx.stroke();
+      if (!isBranch && rand() < 0.018 * (1.0 - y / height))
+        traceBolt(x, y, targetAngle + (rand() - 0.5) * 2.4, w * (0.38 + rand() * 0.20), true);
+    }
   }
 
-  // Glow + core for force-visible bolt.
-  ctx.globalCompositeOperation = 'screen';
-  drawCoreChannel();
-  ctx.filter = 'blur(1.6px)';
-  drawCoreChannel();
+  const startX = width / 2.0 + (rand() - 0.5) * width * 0.08;
+  const startAngle = (rand() - 0.5) * 0.45;
+  const coreWidth = Math.max(5.0, width / 240.0);
+  traceBolt(startX, 0.0, startAngle, coreWidth, false);
+
+  function drawSegments(list, widthMult, mode)
+  {
+    if (!list.length)
+      return;
+    ctx.save();
+    ctx.globalCompositeOperation = mode;
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      ctx.beginPath();
+      ctx.moveTo(s.x0, s.y0);
+      ctx.lineTo(s.x1, s.y1);
+      ctx.lineWidth = Math.max(0.1, s.w * widthMult);
+      ctx.strokeStyle = genLightningColor(s.w * widthMult);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Render passes from the SAME geometry to avoid fat flickering blobs.
+  drawSegments(coreSegments, 1.65, 'screen');
+  drawSegments(branchSegments, 1.35, 'screen');
+
+  ctx.save();
+  ctx.filter = 'blur(1.2px)';
+  drawSegments(coreSegments, 1.18, 'screen');
+  drawSegments(branchSegments, 1.08, 'screen');
+  ctx.restore();
   ctx.filter = 'none';
-  ctx.globalCompositeOperation = 'lighter';
-  drawCoreChannel();
+
+  drawSegments(coreSegments, 0.92, 'lighter');
+  drawSegments(branchSegments, 0.82, 'source-over');
 
   const imageData = ctx.getImageData(0, 0, width, height).data;
   const luminanceData = new Uint8Array(width * height);
   for (let i = 0, j = 0; i < imageData.length; i += 4, j++)
     luminanceData[j] = imageData[i];
-
   return luminanceData;
 }
