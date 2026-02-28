@@ -264,7 +264,7 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
   bool isIC = intensity < 0.0;
   float absIntensity = abs(intensity);
   float T = max(T0, 0.0);
-  if (T > 5.8)
+  if (T > 3.2)
     return 0.0;
 
   float channelEnvelope = lightningChannelEnvelope(T, isIC);
@@ -385,11 +385,11 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   pixVal = max(pixVal - brightnessThreshold, 0.0);
   float persistentBranchFloor = branchBase * (strikeTypeSign < 0.0 ? 0.82 : 0.74);
   pixVal = max(pixVal, persistentBranchFloor);
-  pixVal *= mix(84000.0, 154000.0, strikeTypeSign > 0.0 ? 1.0 : 0.52);
+  pixVal *= mix(18000.0, 32000.0, strikeTypeSign > 0.0 ? 1.0 : 0.62);
 
   // Keep channel visible for the full event life; avoid mid-event disappearing bolts/branches.
   float channelFade = clamp(currentLightningIntensity * (strikeTypeSign > 0.0 ? 0.17 : 0.12), 0.0, 1.0);
-  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.90 : 1.75, strikeTypeSign > 0.0 ? 4.20 : 3.90, lightningTime);
+  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.25 : 1.10, strikeTypeSign > 0.0 ? 2.75 : 2.45, lightningTime);
   pixVal *= channelFade * max(tailFade, 0.0);
 
   float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
@@ -563,7 +563,7 @@ vec4 getAirColor(vec2 fragCoordIn)
   float lightningSign = lightningData[INTENSITY] < 0.0 ? -1.0 : 1.0;
   float currentLightningIntensity = lightningIntensityOverTime(lightningTime, lightningPos, lightningData[INTENSITY]) * lightningSign;
 
-  if (lightningStartIterNum <= 0.0 || lightningTime > 5.6)
+  if (lightningStartIterNum <= 0.0 || lightningTime > 3.2)
     currentLightningIntensity = 0.0;
 
 
