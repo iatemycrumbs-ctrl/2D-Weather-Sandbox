@@ -554,6 +554,7 @@ const guiControls_default = {
   IterPerFrame : 10,
   auto_IterPerFrame : true,
   sound : true,
+  uiSounds : true,
   dryLapseRate : 10.0,     // Real: 9.8 degrees / km
   simHeight : 12000,       // meters
   twelveHourClock : false, // only for display.  false = metric
@@ -611,6 +612,8 @@ var lightningShakePhaseX = 0.0;
 var lightningShakePhaseY = 0.0;
 var lightningShakeBurstTimerFrames = 0;
 var pendingLightningShakeEvents = [];
+var uiAudioCtx = null;
+var lastUiBeepAtMs = 0;
 
 // global framebuffers for measurements
 var frameBuff_0;
@@ -709,6 +712,84 @@ function getLightningTexturePlan()
     return {count : 7, width : 1400, height : 2800, quality : 'medium'};
 
   return {count : 10, width : 2200, height : 4400, quality : 'high'};
+}
+
+function playUiBeep(intensity = 0.5)
+{
+  if (!guiControls?.uiSounds)
+    return;
+
+  const nowMs = performance.now();
+  if (nowMs - lastUiBeepAtMs < 16)
+    return;
+  lastUiBeepAtMs = nowMs;
+
+  try {
+    if (!uiAudioCtx)
+      uiAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (uiAudioCtx.state == 'suspended')
+      uiAudioCtx.resume();
+
+    const now = uiAudioCtx.currentTime;
+    const osc = uiAudioCtx.createOscillator();
+    const gain = uiAudioCtx.createGain();
+    const filt = uiAudioCtx.createBiquadFilter();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(760 + intensity * 280, now);
+    osc.frequency.exponentialRampToValueAtTime(540 + intensity * 180, now + 0.06);
+
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(1200, now);
+    filt.Q.setValueAtTime(0.8, now);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.010 + intensity * 0.012, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.085);
+
+    osc.connect(filt);
+    filt.connect(gain);
+    gain.connect(uiAudioCtx.destination);
+    osc.start(now);
+    osc.stop(now + 0.09);
+  } catch (err) {
+    // ignore UI beep errors on restricted audio contexts
+  }
+}
+
+function installSimulationControlFx()
+{
+  if (!datGui || !datGui.domElement)
+    return;
+
+  const root = datGui.domElement;
+  if (root.dataset.fxInstalled == '1')
+    return;
+  root.dataset.fxInstalled = '1';
+
+  const pulseRow = (target) => {
+    const row = target && target.closest ? target.closest('.cr') : null;
+    if (!row)
+      return;
+    row.classList.remove('ui-control-pulse');
+    void row.offsetWidth;
+    row.classList.add('ui-control-pulse');
+  };
+
+  const onInput = (event) => {
+    pulseRow(event.target);
+    const isSlider = event.target && event.target.type == 'range';
+    playUiBeep(isSlider ? 0.30 : 0.55);
+  };
+
+  const onChange = (event) => {
+    pulseRow(event.target);
+    const isCheckbox = event.target && event.target.type == 'checkbox';
+    playUiBeep(isCheckbox ? 0.78 : 0.62);
+  };
+
+  root.addEventListener('input', onInput, true);
+  root.addEventListener('change', onChange, true);
 }
 
 let hdrFBO;
@@ -4717,6 +4798,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'showLightningRods'), guiControls.showLightningRods ? 1 : 0);
     });
     UI_folder.add(guiControls, 'allowEditingWhenPaused').name('Edit While Paused');
+    UI_folder.add(guiControls, 'uiSounds').name('UI Sounds');
     UI_folder.add(guiControls, 'allowCaves')
       .onChange(function() {
         if (!gl)
@@ -5489,6 +5571,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     precipitation_folder.open();
     lightning_folder.open();
     display_folder.open();
+
+    installSimulationControlFx();
 
     datGui.width = 400;
   }

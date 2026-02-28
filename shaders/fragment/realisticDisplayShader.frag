@@ -389,9 +389,22 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   vec3 channelRimCol = strikeTypeSign < 0.0 ? vec3(0.98, 0.80, 1.0) : vec3(0.86, 0.96, 1.0);
   vec3 lightningCol = mix(channelCoreCol, channelRimCol, clamp(thermalColorMix, 0.0, 1.0));
 
-  float branchBoost = 1.0 + branchSpark * (strikeTypeSign < 0.0 ? 0.65 : 0.52);
-  float strikeContrast = strikeTypeSign < 0.0 ? 0.92 : 1.16;
-  return max(pixVal * lightningCol * strikeContrast * branchBoost, vec3(0.0));
+  float branchBoost = 1.0 + branchSpark * (strikeTypeSign < 0.0 ? 0.76 : 0.62);
+  float strikeContrast = strikeTypeSign < 0.0 ? 0.98 : 1.22;
+
+  float corona = smoothstep(0.12, 0.88, pixVal) * (0.34 + branchSpark * 0.46);
+  float filamentNoise = sin(lightningTexCoord.y * 280.0 + lightningTexCoord.x * 94.0 + lightningTime * 18.0 + random2d(pos * 11.3) * 6.2831) * 0.5 + 0.5;
+  float filament = smoothstep(0.72, 1.0, filamentNoise) * (0.18 + 0.42 * branchSpark);
+
+  vec3 coreHot = strikeTypeSign < 0.0 ? vec3(0.84, 0.58, 1.0) : vec3(0.72, 0.92, 1.0);
+  vec3 rimCold = strikeTypeSign < 0.0 ? vec3(0.46, 0.22, 0.95) : vec3(0.34, 0.62, 1.0);
+  vec3 coronaCol = mix(rimCold, coreHot, clamp(0.35 + thermalColorMix * 0.6, 0.0, 1.0));
+
+  vec3 rebuiltLightning = pixVal * lightningCol * strikeContrast * branchBoost;
+  rebuiltLightning += coronaCol * corona * 4200.0 * (0.55 + lightningBloomStrength * 0.45);
+  rebuiltLightning += coronaCol * filament * 2800.0;
+
+  return max(rebuiltLightning, vec3(0.0));
 }
 
 
