@@ -706,12 +706,12 @@ function getLightningTexturePlan()
   const cores = navigator.hardwareConcurrency || 4;
 
   if (mobileLike || (memory > 0 && memory <= 4) || cores <= 4)
-    return {count : 5, width : 900, height : 1800, quality : 'low'};
+    return {count : 4, width : 640, height : 1280, quality : 'low'};
 
   if ((memory > 0 && memory <= 8) || cores <= 8)
-    return {count : 7, width : 1400, height : 2800, quality : 'medium'};
+    return {count : 5, width : 900, height : 1800, quality : 'medium'};
 
-  return {count : 10, width : 2200, height : 4400, quality : 'high'};
+  return {count : 6, width : 1300, height : 2600, quality : 'high'};
 }
 
 function playUiBeep(intensity = 0.5)
@@ -7245,11 +7245,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   }
 
 
-  function generateLightningTexture(i, imgData)
+  function generateLightningTexture(i, width, height, lumData)
   {
     lightningTextures[i] = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, lightningTextures[i]);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, imgData.width, imgData.height, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, imgData);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, width, height, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, lumData);
     // gl.generateMipmap(gl.TEXTURE_2D);                                                // optional
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); // LINEAR_MIPMAP_LINEAR
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -7262,6 +7262,21 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   const lightningTextureTasks = [];
   const pendingLightningTextureRequests = new Map();
 
+  function createFallbackLightningData(width, height)
+  {
+    const out = new Uint8Array(width * height);
+    const cx = width * 0.5;
+    for (let y = 0; y < height; y++) {
+      const t = y / Math.max(height - 1, 1);
+      const wobble = Math.sin(t * 22.0) * width * 0.018;
+      const x = Math.floor(clamp(cx + wobble, 0, width - 1));
+      out[y * width + x] = 255;
+      if (x + 1 < width)
+        out[y * width + x + 1] = 170;
+    }
+    return out;
+  }
+
   lightningGeneratorWorker.onmessage = (event) => {
     const payload = event.data || {};
     const pending = pendingLightningTextureRequests.get(payload.id);
@@ -7269,9 +7284,27 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       return;
 
     pendingLightningTextureRequests.delete(payload.id);
-    // downloadImageData(payload.imageData); // for debugging
-    generateLightningTexture(pending.textureIndex, payload.imageData);
+    if (pending.timeoutId)
+      clearTimeout(pending.timeoutId);
+
+    const width = payload.width || pending.width;
+    const height = payload.height || pending.height;
+    const lumData = (payload.luminanceData && payload.luminanceData.length == width * height)
+      ? payload.luminanceData
+      : createFallbackLightningData(width, height);
+
+    generateLightningTexture(pending.textureIndex, width, height, lumData);
     pending.resolve();
+  };
+
+  lightningGeneratorWorker.onerror = () => {
+    pendingLightningTextureRequests.forEach((pending) => {
+      if (pending.timeoutId)
+        clearTimeout(pending.timeoutId);
+      generateLightningTexture(pending.textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height));
+      pending.resolve();
+    });
+    pendingLightningTextureRequests.clear();
   };
 
   const lightningTexturePlan = getLightningTexturePlan();
@@ -7280,7 +7313,22 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   for (let i = 0; i < numLightningTextures; i++) {
     lightningTextureTasks.push(new Promise((resolve) => {
       const reqId = i + 1;
-      pendingLightningTextureRequests.set(reqId, {resolve, textureIndex : i});
+      const timeoutId = setTimeout(() => {
+        const pending = pendingLightningTextureRequests.get(reqId);
+        if (!pending)
+          return;
+        pendingLightningTextureRequests.delete(reqId);
+        generateLightningTexture(pending.textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height));
+        pending.resolve();
+      }, 4500);
+
+      pendingLightningTextureRequests.set(reqId, {
+        resolve,
+        textureIndex : i,
+        timeoutId,
+        width : lightningTexturePlan.width,
+        height : lightningTexturePlan.height
+      });
       lightningGeneratorWorker.postMessage({
         id : reqId,
         width : lightningTexturePlan.width,
@@ -7289,9 +7337,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         seed : (Date.now() + i * 2654435761) >>> 0
       });
     }));
+
+    // Avoid queueing all high-memory worker jobs at once; run texture generation sequentially.
+    await lightningTextureTasks[i];
   }
 
-  await Promise.all(lightningTextureTasks);
   lightningGeneratorWorker.terminate();
 
   await loadingBar.set(90, 'Setting up FBO`s');

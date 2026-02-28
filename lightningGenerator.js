@@ -79,11 +79,11 @@ onmessage = (event) => {
   const quality = msg.quality || 'high';
 
   try {
-    const imageData = generateLightningTexture(width, height, seed, quality);
-    postMessage({id : msg.id, imageData});
+    const luminanceData = generateLightningTexture(width, height, seed, quality);
+    postMessage({id : msg.id, width, height, luminanceData}, [ luminanceData.buffer ]);
   } catch (err) {
-    const fallback = new ImageData(width, height);
-    postMessage({id : msg.id, imageData : fallback, error : String(err)});
+    const fallback = new Uint8Array(width * height);
+    postMessage({id : msg.id, width, height, luminanceData : fallback, error : String(err)}, [ fallback.buffer ]);
   }
 };
 
@@ -130,7 +130,11 @@ function generateLightningTexture(width, height, seed, quality)
   if (cfg.bloomAlpha > 0.0)
     drawColumnBloom(ctx, width, height, cfg.bloomAlpha);
 
-  return ctx.getImageData(0, 0, width, height);
+  const imageData = ctx.getImageData(0, 0, width, height).data;
+  const luminanceData = new Uint8Array(width * height);
+  for (let i = 0, j = 0; i < imageData.length; i += 4, j++)
+    luminanceData[j] = imageData[i];
+  return luminanceData;
 
   function tracePath(state)
   {
