@@ -241,8 +241,10 @@ vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float branchCurve = sin(verticalTravel * 8.4 + random2d(pos * 19.3) * 6.2831) * (0.075 + (1.0 - verticalTravel) * 0.06);
   float leaderSeg = floor(verticalTravel * 24.0) / 24.0;
   float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.16 + (1.0 - verticalTravel) * 0.10);
+  float bow = sin(verticalTravel * 3.14159 * (1.9 + random2d(pos * 43.1))) * (0.05 + (1.0 - verticalTravel) * 0.08);
+  float microZag = sin(verticalTravel * 84.0 + random2d(pos * 53.2) * 6.2831) * 0.022;
   float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.34;
-  uv.x = 0.5 + (wrappedDx + branchCurve + leaderJitter + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 1.22;
+  uv.x = 0.5 + (wrappedDx + branchCurve + leaderJitter + bow + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 1.22;
   uv.y = verticalTravel * 1.32;
   return uv;
 }
@@ -452,15 +454,20 @@ vec4 getAirColor(vec2 fragCoordIn)
   float cloudNoiseBroad = texture(noiseTex, cloudNoiseUv0).r;
   float cloudNoiseDetail = texture(noiseTex, cloudNoiseUv1).r;
   float cloudNoiseFine = texture(noiseTex, cloudNoiseUv2).r;
+  float cloudNoiseWarp = texture(noiseTex, vec2(texCoord.x * resolution.x * 0.032 + iterNum * 0.0026,
+                                                texCoord.y * resolution.y * 0.046 + iterNum * 0.0019)).r;
 
   float billow = mix(cloudNoiseBroad, cloudNoiseDetail, 0.52);
-  float cauliflowerRidge = smoothstep(0.60, 0.98, cloudNoiseFine) * smoothstep(0.24, 0.88, cloudBody);
-  float anvilShear = smoothstep(0.58, 0.97, texCoord.y) * (0.80 + 0.62 * abs(base[VX]));
+  float cauliflowerRidge = smoothstep(0.56, 0.98, cloudNoiseFine) * smoothstep(0.18, 0.92, cloudBody);
+  float cloudTower = smoothstep(0.20, 0.82, texCoord.y) * smoothstep(0.40, 0.92, cloudNoiseDetail + cloudBody * 0.08);
+  float cloudCavity = smoothstep(0.28, 0.86, cloudNoiseWarp) * smoothstep(0.20, 0.80, cloudBody);
+  float anvilShear = smoothstep(0.58, 0.97, texCoord.y) * (0.84 + 0.70 * abs(base[VX]));
 
-  float cloudDensity = cloudBody * (7.4 + cloudLayerComplexity * 6.6);
+  float cloudDensity = cloudBody * (7.9 + cloudLayerComplexity * 7.2);
   cloudDensity *= (0.68 + cloudLayerA * 0.36 + cloudLayerB * 0.34 + cloudLayerC * 0.31);
-  cloudDensity *= mix(0.66, 1.34, billow);
-  cloudDensity *= (1.0 + anvilShear * 0.30 + cauliflowerRidge * 0.24);
+  cloudDensity *= mix(0.62, 1.44, billow);
+  cloudDensity *= (1.0 + anvilShear * 0.32 + cauliflowerRidge * 0.30 + cloudTower * 0.28);
+  cloudDensity *= mix(0.88, 1.10, cloudCavity);
 
   float cloudVisualLimiter = 1.0 / (1.0 + max(cloudDensity - 3.8, 0.0) * 0.20);
   cloudDensity *= cloudVisualLimiter;
@@ -481,15 +488,17 @@ vec4 getAirColor(vec2 fragCoordIn)
   float precipSparkleMask = smoothstep(0.76, 1.0, sparkleNoise + precipShaft * 0.30);
   float precipSparkleGlow = precipSparkleMask * precipShaft * precipitationSparkle;
 
-  float silverLining = smoothstep(0.44, 0.98, cloudNoiseFine) * smoothstep(0.22, 0.86, cloudBody) * (0.30 + 0.78 * lightIntensity);
+  float silverLining = smoothstep(0.40, 0.98, cloudNoiseFine) * smoothstep(0.18, 0.88, cloudBody) * (0.34 + 0.86 * lightIntensity);
   vec3 cloudCoreCol = mix(vec3(0.60, 0.66, 0.74), vec3(0.92, 0.96, 1.0), clamp(cloudShade * 1.20, 0.0, 1.0));
-  vec3 cloudShadowCol = vec3(0.32, 0.39, 0.50);
+  vec3 cloudShadowCol = vec3(0.27, 0.34, 0.46);
   vec3 precipShaftCol = mix(vec3(0.55, 0.70, 0.98), vec3(0.84, 0.94, 1.0), clamp(precipitationSparkle * 0.9, 0.0, 1.0));
   vec3 precipMistCol = mix(vec3(0.72, 0.80, 0.92), vec3(0.50, 0.61, 0.84), clamp(precipitationMistStrength * 0.78, 0.0, 1.0));
 
-  vec3 cloudCol = mix(cloudShadowCol, cloudCoreCol, clamp(cloudShade * (0.78 + 0.30 * billow), 0.0, 1.0));
+  float cloudContrast = clamp(cloudShade * (0.74 + 0.34 * billow + cloudTower * 0.12), 0.0, 1.0);
+  vec3 cloudCol = mix(cloudShadowCol, cloudCoreCol, cloudContrast);
   cloudCol += vec3(0.12, 0.17, 0.26) * silverLining;
   cloudCol += vec3(0.07, 0.09, 0.12) * cauliflowerRidge;
+  cloudCol = mix(cloudCol, cloudShadowCol * 0.85, cloudCavity * 0.22);
   cloudCol = mix(cloudCol, precipMistCol, precipMist * 0.52);
   cloudCol += precipShaftCol * (precipShaftOpacity * 0.56 + precipSparkleGlow * 0.40);
 
