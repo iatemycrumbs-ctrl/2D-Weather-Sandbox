@@ -4491,6 +4491,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       lastAcceptedLightningVisualClock = -10000;
       gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT, new Float32Array([ 0.0, 0.0, -10000.0, 0.0 ]));
+      gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT, new Float32Array([ 0.0, 0.0, -10000.0, 0.0 ]));
       lightningRods = [];
       pendingLightningPayloads.length = 0;
       pendingLightningTextureWrites.length = 0;

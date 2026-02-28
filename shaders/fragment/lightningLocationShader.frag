@@ -23,16 +23,15 @@ uniform float dryLapse;
 
 void main()
 {
-  // lightningLocation = vec4(0.5, 0.5, 150, 0); // test
-  // return;
+  // Always write an explicit inactive marker so stale strike data cannot persist
+  // in the 1x1 lightning state texture when no new strike is emitted.
+  lightningLocation = vec4(0.0, 0.0, -10000.0, 0.0);
 
   vec4 newLightningLocation = texelFetch(precipFeedbackTex, ivec2(1, 0), 0); // read pixel 1, 0 where the lightning location was written to by a precipitation particle
 
-
-  // No strike, or two strikes tried to generate during the same iteration, making the number twice as high
-  if (newLightningLocation[START_ITERNUM] < max(iterNum - 1.0, 1.0) || newLightningLocation[START_ITERNUM] > iterNum) {
-    discard; // no new lightning strike, so no update
-  }
+  // No strike, or two strikes tried to generate during the same iteration, making the number twice as high.
+  if (newLightningLocation[START_ITERNUM] < max(iterNum - 1.0, 1.0) || newLightningLocation[START_ITERNUM] > iterNum)
+    return;
 
   lightningLocation = newLightningLocation;
 }
