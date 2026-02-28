@@ -21,6 +21,7 @@ function getQualityConfig(quality)
       branchSteps : 95,
       splitChance : 0.085,
       maxDepth : 2,
+      recoilChance : 0.0,
       haloWidth : 3.1,
       glowWidth : 1.7,
       branchWidth : 0.9,
@@ -28,7 +29,9 @@ function getQualityConfig(quality)
       haloAlpha : 0.20,
       glowAlpha : 0.44,
       bloomAlpha : 0.0,
-      branchDecay : 0.968
+      branchDecay : 0.968,
+      channelJitter : 0.28,
+      trunkForkBias : 0.14
     };
   }
 
@@ -38,6 +41,7 @@ function getQualityConfig(quality)
       branchSteps : 140,
       splitChance : 0.115,
       maxDepth : 3,
+      recoilChance : 0.0,
       haloWidth : 3.8,
       glowWidth : 1.95,
       branchWidth : 0.95,
@@ -45,7 +49,9 @@ function getQualityConfig(quality)
       haloAlpha : 0.24,
       glowAlpha : 0.52,
       bloomAlpha : 0.06,
-      branchDecay : 0.972
+      branchDecay : 0.972,
+      channelJitter : 0.36,
+      trunkForkBias : 0.18
     };
   }
 
@@ -54,6 +60,7 @@ function getQualityConfig(quality)
     branchSteps : 185,
     splitChance : 0.14,
     maxDepth : 4,
+    recoilChance : 0.0,
     haloWidth : 4.5,
     glowWidth : 2.25,
     branchWidth : 1.0,
@@ -61,7 +68,9 @@ function getQualityConfig(quality)
     haloAlpha : 0.29,
     glowAlpha : 0.60,
     bloomAlpha : 0.10,
-    branchDecay : 0.976
+    branchDecay : 0.976,
+    channelJitter : 0.44,
+    trunkForkBias : 0.24
   };
 }
 
@@ -106,10 +115,13 @@ function generateLightningTexture(width, height, seed, quality)
     maxSteps : cfg.trunkSteps
   });
 
-  drawSegments(ctx, trunk, `rgba(160, 205, 255, ${cfg.haloAlpha})`, cfg.haloWidth, 'screen');
-  drawSegments(ctx, trunk, `rgba(208, 232, 255, ${cfg.glowAlpha})`, cfg.glowWidth, 'screen');
-  drawSegments(ctx, branches, 'rgba(232, 244, 255, 0.72)', cfg.branchWidth, 'source-over');
+  drawSegments(ctx, trunk, `rgba(132, 182, 255, ${cfg.haloAlpha * 0.90})`, cfg.haloWidth * 1.35, 'screen');
+  drawSegments(ctx, trunk, `rgba(188, 224, 255, ${cfg.haloAlpha})`, cfg.haloWidth, 'screen');
+  drawSegments(ctx, trunk, `rgba(218, 238, 255, ${cfg.glowAlpha})`, cfg.glowWidth, 'screen');
+  drawSegments(ctx, branches, 'rgba(210, 231, 255, 0.46)', cfg.branchWidth * 1.25, 'screen');
+  drawSegments(ctx, branches, 'rgba(236, 246, 255, 0.78)', cfg.branchWidth, 'source-over');
   drawSegments(ctx, trunk, 'rgba(255, 255, 255, 1.0)', cfg.coreWidth, 'lighter');
+  drawReturnStrokes(ctx, trunk, cfg, rand);
 
   if (cfg.bloomAlpha > 0.0)
     drawColumnBloom(ctx, width, height, cfg.bloomAlpha);
@@ -135,10 +147,11 @@ function generateLightningTexture(width, height, seed, quality)
         return;
 
       const descendBias = 0.20 + current.depth * 0.02;
-      const wiggle = (rand() - 0.5) * (0.28 + current.depth * 0.08);
+      const wiggle = (rand() - 0.5) * (cfg.channelJitter + current.depth * 0.08);
       const centerPull = (startX - current.x) / width * 0.12;
+      const trunkFork = current.depth === 0 ? (rand() - 0.5) * cfg.trunkForkBias : 0.0;
 
-      current.angle = current.angle * 0.86 + wiggle + centerPull;
+      current.angle = current.angle * 0.86 + wiggle + centerPull + trunkFork;
 
       const dx = Math.sin(current.angle) * current.step;
       const dy = Math.max(0.48, Math.cos(current.angle) * current.step + descendBias * current.step);
@@ -175,8 +188,34 @@ function generateLightningTexture(width, height, seed, quality)
           maxSteps : Math.floor(cfg.branchSteps * (0.45 + rand() * 0.65))
         });
       }
+
     }
   }
+}
+
+function drawReturnStrokes(ctx, trunk, cfg, rand)
+{
+  if (!trunk.length)
+    return;
+
+  const count = Math.max(1, Math.floor(trunk.length / 45));
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineCap = 'round';
+
+  for (let i = 0; i < count; i++) {
+    const idx = Math.floor((0.28 + rand() * 0.68) * (trunk.length - 1));
+    const seg = trunk[idx];
+    const flicker = 0.55 + rand() * 0.65;
+    ctx.lineWidth = Math.max(0.2, seg.w * cfg.coreWidth * flicker);
+    ctx.beginPath();
+    ctx.moveTo(seg.x0, seg.y0);
+    ctx.lineTo(seg.x1, seg.y1);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
 function drawSegments(ctx, segments, color, widthScale, mode)

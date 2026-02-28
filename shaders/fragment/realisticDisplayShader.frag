@@ -181,21 +181,22 @@ float lightningChannelEnvelope(float T, bool isIC)
 
 vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTypeSign)
 {
+  float seedPhase = random2d(seed * 8.1) * 6.2831;
+
   if (strikeTypeSign < 0.0) {
-    // IC (purple): broader horizontal filament sweep constrained in vertical drift.
+    // IC: keep subtle in-cloud drift so the channel does not collapse into a repeating snake.
     float axis = uv.x;
-    float meander = sin(axis * 31.0 + lightningTime * 1.8 + random2d(seed * 17.1) * 6.2831) * 0.0075;
-    meander += sin(axis * 74.0 + lightningTime * 1.3 + random2d(seed * 7.3) * 6.2831) * 0.0030;
-    float filament = sin((axis * 108.0 + lightningTime * 6.0) + uv.y * 15.0) * 0.0013;
-    return vec2(0.0, (meander + filament) * 0.36);
+    float coarse = (random2d(vec2(axis * 12.0 + seed.x * 41.0, lightningTime * 0.9 + seedPhase)) - 0.5) * 0.0030;
+    float fine = (random2d(vec2(axis * 25.0 + seed.y * 29.0, lightningTime * 1.3 + 2.7)) - 0.5) * 0.0016;
+    return vec2(0.0, (coarse + fine) * 0.30);
   }
 
-  // CG (blue): stronger side-to-side channel jaggedness while propagating downward.
+  // CG: jagged offsets based on non-periodic hash noise instead of smooth sinusoidal snakes.
   float axis = uv.y;
-  float meander = sin(axis * 42.0 + lightningTime * 2.5 + random2d(seed * 13.2) * 6.2831) * 0.0100;
-  meander += sin(axis * 89.0 + lightningTime * 1.9 + random2d(seed * 5.6) * 6.2831) * 0.0042;
-  float filament = sin((axis * 142.0 + lightningTime * 7.8) + uv.x * 22.0) * 0.0018;
-  return vec2(meander + filament, 0.0);
+  float coarse = (random2d(vec2(axis * 14.0 + seed.x * 37.0, lightningTime * 1.2 + seedPhase)) - 0.5) * 0.0062;
+  float medium = (random2d(vec2(axis * 31.0 + seed.y * 23.0, lightningTime * 2.1 + 4.1)) - 0.5) * 0.0036;
+  float fine = (random2d(vec2(axis * 57.0 + uv.x * 19.0, lightningTime * 3.8 + 1.6)) - 0.5) * 0.0016;
+  return vec2(coarse + medium + fine, 0.0);
 }
 
 vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)

@@ -217,6 +217,50 @@
             animation: neonPulse 2.8s ease-in-out infinite;
         }
 
+
+        @keyframes controlsPulse {
+            0% { box-shadow: 0 0 0 rgba(122, 234, 255, 0.0), var(--shadow); }
+            45% { box-shadow: 0 0 20px rgba(122, 234, 255, 0.42), var(--shadow); }
+            100% { box-shadow: 0 0 0 rgba(122, 234, 255, 0.0), var(--shadow); }
+        }
+
+        @keyframes controlsShimmer {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
+        }
+
+        @keyframes launchBounce {
+            0% { transform: translateY(0) scale(1); }
+            30% { transform: translateY(-4px) scale(1.005); }
+            100% { transform: translateY(0) scale(1); }
+        }
+
+        #startBtn {
+            background-image: linear-gradient(120deg, rgba(34, 149, 255, 0.12), rgba(40, 229, 255, 0.08), rgba(96, 77, 255, 0.13));
+            background-size: 220% 220%;
+        }
+
+        #startBtn.sim-controls-pulse {
+            animation: controlsPulse 0.34s ease;
+        }
+
+        #startBtn.sim-controls-shimmer {
+            animation: controlsShimmer 0.56s linear;
+        }
+
+        #startBtn.sim-controls-launch {
+            animation: launchBounce 0.36s ease;
+        }
+
+        #startBtn input[type="range"] {
+            transition: transform 0.16s ease, filter 0.16s ease;
+        }
+
+        #startBtn input[type="range"]:active {
+            transform: scaleY(1.22);
+            filter: drop-shadow(0 0 8px rgba(127, 236, 255, 0.55));
+        }
+
         #mainCanvas {
             position: fixed;
             top: 0;
