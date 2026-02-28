@@ -122,22 +122,49 @@ float computeHydrometeorGrowth(float cloudAccess, float supersat, float growthRa
   return max((cloudAccretion + vaporDeposition) * growthRate * surfaceArea, 0.0);
 }
 
+float computeWetBulbProxy(float ambientTemp, float vapor, float pressure)
+{
+  float humidityRatio = clamp(vapor / max(maxWater(ambientTemp), 0.0001), 0.0, 1.8);
+  float dryness = clamp(1.0 - humidityRatio, 0.0, 1.0);
+  float pressureInfluence = map_rangeC(pressure, 0.70, 1.35, 0.85, 1.10);
+  float cooling = dryness * map_rangeC(ambientTemp, CtoK(-20.0), CtoK(35.0), 1.6, 6.8) * pressureInfluence;
+  return ambientTemp - cooling;
+}
+
+float computeTurbulenceMixing(float vx, float vy, float cloudWater, float smoke)
+{
+  float shear = min(length(vec2(vx, vy)) * 34.0, 2.2);
+  float convective = map_rangeC(max(vy, 0.0), 0.0, 0.025, 0.9, 1.5);
+  float condensateDamping = map_rangeC(cloudWater, 0.0, 2.5, 1.0, 0.74);
+  float aerosolBoost = map_rangeC(smoke, 0.0, 1.6, 1.0, 1.22);
+  return shear * convective * condensateDamping * aerosolBoost;
+}
 
 // Brand-new precipitation transport model:
 // keeps hydrometeors from unrealistically hovering in elevated updraft bands.
-float computeSedimentationVelocity(float totalMass, float surfaceArea, float localDensity, float altitudeNorm, float updraft, float downdraft)
+float computeSedimentationVelocity(float totalMass,
+                                   float surfaceArea,
+                                   float localDensity,
+                                   float altitudeNorm,
+                                   float updraft,
+                                   float downdraft,
+                                   float pressure,
+                                   float turbulenceMixing)
 {
   float phaseBoost = mix(1.0, 1.55, clamp((localDensity - snowDensity) / max(1.25 - snowDensity, 0.05), 0.0, 1.0));
   float spectrumBoost = map_rangeC(precipitationSizeSpectrum, 0.2, 2.5, 0.88, 1.45);
   float massTerminal = sqrt(max(totalMass / max(surfaceArea, 0.0001), 0.04));
-  float baseTerminal = fallSpeed * massTerminal * phaseBoost * spectrumBoost;
+
+  // lower pressure aloft slows settling while dense lower air accelerates it.
+  float airDensityBoost = map_rangeC(pressure, 0.72, 1.28, 0.82, 1.18);
+  float baseTerminal = fallSpeed * massTerminal * phaseBoost * spectrumBoost * airDensityBoost;
 
   // force a minimum settling component aloft so precip cannot remain suspended indefinitely.
   float altitudeSettlingFloor = fallSpeed * mix(0.42, 0.95, clamp(altitudeNorm, 0.0, 1.0));
 
   // updrafts can reduce settling but not fully cancel it; downdrafts accelerate fallout.
-  float cappedUpdraftAssist = min(max(updraft, 0.0) * 0.28, baseTerminal * 0.68);
-  float downdraftAssist = max(downdraft, 0.0) * (0.30 + microburstStrength * 0.25);
+  float cappedUpdraftAssist = min(max(updraft, 0.0) * (0.24 + turbulenceMixing * 0.04), baseTerminal * 0.68);
+  float downdraftAssist = max(downdraft, 0.0) * (0.30 + microburstStrength * 0.25 + turbulenceMixing * 0.03);
 
   return max(baseTerminal + altitudeSettlingFloor + downdraftAssist - cappedUpdraftAssist, fallSpeed * 0.35);
 }
@@ -271,7 +298,7 @@ void main()
   newDensity = density;   // determines fall speed
   feedback = vec4(0.0);
   deposition = vec2(0.0);
-  bool lightningWarmupDone = iterNum > 120.0;
+  bool lightningWarmupDone = iterNum > 420.0;
 
   // Lightning Ground Strike tool: tap to force a cloud-to-ground strike near the cursor.
   if (userInputType == 26 && gl_VertexID == 0 && userInputValues.x >= 0.0 && userInputValues.x <= 1.0) {
@@ -704,13 +731,15 @@ void main()
                          1.0); // density increases upto 1.0 as snow melts
       }
 
-      float dropletTemp = potentialToRealT(base[TEMPERATURE]);                                       // should be wetbulb temperature...
+      float dropletTemp = potentialToRealT(base[TEMPERATURE]);
+      float wetBulbTemp = computeWetBulbProxy(dropletTemp, water[TOTAL], base[PRESSURE]);
 
-      if (newMass[ICE] > 0.0)                                                                        // if any ice
-        dropletTemp = min(dropletTemp, CtoK(0.0));                                                   // temp can not be more than 0 C
+      if (newMass[ICE] > 0.0)
+        wetBulbTemp = min(wetBulbTemp, CtoK(0.0));
 
-      float dryDeficit = max((maxWater(dropletTemp) - water[TOTAL]), 0.0);
-      float ventFactor = (1.0 + min(length(base.xy) * 30.0, 1.8)) * map_rangeC(ventilationEvapEnhancement, 0.3, 2.5, 0.60, 1.90);
+      float dryDeficit = max((maxWater(wetBulbTemp) - water[TOTAL]), 0.0);
+      float turbulenceMixing = computeTurbulenceMixing(base[VX], base[VY], water[CLOUD], water[SMOKE]);
+      float ventFactor = (1.0 + min(length(base.xy) * 30.0, 1.8) + turbulenceMixing * 0.22) * map_rangeC(ventilationEvapEnhancement, 0.3, 2.5, 0.60, 1.90);
       float evapAndSubli = max(dryDeficit * surfaceArea * evapRate * map_rangeC(newDensity, 0.2, 1.3, 1.0, 0.78) * ventFactor, 0.); // evaporation/sublimation
 
       // evapAndSubli = 0.0000;                                                                         // remove quickly for DEBUG
@@ -732,7 +761,7 @@ void main()
       float updraft = max(base[VY], 0.0);
       float downdraft = max(-base[VY], 0.0);
       float altitudeNorm = clamp(texCoord.y, 0.0, 1.0);
-      float fallVelocity = computeSedimentationVelocity(totalMass, surfaceArea, newDensity, altitudeNorm, updraft, downdraft);
+      float fallVelocity = computeSedimentationVelocity(totalMass, surfaceArea, newDensity, altitudeNorm, updraft, downdraft, base[PRESSURE], turbulenceMixing);
 
       // 2D hail dynamics approximation: denser hail keeps momentum, drifts less with air, and can rebound in strong updraft cores.
       float hailFraction = clamp(map_rangeC(newDensity, 0.95, 1.35, 0.0, 1.0), 0.0, 1.0);
@@ -749,7 +778,7 @@ void main()
       newPos.y -= fallVelocity * mix(1.0, 1.38, hailFraction);
 
       // dry slots rapidly erode suspended hydrometeors and encourage fallout recycling.
-      float drySlot = map_rangeC(maxWater(dropletTemp) - water[TOTAL], 0.0, 12.0, 0.0, 1.0);
+      float drySlot = map_rangeC(maxWater(wetBulbTemp) - water[TOTAL], 0.0, 12.0, 0.0, 1.0);
       if (drySlot > 0.65 && altitudeNorm > 0.35) {
         newMass[WATER] *= 0.96;
         newMass[ICE] *= 0.97;

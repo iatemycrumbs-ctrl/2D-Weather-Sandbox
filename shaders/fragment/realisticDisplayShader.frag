@@ -178,10 +178,14 @@ float calcLightningTime(float startIterNum)
 
 float lightningChannelEnvelope(float T, bool isIC)
 {
-  float rise = 1.0 - exp(-T * (isIC ? 10.0 : 13.0));
-  float decay = exp(-T * (isIC ? 2.6 : 3.4));
-  float glowTail = exp(-T * (isIC ? 0.95 : 1.25)) * (isIC ? 0.24 : 0.18);
-  return rise * decay * (isIC ? 2.2 : 3.0) + glowTail;
+  // Stepped-leader + return-stroke timing model with short restrikes.
+  float leaderRise = 1.0 - exp(-T * (isIC ? 8.5 : 11.0));
+  float leaderDecay = exp(-T * (isIC ? 3.2 : 4.1));
+  float returnStroke = exp(-pow(max(T - (isIC ? 0.17 : 0.12), 0.0) / (isIC ? 0.23 : 0.18), 2.0)) * (isIC ? 0.85 : 1.15);
+  float restrike1 = exp(-pow(max(T - 0.42, 0.0) / 0.16, 2.0)) * (isIC ? 0.32 : 0.55);
+  float restrike2 = exp(-pow(max(T - 0.74, 0.0) / 0.18, 2.0)) * (isIC ? 0.18 : 0.34);
+  float glowTail = exp(-T * (isIC ? 0.85 : 1.05)) * (isIC ? 0.26 : 0.21);
+  return leaderRise * leaderDecay * (isIC ? 1.8 : 2.5) + returnStroke + restrike1 + restrike2 + glowTail;
 }
 
 vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTypeSign)
@@ -260,14 +264,18 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
   bool isIC = intensity < 0.0;
   float absIntensity = abs(intensity);
   float T = max(T0, 0.0);
+  if (T > 5.8)
+    return 0.0;
 
   float channelEnvelope = lightningChannelEnvelope(T, isIC);
 
-  // Stable low-frequency flicker to avoid continuous harsh strobing.
+  // Layered flicker: low-frequency plasma breathing + high-frequency stepping.
   float phase = random2d(lightningPos * 9.17) * 6.2831;
-  float flicker = 0.97 + 0.03 * sin(T * (isIC ? 4.6 : 3.2) + phase);
+  float flickerLF = 0.95 + 0.05 * sin(T * (isIC ? 4.8 : 3.6) + phase);
+  float flickerHF = 0.92 + 0.08 * sin(T * (isIC ? 32.0 : 28.0) + phase * 1.9);
 
-  return channelEnvelope * max(flicker, 0.90) * pow(absIntensity, 1.50);
+  float dampedIntensity = pow(clamp(absIntensity, 0.0, 4.0), 1.45);
+  return channelEnvelope * max(flickerLF * flickerHF, 0.82) * dampedIntensity;
 }
 
 vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningIntensity)
@@ -381,9 +389,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
 
   // Keep channel visible for the full event life; avoid mid-event disappearing bolts/branches.
   float channelFade = clamp(currentLightningIntensity * (strikeTypeSign > 0.0 ? 0.17 : 0.12), 0.0, 1.0);
-  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 2.55 : 2.35, strikeTypeSign > 0.0 ? 6.30 : 5.90, lightningTime);
-  tailFade = max(tailFade, strikeTypeSign > 0.0 ? 0.34 : 0.30);
-  pixVal *= channelFade * tailFade;
+  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.90 : 1.75, strikeTypeSign > 0.0 ? 4.20 : 3.90, lightningTime);
+  pixVal *= channelFade * max(tailFade, 0.0);
 
   float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
   float thermalColorMix = map_rangeC(lightningTemp, lightningTempMinK, lightningTempMaxK, 0.0, 1.0) * lightningColorTempMult;
