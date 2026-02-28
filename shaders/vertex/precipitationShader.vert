@@ -271,6 +271,7 @@ void main()
   newDensity = density;   // determines fall speed
   feedback = vec4(0.0);
   deposition = vec2(0.0);
+  bool lightningWarmupDone = iterNum > 120.0;
 
   // Lightning Ground Strike tool: tap to force a cloud-to-ground strike near the cursor.
   if (userInputType == 26 && gl_VertexID == 0 && userInputValues.x >= 0.0 && userInputValues.x <= 1.0) {
@@ -286,6 +287,30 @@ void main()
       feedback.xy = vec2(sourceX, sourceY);
       feedback[START_ITERNUM] = iterNum;
       feedback[INTENSITY] = launchStrength;
+      isActive = false;
+      gl_PointSize = 1.0;
+      gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
+      position_out = newPos;
+      mass_out = newMass;
+      density_out = max(newDensity, 0.0);
+      return;
+    }
+  }
+
+  // Lightning IC Strike tool: force in-cloud purple channel without ground contact.
+  if (userInputType == 29 && gl_VertexID == 0 && userInputValues.x >= 0.0 && userInputValues.x <= 1.0) {
+    vec4 lightningDataNow = texture(lightningDataTex, vec2(0.5));
+    float previousLightningAge = iterNum - lightningDataNow[START_ITERNUM];
+    float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.05, 0.55), 5.0 + abs(lightningDataNow[INTENSITY]) * (1.7 + multiStrokeLightning * 1.3));
+    bool lightningChannelFree = lightningDataNow[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
+
+    if (lightningChannelFree) {
+      float sourceX = userInputValues.x;
+      float sourceY = clamp(max(userInputValues.y, 0.52), 0.52, 0.92);
+      float launchStrength = max(0.28 + abs(userInputValues.z) * 0.7, 0.24);
+      feedback.xy = vec2(sourceX, sourceY);
+      feedback[START_ITERNUM] = iterNum;
+      feedback[INTENSITY] = -launchStrength;
       isActive = false;
       gl_PointSize = 1.0;
       gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
@@ -350,7 +375,7 @@ void main()
 
   // Independent storm-lightning probe: decouples lightning generation from droplet spawn state so
   // electrified storms keep striking even when few droplets are currently in inactive respawn pool.
-  if (gl_VertexID == 0) {
+  if (gl_VertexID == 0 && lightningWarmupDone) {
     vec4 lightningDataNow = texture(lightningDataTex, vec2(0.5));
     float previousLightningAge = iterNum - lightningDataNow[START_ITERNUM];
     float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.95, 0.48),
@@ -385,7 +410,7 @@ void main()
       stormSpawnChance = clamp(stormSpawnChance, 0.0, 0.86);
 
       float stormRand = random2d(probeSeed * 2.13 + vec2(bestScore * 17.0, previousLightningAge * 0.001));
-      bool overdueStormRecharge = previousLightningAge > (58.0 + 20.0 * lightningMinInterval) && bestScore > 0.040;
+      bool overdueStormRecharge = lightningWarmupDone && previousLightningAge > (58.0 + 20.0 * lightningMinInterval) && bestScore > 0.040;
 
       if (stormSpawnChance > stormRand || overdueStormRecharge) {
         bool isIC = bestPos.y > 0.52 && random2d(bestPos * 37.1 + probeSeed) < clamp(icLightningRatio, 0.18, 0.92);
@@ -524,9 +549,9 @@ void main()
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
           float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.05, 0.52), 4.5 + abs(lightningData[INTENSITY]) * (1.9 + multiStrokeLightning * 1.35));
-          bool lightningChannelFree = lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold;
+          bool lightningChannelFree = lightningWarmupDone && (lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold);
           bool cloudAnchoredSource = water[CLOUD] > threshold * 1.10 && texCoord.y >= 0.14 && texCoord.y <= 0.97;
-          bool overdueStormRecharge = lightningChannelFree && previousLightningAge > (72.0 + 24.0 * lightningMinInterval)
+          bool overdueStormRecharge = lightningWarmupDone && lightningChannelFree && previousLightningAge > (72.0 + 24.0 * lightningMinInterval)
                                     && cloudPlusPrecipDensity > lightningCloudDensityThreshold + 0.22
                                     && electricPotential > 0.20
                                     && cloudAnchoredSource;

@@ -104,7 +104,7 @@ function generateLightningTexture(width, height, seed, quality)
 
   const startX = width * (0.46 + (rand() - 0.5) * 0.12);
   const trunkWobbleFreq = 1.1 + rand() * 2.2;
-  const trunkWobbleAmp = 0.09 + rand() * 0.12;
+  const trunkWobbleAmp = 0.04 + rand() * 0.08;
   const trunkJagSeed = rand();
   tracePath({
     x : startX,
@@ -160,8 +160,8 @@ function generateLightningTexture(width, height, seed, quality)
       const curvature = Math.sin((current.y / height) * Math.PI * (1.25 + current.depth * 0.35) + rand() * 0.6) * (0.075 + current.depth * 0.028);
       const kink = (rand() < 0.06) ? ((rand() < 0.5 ? -1 : 1) * (0.10 + rand() * 0.16)) : 0.0;
       const jagBand = Math.floor((current.y / height) * 26.0);
-      const segmentJitter = (rand() - 0.5) * 0.07 + (Math.sin((current.y / height) * Math.PI * 2.0 * trunkWobbleFreq + trunkJagSeed * 6.2831) * trunkWobbleAmp);
-      const segmentedBend = (Math.sin(floatSafe(jagBand) * (0.9 + trunkJagSeed * 0.5) + trunkJagSeed * 3.0) * 0.06);
+      const segmentJitter = (rand() - 0.5) * 0.04 + (Math.sin((current.y / height) * Math.PI * 2.0 * trunkWobbleFreq + trunkJagSeed * 6.2831) * trunkWobbleAmp);
+      const segmentedBend = (Math.sin(floatSafe(jagBand) * (0.9 + trunkJagSeed * 0.5) + trunkJagSeed * 3.0) * 0.04);
 
       current.angle = current.angle * 0.78 + wiggle + centerPull + curvature + kink + segmentJitter + segmentedBend;
 

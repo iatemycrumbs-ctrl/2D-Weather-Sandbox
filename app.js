@@ -4741,9 +4741,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       {key : 'sandTerrain', label : 'Sand Terrain', id : 'TOOL_SAND_TERRAIN', hotkey : 'KeyJ'},
       {key : 'localHeatDry', label : 'Local Heating + Drying', id : 'TOOL_LOCAL_HEAT_DRY', hotkey : 'Semicolon'},
       {key : 'lightningGround', label : 'Lightning (Ground Strike)', id : 'TOOL_LIGHTNING_GROUND', hotkey : 'Quote'},
+      {key : 'lightningIC', label : 'Lightning (IC Strike)', id : 'TOOL_LIGHTNING_IC', hotkey : 'KeyL'},
       {key : 'skyscraper', label : 'Skyscraper', id : 'TOOL_SKYSCRAPER'},
       {key : 'lightningRod', label : 'Lightning Rod', id : 'TOOL_LIGHTNING_ROD'},
       {key : 'lightningGenerator', label : 'Artificial Lightning Generator', id : 'TOOL_ARTIFICIAL_LIGHTNING'},
+      {key : 'nuclearPowerplant', label : 'Nuclear Powerplant', id : 'TOOL_NUCLEAR_POWERPLANT'},
+      {key : 'superIndustrial', label : 'Super Industrial', id : 'TOOL_SUPER_INDUSTRIAL'},
       {key : 'weatherStation', label : 'Weather Station', id : 'TOOL_STATION', hotkey : 'KeyM'},
       {key : 'weatherBalloon', label : 'Weather Balloon', id : 'TOOL_BALLOON'}
     ];
@@ -7713,6 +7716,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = 3;
         else if (guiControls.tool == 'TOOL_LIGHTNING_GROUND')
           inputType = 26;
+        else if (guiControls.tool == 'TOOL_LIGHTNING_IC')
+          inputType = 29;
         else if (guiControls.tool == 'TOOL_LOCAL_HEAT_DRY')
           inputType = 27;
         else if (guiControls.tool == 'TOOL_SAND_TERRAIN')
@@ -7733,6 +7738,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = 15;
         else if (guiControls.tool == 'TOOL_WALL_INDUSTRIAL')
           inputType = 16;
+        else if (guiControls.tool == 'TOOL_NUCLEAR_POWERPLANT')
+          inputType = 16;
+        else if (guiControls.tool == 'TOOL_SUPER_INDUSTRIAL')
+          inputType = 16;
         else if (guiControls.tool == 'TOOL_SKYSCRAPER')
           inputType = 24;
         else if (guiControls.tool == 'TOOL_LIGHTNING_ROD')
@@ -7751,6 +7760,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         var intensity = guiControls.brushIntensity;
         if (guiControls.tool == 'TOOL_LOCAL_HEAT_DRY')
           intensity *= 1.4;
+        else if (guiControls.tool == 'TOOL_NUCLEAR_POWERPLANT')
+          intensity *= 2.2;
+        else if (guiControls.tool == 'TOOL_SUPER_INDUSTRIAL')
+          intensity *= 3.2;
 
         if (ctrlPressed) {
           intensity *= -1;

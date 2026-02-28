@@ -121,6 +121,7 @@ vec3 getWallColor(float depth)
 
   float broadPatch = texture(noiseTex, vec2(texCoord.x * resolution.x, texCoord.y * resolution.y) * 0.06).r;
   float finePatch = texture(noiseTex, vec2(texCoord.x * resolution.x + 117.0, texCoord.y * resolution.y - 43.0) * 0.28).r;
+  float reliefPatch = texture(noiseTex, vec2(texCoord.x * resolution.x * 0.11 - 51.0, texCoord.y * resolution.y * 0.13 + 77.0)).r;
   vec3 canopyTint = mix(vec3(0.82, 1.05, 0.82), vec3(1.10, 0.92, 0.78), broadPatch);
   vec3 bladeTint = mix(vec3(0.88, 0.96, 0.88), vec3(1.08, 1.10, 0.92), finePatch);
   surfCol = mix(surfCol, surfCol * canopyTint * bladeTint, vegFrac * 0.45);
@@ -153,8 +154,9 @@ vec3 getWallColor(float depth)
     vec3 coreCol = vec3(1.0, 0.88, 0.64);
     color = mix(charCol, mix(emberCol, coreCol, broadPatch), flame);
   } else {
-    const vec3 rockCol = vec3(0.70);
-    color = mix(surfCol, rockCol, clamp(depth * 0.35, 0.0, 1.0));
+    vec3 rockCol = mix(vec3(0.42, 0.44, 0.46), vec3(0.66, 0.62, 0.58), clamp(reliefPatch * 1.15, 0.0, 1.0));
+    float terrainSlopeTint = smoothstep(0.15, 0.88, depth + (reliefPatch - 0.5) * 0.35);
+    color = mix(surfCol, rockCol, clamp(depth * 0.42 + terrainSlopeTint * 0.18, 0.0, 1.0));
   }
 
   color *= mix(vec3(0.88), vec3(1.12), texture(noiseTex, vec2(texCoord.x * resolution.x, texCoord.y * resolution.y) * 0.20).rgb);
@@ -168,6 +170,8 @@ const float lightningTexAspect = lightningTexRes.x / lightningTexRes.y;
 
 float calcLightningTime(float startIterNum)
 {
+  if (startIterNum <= 0.0)
+    return 1000.0;
   float lightningTime = max(lightningAnimIter - startIterNum, 0.0);
   return lightningTime / max(2.55 * lightningFlashPersistence, 0.01);
 }
@@ -552,6 +556,9 @@ vec4 getAirColor(vec2 fragCoordIn)
   float lightningSign = lightningData[INTENSITY] < 0.0 ? -1.0 : 1.0;
   float currentLightningIntensity = lightningIntensityOverTime(lightningTime, lightningPos, lightningData[INTENSITY]) * lightningSign;
 
+  if (lightningStartIterNum <= 0.0 || lightningTime > 5.6)
+    currentLightningIntensity = 0.0;
+
 
   float lightningVisThreshold = mix(0.18, 0.08, clamp((mobileLightningVisibility - 1.0) * 0.85, 0.0, 1.0));
   bool forceMobileBoltRender = mobileLightningVisibility >= 2.0;
@@ -578,23 +585,28 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   onLight += vec3(lightningOnLight) + coronaColor * (electricFieldGlow * electricFieldVizStrength + fieldDiffused * 0.018);
 
-  // Reworked rainbow: primary + faint secondary arc opposite the sun with horizon and rain gating.
-  float rainRich = clamp(water[PRECIPITATION] * 2.4 + cloudOpacity * 0.5, 0.0, 1.0);
-  float sunElevNorm = clamp((sunAngle + 0.22) * 1.15, 0.0, 1.0);
-  vec2 rainbowCenter = vec2(0.5, 0.12 + sunElevNorm * 0.26);
+  // Rainbow rework: sun-opposed arc with rain curtain gating, broad glow and subtle secondary inversion.
+  float rainRich = clamp(water[PRECIPITATION] * 2.1 + cloudOpacity * 0.42, 0.0, 1.0);
+  float sunElevNorm = clamp((sunAngle + 0.24) * 1.08, 0.0, 1.0);
+  vec2 rainbowCenter = vec2(0.5, 0.10 + sunElevNorm * 0.24);
   vec2 toPix = vec2((texCoord.x - rainbowCenter.x) * aspectRatios[0], texCoord.y - rainbowCenter.y);
   float r = length(toPix);
-  float primaryArc = exp(-pow((r - 0.515) / 0.017, 2.0));
-  float secondaryArc = exp(-pow((r - 0.565) / 0.024, 2.0)) * 0.42;
 
-  float primaryW = map_rangeC(r, 0.495, 0.535, 700.0, 410.0);
-  float secondaryW = map_rangeC(r, 0.545, 0.585, 410.0, 700.0);
+  float primaryArcCore = exp(-pow((r - 0.505) / 0.014, 2.0));
+  float primaryArcHalo = exp(-pow((r - 0.505) / 0.032, 2.0)) * 0.52;
+  float secondaryArc = exp(-pow((r - 0.562) / 0.024, 2.0)) * 0.36;
+
+  float primaryW = map_rangeC(r, 0.485, 0.532, 700.0, 405.0);
+  float secondaryW = map_rangeC(r, 0.544, 0.586, 410.0, 700.0);
   vec3 rainbowPrimaryCol = spectral_zucconi(primaryW);
-  vec3 rainbowSecondaryCol = spectral_zucconi(secondaryW) * 0.65;
+  vec3 rainbowSecondaryCol = spectral_zucconi(secondaryW) * 0.58;
 
-  float rainbowMask = (primaryArc + secondaryArc) * rainRich * clamp(lightIntensity * 2.3, 0.0, 1.0);
-  rainbowMask *= smoothstep(0.03, 0.32, texCoord.y);
-  onLight += (rainbowPrimaryCol * primaryArc + rainbowSecondaryCol * secondaryArc) * rainbowMask * (1.15 * sqrt(ambientScattering));
+  float rainCurtainMask = smoothstep(0.18, 0.88, water[PRECIPITATION] + water[CLOUD] * 0.22);
+  float rainbowMask = (primaryArcCore + primaryArcHalo + secondaryArc) * rainRich * rainCurtainMask * clamp(lightIntensity * 2.2, 0.0, 1.0);
+  rainbowMask *= smoothstep(0.03, 0.34, texCoord.y);
+
+  vec3 rainbowLight = rainbowPrimaryCol * (primaryArcCore + primaryArcHalo) + rainbowSecondaryCol * secondaryArc;
+  onLight += rainbowLight * rainbowMask * (1.22 * sqrt(ambientScattering));
 
   return vec4(color, opacity);
 }
