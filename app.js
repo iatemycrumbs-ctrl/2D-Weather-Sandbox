@@ -606,9 +606,7 @@ var lightningRenderCooldownFrames = 160;
 var lightningMaxVisualLifetimeFrames = 90;
 var lastAcceptedLightningStartIter = -1;
 var lastAcceptedLightningVisualClock = -10000;
-var lightningTextureRequestInFlight = false;
-var lightningTextureLastRequestFrame = -10000;
-var lightningTextureMinRequestSpacingFrames = 120;
+var activeLightningTextureIndex = 0;
 
 var lightningShakeOffsetX = 0.0;
 var lightningShakeOffsetY = 0.0;
@@ -4492,8 +4490,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       lightningVisualClock = 0;
       lastAcceptedLightningStartIter = -1;
       lastAcceptedLightningVisualClock = -10000;
-      lightningTextureRequestInFlight = false;
-      lightningTextureLastRequestFrame = -10000;
+      activeLightningTextureIndex = 0;
       gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT, new Float32Array([ 0.0, 0.0, -10000.0, 0.0 ]));
       gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
@@ -7279,7 +7276,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   const lightningGeneratorWorker = new Worker('./lightningGenerator.js');
   const pendingLightningTextureRequests = new Map();
   let lightningTextureRequestCounter = 1;
-  let latestLightningTextureRequestId = 0;
 
   function createFallbackLightningData(width, height)
   {
@@ -7312,11 +7308,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       ? payload.luminanceData
       : createFallbackLightningData(width, height);
 
-    // Ignore stale worker responses if a newer strike already requested a texture.
-    if (payload.id == latestLightningTextureRequestId)
-      generateLightningTexture(pending.textureIndex, width, height, lumData);
-
-    lightningTextureRequestInFlight = false;
+    generateLightningTexture(pending.textureIndex, width, height, lumData);
     pending.resolve(true);
   };
 
@@ -7325,42 +7317,30 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       if (pending.timeoutId)
         clearTimeout(pending.timeoutId);
       generateLightningTexture(pending.textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height));
-      pending.resolve();
+      pending.resolve(false);
     });
     pendingLightningTextureRequests.clear();
-    lightningTextureRequestInFlight = false;
   };
 
   const lightningTexturePlan = getLightningTexturePlan();
-  numLightningTextures = 1;
+  numLightningTextures = Math.max(4, Math.min(lightningTexturePlan.count, 8));
 
-  function requestLightningTextureRefresh(seed)
+  function requestLightningTextureForIndex(textureIndex, seed)
   {
-    if (lightningTextureRequestInFlight)
-      return Promise.resolve(false);
-    if ((lightningVisualClock - lightningTextureLastRequestFrame) < lightningTextureMinRequestSpacingFrames)
-      return Promise.resolve(false);
-
-    lightningTextureRequestInFlight = true;
-    lightningTextureLastRequestFrame = lightningVisualClock;
-
     const reqId = lightningTextureRequestCounter++;
-    latestLightningTextureRequestId = reqId;
-
     return new Promise((resolve) => {
       const timeoutId = setTimeout(() => {
         const pending = pendingLightningTextureRequests.get(reqId);
         if (!pending)
           return;
         pendingLightningTextureRequests.delete(reqId);
-        lightningTextureRequestInFlight = false;
-        generateLightningTexture(0, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height));
-        pending.resolve(true);
-      }, 1800);
+        generateLightningTexture(textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height));
+        pending.resolve(false);
+      }, 2500);
 
       pendingLightningTextureRequests.set(reqId, {
         resolve,
-        textureIndex : 0,
+        textureIndex,
         timeoutId,
         width : lightningTexturePlan.width,
         height : lightningTexturePlan.height
@@ -7376,7 +7356,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     });
   }
 
-  await requestLightningTextureRefresh((Date.now() ^ 0x9e3779b9) >>> 0);
+  for (let i = 0; i < numLightningTextures; i++) {
+    const seed = (Date.now() + i * 2654435761) >>> 0;
+    await requestLightningTextureForIndex(i, seed);
+  }
+
+  lightningGeneratorWorker.terminate();
 
   await loadingBar.set(90, 'Setting up FBO`s');
 
@@ -8058,7 +8043,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
                                    new Float32Array([ lightningX, lightningY, lightningVisualClock, lightningSignedIntensity ]));
 
                   const strikeSeed = (((lightningStartIter * 2654435761) ^ Math.floor(lightningX * 65535.0) ^ (Math.floor(lightningY * 65535.0) << 1)) >>> 0);
-                  requestLightningTextureRefresh(strikeSeed);
+                  activeLightningTextureIndex = strikeSeed % max(numLightningTextures, 1);
 
                   triggerLightningEffects(lightningX, lightningY, lightningIntensity);
 
@@ -8310,7 +8295,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       }
 
 
-      let lightningTexNum = Math.floor(lightningAnimIter / 400) % numLightningTextures;
+      let lightningTexNum = activeLightningTextureIndex % max(numLightningTextures, 1);
       // console.log(lightningTexNum)
 
       gl.activeTexture(gl.TEXTURE7);
