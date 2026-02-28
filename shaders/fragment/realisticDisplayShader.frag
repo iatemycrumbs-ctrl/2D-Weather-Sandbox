@@ -239,8 +239,10 @@ vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
 
   float branchCurve = sin(verticalTravel * 8.4 + random2d(pos * 19.3) * 6.2831) * (0.075 + (1.0 - verticalTravel) * 0.06);
+  float leaderSeg = floor(verticalTravel * 24.0) / 24.0;
+  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.16 + (1.0 - verticalTravel) * 0.10);
   float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.34;
-  uv.x = 0.5 + (wrappedDx + branchCurve + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 1.22;
+  uv.x = 0.5 + (wrappedDx + branchCurve + leaderJitter + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 1.22;
   uv.y = verticalTravel * 1.32;
   return uv;
 }

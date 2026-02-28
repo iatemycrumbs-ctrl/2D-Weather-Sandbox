@@ -96,6 +96,44 @@
             transition: filter 180ms ease;
         }
 
+        .dg .cr.boolean .c input[type=checkbox] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 54px;
+            height: 24px;
+            border-radius: 999px;
+            position: relative;
+            cursor: pointer;
+            border: 1px solid rgba(92, 195, 255, 0.55);
+            background: linear-gradient(120deg, rgba(8, 30, 58, 0.95), rgba(17, 56, 92, 0.85));
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.52), 0 0 8px rgba(76, 186, 255, 0.20);
+            transition: all 220ms ease;
+        }
+
+        .dg .cr.boolean .c input[type=checkbox]::before {
+            content: "";
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            left: 3px;
+            top: 2px;
+            background: radial-gradient(circle at 35% 30%, #e6ffff, #55cbff 62%, #216ec8);
+            box-shadow: 0 1px 8px rgba(10, 30, 68, 0.75);
+            transition: transform 220ms cubic-bezier(0.22, 0.80, 0.24, 1.0), background 180ms ease;
+        }
+
+        .dg .cr.boolean .c input[type=checkbox]:checked {
+            background: linear-gradient(120deg, rgba(16, 69, 82, 0.95), rgba(17, 115, 95, 0.85));
+            border-color: rgba(99, 242, 217, 0.75);
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.45), 0 0 12px rgba(70, 247, 206, 0.34);
+        }
+
+        .dg .cr.boolean .c input[type=checkbox]:checked::before {
+            transform: translateX(28px);
+            background: radial-gradient(circle at 35% 30%, #f6ffff, #6bffd3 60%, #1aa277);
+        }
+
         .dg .cr.number input[type=text],
         .dg .cr.string input[type=text] {
             background: rgba(2, 8, 22, 0.86) !important;
@@ -435,6 +473,19 @@
             border: 1px solid rgba(255, 255, 255, 0.12);
             box-shadow: 0 24px 50px rgba(0, 0, 0, 0.35);
             backdrop-filter: blur(8px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #IntroScreen::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: linear-gradient(100deg, rgba(65, 197, 255, 0.08), rgba(105, 100, 255, 0.10) 42%, rgba(48, 176, 236, 0.06));
+            background-size: 220% 100%;
+            animation: controlScan 8.5s linear infinite;
+            opacity: 0.75;
         }
 
         .intro-hero {
@@ -685,6 +736,11 @@
 
         .control-card, .intro-panel, .intro-hero-card {
             animation: introFloat 8s ease-in-out infinite;
+            background-size: 220% 100%;
+            animation-name: introFloat, controlScan;
+            animation-duration: 8s, 10s;
+            animation-timing-function: ease-in-out, linear;
+            animation-iteration-count: infinite, infinite;
         }
 
         .control-card:hover, .intro-panel:hover, .intro-hero-card:hover {
