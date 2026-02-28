@@ -600,6 +600,8 @@ var lastFrameNum = 0;
 
 var iterNum = 0;
 var lightningVisualClock = 0;
+var lightningStartupWarmupFrames = 140;
+var lastAcceptedLightningStartIter = -1;
 
 var lightningShakeOffsetX = 0.0;
 var lightningShakeOffsetY = 0.0;
@@ -4481,6 +4483,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       frameNum = 0;
       iterNum = 0;
       lightningVisualClock = 0;
+      lastAcceptedLightningStartIter = -1;
       gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT, new Float32Array([ 0.0, 0.0, -10000.0, 0.0 ]));
       lightningRods = [];
@@ -7149,7 +7152,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, precipitationDepositionTexture, 0);
 
   gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 1, 0, gl.RGBA, gl.FLOAT, null);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, 1, 1, 0, gl.RGBA, gl.FLOAT, new Float32Array([ 0.0, 0.0, -10000.0, 0.0 ]));
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
@@ -8006,17 +8009,29 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
               // console.log('lightningDataValues: ', lightningDataValues[0], lightningDataValues[1], lightningDataValues[2], iterNum, lightningDataValues[3]);
 
               if (Math.round(lightningDataValues[2]) == iterNum) {
+                const lightningStartIter = Math.round(lightningDataValues[2]);
+                const lightningX = lightningDataValues[0];
+                const lightningY = lightningDataValues[1];
                 const lightningSignedIntensity = lightningDataValues[3];
-                const lightningIntensity = Math.pow(Math.abs(lightningSignedIntensity), 2.0);
 
-                gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
-                gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT,
-                                 new Float32Array([ lightningDataValues[0], lightningDataValues[1], lightningVisualClock, lightningSignedIntensity ]));
+                const validStrike = Number.isFinite(lightningX) && Number.isFinite(lightningY) && Number.isFinite(lightningSignedIntensity)
+                  && lightningX >= 0.0 && lightningX <= 1.0 && lightningY >= 0.0 && lightningY <= 1.0;
+                const warmupDone = iterNum > lightningStartupWarmupFrames;
+                const newStrikeIter = lightningStartIter > lastAcceptedLightningStartIter;
 
-                triggerLightningEffects(lightningDataValues[0], lightningDataValues[1], lightningIntensity);
+                if (validStrike && warmupDone && newStrikeIter) {
+                  lastAcceptedLightningStartIter = lightningStartIter;
+                  const lightningIntensity = Math.pow(clamp(Math.abs(lightningSignedIntensity), 0.0, 4.0), 2.0);
 
-                if (guiControls.sound)
-                  soundSystem.soundThunder(lightningDataValues[0], lightningDataValues[1], lightningIntensity);
+                  gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
+                  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT,
+                                   new Float32Array([ lightningX, lightningY, lightningVisualClock, lightningSignedIntensity ]));
+
+                  triggerLightningEffects(lightningX, lightningY, lightningIntensity);
+
+                  if (guiControls.sound)
+                    soundSystem.soundThunder(lightningX, lightningY, lightningIntensity);
+                }
               }
             }
 
