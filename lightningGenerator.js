@@ -32,6 +32,10 @@ onmessage = (event) => {
     // Repaint the trunk path as an explicit 1px snake spine so CG channels cannot break.
     stampTrunkSnake(luminanceData, width, height, bolt.trunkPoints);
 
+    // One additional continuity pass stitches sub-pixel stair-step gaps left by rasterization,
+    // especially in near-vertical CG leaders on high-aspect textures.
+    bridgeDiagonalGaps(luminanceData, width, height);
+
     // Keep only lightning pixels connected to the trunk origin and remove detached speckles.
     filterDisconnectedLightning(luminanceData, width, height, bolt.trunkPoints);
 
@@ -139,6 +143,40 @@ function filterDisconnectedLightning(luminanceData, width, height, trunkPoints)
   for (let i = 0; i < luminanceData.length; i++) {
     if (!connectedMask[i])
       luminanceData[i] = 0;
+  }
+}
+
+function bridgeDiagonalGaps(luminanceData, width, height)
+{
+  const source = luminanceData.slice();
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x;
+      const center = source[idx];
+      if (center >= 24)
+        continue;
+
+      const left = source[idx - 1];
+      const right = source[idx + 1];
+      const up = source[idx - width];
+      const down = source[idx + width];
+      const upLeft = source[idx - width - 1];
+      const upRight = source[idx - width + 1];
+      const downLeft = source[idx + width - 1];
+      const downRight = source[idx + width + 1];
+
+      const hasDiagonalBridge = (upLeft >= 52 && downRight >= 52) || (upRight >= 52 && downLeft >= 52);
+      const hasHVBridge = (left >= 64 && right >= 64) || (up >= 64 && down >= 64);
+      if (hasDiagonalBridge || hasHVBridge) {
+        const bridgeLum = Math.max(
+          Math.min(upLeft, downRight),
+          Math.min(upRight, downLeft),
+          Math.min(left, right),
+          Math.min(up, down)
+        );
+        luminanceData[idx] = Math.max(luminanceData[idx], Math.floor(bridgeLum * 0.72));
+      }
+    }
   }
 }
 

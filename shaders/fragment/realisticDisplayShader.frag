@@ -248,13 +248,13 @@ vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
 
   float branchCurve = sin(verticalTravel * 8.0 + random2d(pos * 19.3) * 6.2831) * (0.022 + (1.0 - verticalTravel) * 0.016);
-  float leaderSeg = floor(verticalTravel * 24.0) / 24.0;
-  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.046 + (1.0 - verticalTravel) * 0.032);
+  float leaderSeg = floor(verticalTravel * 32.0) / 32.0;
+  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.034 + (1.0 - verticalTravel) * 0.020);
   float bow = sin(verticalTravel * 3.14159 * (1.7 + random2d(pos * 43.1))) * (0.014 + (1.0 - verticalTravel) * 0.022);
   float microZag = sin(verticalTravel * 78.0 + random2d(pos * 53.2) * 6.2831) * 0.006;
   float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.10;
   uv.x = 0.5 + (wrappedDx + branchCurve + leaderJitter + bow + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.74;
-  uv.y = verticalTravel * 1.32;
+  uv.y = verticalTravel * 1.26;
   return uv;
 }
 
@@ -322,6 +322,17 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
                      max(texture(lightningTex, lightningTexCoord + vec2(px.x, -px.y)).r,
                          texture(lightningTex, lightningTexCoord + vec2(-px.x, -px.y)).r));
     pixVal = max(pixVal, diag * 0.62);
+
+    // Continuity bridge: sample a short vertical segment in texture space so missing
+    // staircase pixels cannot split the CG trunk into disconnected chunks.
+    float segBridge = max(
+      texture(lightningTex, lightningTexCoord + vec2(0.0, px.y * 1.5)).r,
+      texture(lightningTex, lightningTexCoord - vec2(0.0, px.y * 1.5)).r
+    );
+    segBridge = max(segBridge,
+                    max(texture(lightningTex, lightningTexCoord + vec2(px.x * 0.75, px.y * 1.2)).r,
+                        texture(lightningTex, lightningTexCoord + vec2(-px.x * 0.75, -px.y * 1.2)).r));
+    pixVal = max(pixVal, segBridge * 0.58);
   }
 
   // Keep IC in cloud and CG mostly below source cloud.
@@ -331,7 +342,9 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     pixVal *= icCloudBand * localCloudMask;
   } else {
     float belowSource = 1.0 - smoothstep(pos.y - 0.02, pos.y + 0.04, texCoord.y);
-    float cgLateralConfine = 1.0 - smoothstep(0.24, 0.58, abs(lightningTexCoord.x - 0.5));
+    float nearGround = smoothstep(0.55, 1.00, lightningTexCoord.y);
+    float corridorWidth = mix(0.22, 0.40, nearGround);
+    float cgLateralConfine = 1.0 - smoothstep(corridorWidth, corridorWidth + 0.30, abs(lightningTexCoord.x - 0.5));
     cgLateralConfine = max(cgLateralConfine, 0.16);
     pixVal *= belowSource * cgLateralConfine;
   }
@@ -391,7 +404,7 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   float cloudwater = water[CLOUD];
 
-  // Cloud visual rework v2: towering convection body + anvil cap + detailed billow ridges.
+  // Cloud visual rework v3: deeper tower depth cues, anvil shear and precipitation curtains.
   float cloudShade = clamp(1.0 / (cloudwater * 0.0036 + 1.0), 0.14, 1.0);
 
   float cloudBody = max(cloudwater, 0.0);
@@ -416,11 +429,14 @@ vec4 getAirColor(vec2 fragCoordIn)
   float cloudTower = smoothstep(0.20, 0.82, texCoord.y) * smoothstep(0.40, 0.92, cloudNoiseDetail + cloudBody * 0.08);
   float cloudCavity = smoothstep(0.28, 0.86, cloudNoiseWarp) * smoothstep(0.20, 0.80, cloudBody);
   float anvilShear = smoothstep(0.58, 0.97, texCoord.y) * (0.84 + 0.70 * abs(base[VX]));
+  float cloudTurret = smoothstep(0.24, 0.84, texCoord.y) * smoothstep(0.64, 0.98, cloudNoiseBroad + cloudNoiseFine * 0.7);
+  float entrainment = smoothstep(0.08, 0.42, texCoord.y) * smoothstep(0.45, 0.95, cloudNoiseWarp + cloudNoiseDetail * 0.6);
 
   float cloudDensity = cloudBody * (7.9 + cloudLayerComplexity * 7.2);
   cloudDensity *= (0.68 + cloudLayerA * 0.36 + cloudLayerB * 0.34 + cloudLayerC * 0.31);
   cloudDensity *= mix(0.62, 1.44, billow);
   cloudDensity *= (1.0 + anvilShear * 0.32 + cauliflowerRidge * 0.30 + cloudTower * 0.28);
+  cloudDensity *= (1.0 + cloudTurret * 0.16 + entrainment * 0.14);
   cloudDensity *= mix(0.88, 1.10, cloudCavity);
 
   float cloudVisualLimiter = 1.0 / (1.0 + max(cloudDensity - 3.8, 0.0) * 0.20);
@@ -452,8 +468,10 @@ vec4 getAirColor(vec2 fragCoordIn)
   float cloudContrast = clamp(cloudShade * (0.74 + 0.34 * billow + cloudTower * 0.12), 0.0, 1.0);
   vec3 cloudCol = mix(cloudShadowCol, cloudCoreCol, cloudContrast);
   cloudCol += vec3(0.12, 0.17, 0.26) * silverLining;
+  cloudCol += vec3(0.06, 0.09, 0.15) * cloudTurret;
   cloudCol += vec3(0.07, 0.09, 0.12) * cauliflowerRidge;
   cloudCol = mix(cloudCol, cloudShadowCol * 0.85, cloudCavity * 0.22);
+  cloudCol = mix(cloudCol, cloudShadowCol * 0.80, entrainment * 0.18);
   cloudCol = mix(cloudCol, precipMistCol, precipMist * 0.52);
   cloudCol += precipShaftCol * (precipShaftOpacity * 0.88 + precipSparkleGlow * 0.24);
 
@@ -525,12 +543,15 @@ vec4 getAirColor(vec2 fragCoordIn)
   onLight += vec3(lightningOnLight) + coronaColor * (electricFieldGlow * electricFieldVizStrength + fieldDiffused * 0.012);
   onLight = min(onLight, vec3(14.0));
 
-  // Rainbow rework: sun-opposed arc with rain curtain gating, broad glow and subtle secondary inversion.
+  // Rainbow rework: sun-opposed arc with anti-solar center shift and wet-curtain gating.
   float rainRich = clamp(water[PRECIPITATION] * 2.1 + cloudOpacity * 0.42, 0.0, 1.0);
   float sunElevNorm = clamp((sunAngle + 0.24) * 1.08, 0.0, 1.0);
-  vec2 rainbowCenter = vec2(0.5, 0.10 + sunElevNorm * 0.24);
+  float antiSolarX = clamp(0.5 - sin(sunAngle) * 0.36, 0.14, 0.86);
+  vec2 rainbowCenter = vec2(antiSolarX, 0.10 + sunElevNorm * 0.24);
   vec2 toPix = vec2((texCoord.x - rainbowCenter.x) * aspectRatios[0], texCoord.y - rainbowCenter.y);
   float r = length(toPix);
+  float arcHeightMask = 1.0 - smoothstep(0.42, 0.95, texCoord.y);
+  float horizonFade = smoothstep(0.02, 0.30, texCoord.y);
 
   float primaryArcCore = exp(-pow((r - 0.505) / 0.014, 2.0));
   float primaryArcHalo = exp(-pow((r - 0.505) / 0.032, 2.0)) * 0.52;
@@ -543,7 +564,7 @@ vec4 getAirColor(vec2 fragCoordIn)
 
   float rainCurtainMask = smoothstep(0.18, 0.88, water[PRECIPITATION] + water[CLOUD] * 0.22);
   float rainbowMask = (primaryArcCore + primaryArcHalo + secondaryArc) * rainRich * rainCurtainMask * clamp(lightIntensity * 2.2, 0.0, 1.0);
-  rainbowMask *= smoothstep(0.03, 0.34, texCoord.y);
+  rainbowMask *= smoothstep(0.03, 0.34, texCoord.y) * arcHeightMask * horizonFade;
 
   vec3 rainbowLight = rainbowPrimaryCol * (primaryArcCore + primaryArcHalo) + rainbowSecondaryCol * secondaryArc;
   onLight += rainbowLight * rainbowMask * (1.22 * sqrt(ambientScattering));
