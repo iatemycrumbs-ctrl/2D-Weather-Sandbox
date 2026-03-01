@@ -8,8 +8,22 @@ onmessage = (event) => {
     const imageData = generateLightningBolt(width, height, seed);
     const rgba = imageData.data;
     const luminanceData = new Uint8Array(width * height);
-    for (let i = 0, j = 0; i < rgba.length; i += 4, j++)
-      luminanceData[j] = rgba[i];
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = y * width + x;
+        const i = idx * 4;
+        const center = rgba[i];
+
+        // Bridge tiny raster gaps so CG channels remain visually linked.
+        const left = x > 0 ? rgba[i - 4] : 0;
+        const right = x + 1 < width ? rgba[i + 4] : 0;
+        const up = y > 0 ? rgba[i - width * 4] : 0;
+        const down = y + 1 < height ? rgba[i + width * 4] : 0;
+        const maxNeighbor = Math.max(left, right, up, down);
+
+        luminanceData[idx] = Math.max(center, Math.floor(maxNeighbor * 0.74));
+      }
+    }
 
     postMessage({id : msg.id, width, height, luminanceData}, [ luminanceData.buffer ]);
   } catch (err) {

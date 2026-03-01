@@ -325,7 +325,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     pixVal *= icCloudBand * localCloudMask;
   } else {
     float belowSource = 1.0 - smoothstep(pos.y - 0.02, pos.y + 0.04, texCoord.y);
-    float cgLateralConfine = 1.0 - smoothstep(0.20, 0.48, abs(lightningTexCoord.x - 0.5));
+    float cgLateralConfine = 1.0 - smoothstep(0.24, 0.58, abs(lightningTexCoord.x - 0.5));
+    cgLateralConfine = max(cgLateralConfine, 0.16);
     pixVal *= belowSource * cgLateralConfine;
   }
 
