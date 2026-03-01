@@ -8062,7 +8062,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
                                    new Float32Array([ lightningX, lightningY, lightningVisualClock, lightningSignedIntensity ]));
 
                   const strikeSeed = (((lightningStartIter * 2654435761) ^ Math.floor(lightningX * 65535.0) ^ (Math.floor(lightningY * 65535.0) << 1)) >>> 0);
-                  activeLightningTextureIndex = strikeSeed % max(numLightningTextures, 1);
+                  activeLightningTextureIndex = strikeSeed % Math.max(numLightningTextures, 1);
 
                   triggerLightningEffects(lightningX, lightningY, lightningIntensity);
 
@@ -8314,7 +8314,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       }
 
 
-      let lightningTexNum = activeLightningTextureIndex % max(numLightningTextures, 1);
+      let lightningTexNum = activeLightningTextureIndex % Math.max(numLightningTextures, 1);
       // console.log(lightningTexNum)
 
       gl.activeTexture(gl.TEXTURE7);
