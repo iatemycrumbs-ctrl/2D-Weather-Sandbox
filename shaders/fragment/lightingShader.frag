@@ -96,10 +96,13 @@ void main()
         case WALLTYPE_RUNWAY:
         case WALLTYPE_URBAN:
         case WALLTYPE_INDUSTRIAL:
+        case WALLTYPE_SUPER_INDUSTRIAL:
+        case WALLTYPE_SKYSCRAPER:
+        case WALLTYPE_NUCLEAR:
           if (abs(sunAngle) > 85. * deg2rad)
             reflectedLight.rgb += vec3(1.00, 0.97, 0.57) * 0.03; // Urban area emits light
           {
-            float urbanHeatStorage = (wall[TYPE] == WALLTYPE_INDUSTRIAL) ? 1.18 : 1.10;
+            float urbanHeatStorage = (wall[TYPE] == WALLTYPE_NUCLEAR) ? 1.28 : ((wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL) ? 1.24 : ((wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER) ? 1.18 : 1.10));
             IR_up = IR_emitted(realTemp * urbanHeatStorage);
           }
           net_heating += (IR_down - IR_up) * lightHeatingConst;

@@ -279,7 +279,7 @@ void main()
           albedoTotal = map_range(float(wallX0Ym[VEGETATION]), 0., 127., albedoSoil, fullVegetationAlbedo);
         } else if (wall[TYPE] == WALLTYPE_URBAN) {
           albedoTotal = ALBEDO_URBAN;
-        } else if (wall[TYPE] == WALLTYPE_INDUSTRIAL) {
+        } else if (wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[TYPE] == WALLTYPE_NUCLEAR) {
           albedoTotal = ALBEDO_INDUSTRIAL;
         } else if (wall[TYPE] == WALLTYPE_RUNWAY) {
           albedoTotal = ALBEDO_RUNWAY;
@@ -376,7 +376,10 @@ void main()
         }
         // nobreak!
       case WALLTYPE_INDUSTRIAL:
-        if (wall[TYPE] == WALLTYPE_INDUSTRIAL) { // exclude WALLTYPE_FIRE
+      case WALLTYPE_SUPER_INDUSTRIAL:
+      case WALLTYPE_SKYSCRAPER:
+      case WALLTYPE_NUCLEAR:
+        if (wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[TYPE] == WALLTYPE_NUCLEAR) { // exclude WALLTYPE_FIRE
           int texFragX = int(texCoord.x * resolution.x) % 80;
 
           if (wall[VERT_DISTANCE] == 5 && (texFragX == 18 || texFragX == 22)) { // cooling towers
@@ -447,6 +450,10 @@ void main()
       vec4 lightAboveSurface = texture(lightTex, texCoordX0Yp); // sample cell above surface
 
       switch (wall[TYPE]) {
+      case WALLTYPE_NUCLEAR:
+        wall[VEGETATION] = min(wall[VEGETATION], 8);
+      case WALLTYPE_SUPER_INDUSTRIAL:
+      case WALLTYPE_SKYSCRAPER:
       case WALLTYPE_INDUSTRIAL:
         wall[VEGETATION] = min(wall[VEGETATION], 15); // limit vegetation in industrial areas
       case WALLTYPE_URBAN:
@@ -565,8 +572,8 @@ void main()
           }
 
           // Urban / industrial storm damage under extreme winds.
-          if ((wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL) && gustStress > 0.025) {
-            float structureResilience = wall[TYPE] == WALLTYPE_INDUSTRIAL ? 1.2 : 1.0;
+          if ((wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[TYPE] == WALLTYPE_NUCLEAR) && gustStress > 0.025) {
+            float structureResilience = wall[TYPE] == WALLTYPE_NUCLEAR ? 1.45 : (wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL ? 1.3 : 1.1);
             float destructionChance = clamp((gustStress - 0.025) * 5.0 / structureResilience, 0.0, 0.35);
             if (random2d(vec2(iterNum * 0.23, fragCoord.x * 0.19 + fragCoord.y * 0.13)) < destructionChance) {
               wall[TYPE] = WALLTYPE_LAND;
