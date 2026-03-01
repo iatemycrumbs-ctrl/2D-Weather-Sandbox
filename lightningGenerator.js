@@ -24,6 +24,8 @@ function generateLightningBolt(width, height, seed)
   const ctx = lightningCanvas.getContext('2d', {alpha : true, desynchronized : true});
 
   ctx.clearRect(0, 0, width, height);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
 
   let rngState = seed || 1;
   function rand()
@@ -51,8 +53,8 @@ function generateLightningBolt(width, height, seed)
   ctx.lineWidth = lineWidth;
 
   while (startY < height) {
-    const nextX = startX + Math.sin(angle) * 1.18;
-    const nextY = startY + Math.cos(angle) * 1.30;
+    const nextX = startX + Math.sin(angle) * 1.02;
+    const nextY = startY + Math.cos(angle) * 1.14;
 
     angle += (rand() - 0.5) * 0.74;
     angle -= (angle - targetAngle) * 0.08;
@@ -73,6 +75,23 @@ function generateLightningBolt(width, height, seed)
   }
   ctx.strokeStyle = genLightningColor(lineWidth);
   ctx.stroke();
+
+  // Add a connected core pass to avoid perceived gaps between stepped segments.
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.beginPath();
+  ctx.moveTo(width * 0.5, 0.0);
+  let coreX = width * 0.5;
+  let coreAngle = 0.0;
+  for (let coreY = 0.0; coreY < height; coreY += 1.0) {
+    coreAngle += (rand() - 0.5) * 0.22;
+    coreAngle *= 0.92;
+    coreX += Math.sin(coreAngle) * 0.42;
+    ctx.lineTo(coreX, coreY + 1.0);
+  }
+  ctx.lineWidth = Math.max(1.4, lineWidth * 0.22);
+  ctx.strokeStyle = 'rgb(220,220,220)';
+  ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
 
   return ctx.getImageData(0, 0, width, height);
 
