@@ -607,6 +607,8 @@ var lightningMaxVisualLifetimeFrames = 90;
 var lastAcceptedLightningStartIter = -1;
 var lastAcceptedLightningVisualClock = -10000;
 var activeLightningTextureIndex = 0;
+var previousLightningTextureIndex = -1;
+var lightningTexturePhase = 0.0;
 
 var lightningShakeOffsetX = 0.0;
 var lightningShakeOffsetY = 0.0;
@@ -4495,6 +4497,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       lastAcceptedLightningStartIter = -1;
       lastAcceptedLightningVisualClock = -10000;
       activeLightningTextureIndex = 0;
+      previousLightningTextureIndex = -1;
+      lightningTexturePhase = 0.0;
       gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT, new Float32Array([ 0.0, 0.0, -10000.0, 0.0 ]));
       gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
@@ -8066,7 +8070,13 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
                                    new Float32Array([ lightningX, lightningY, lightningVisualClock, lightningSignedIntensity ]));
 
                   const strikeSeed = (((lightningStartIter * 2654435761) ^ Math.floor(lightningX * 65535.0) ^ (Math.floor(lightningY * 65535.0) << 1)) >>> 0);
-                  activeLightningTextureIndex = strikeSeed % Math.max(numLightningTextures, 1);
+                  const lightningTextureCount = Math.max(numLightningTextures, 1);
+                  let chosenTextureIndex = strikeSeed % lightningTextureCount;
+                  if (lightningTextureCount > 1 && chosenTextureIndex == previousLightningTextureIndex)
+                    chosenTextureIndex = (chosenTextureIndex + 1 + (strikeSeed % Math.max(lightningTextureCount - 1, 1))) % lightningTextureCount;
+                  activeLightningTextureIndex = chosenTextureIndex;
+                  previousLightningTextureIndex = chosenTextureIndex;
+                  lightningTexturePhase = ((strikeSeed >>> 8) & 1023) / 1024.0;
 
                   triggerLightningEffects(lightningX, lightningY, lightningIntensity);
 
@@ -8303,6 +8313,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'Xmult'), horizontalDisplayMult);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'iterNum'), iterNum);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningAnimIter'), lightningAnimIter);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTexturePhase'), lightningTexturePhase);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'dynamicChargeSeparation'), guiControls.dynamicChargeSeparation);

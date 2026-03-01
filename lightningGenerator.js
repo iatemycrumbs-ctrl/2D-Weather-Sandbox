@@ -47,31 +47,41 @@ function stampTrunkSnake(luminanceData, width, height, trunkPoints)
   if (!trunkPoints || trunkPoints.length < 2)
     return;
 
+  function stampPixel(x, y, value)
+  {
+    if (x < 0 || x >= width || y < 0 || y >= height)
+      return;
+    const idx = y * width + x;
+    luminanceData[idx] = Math.max(luminanceData[idx], value);
+  }
+
+  // Bresenham-style stamping keeps the trunk as a single continuous snake
+  // without introducing chunky duplicated side segments.
   for (let i = 1; i < trunkPoints.length; i++) {
-    const a = trunkPoints[i - 1];
-    const b = trunkPoints[i];
+    let x0 = Math.round(trunkPoints[i - 1].x);
+    let y0 = Math.round(trunkPoints[i - 1].y);
+    const x1 = Math.round(trunkPoints[i].x);
+    const y1 = Math.round(trunkPoints[i].y);
 
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) * 1.6));
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
 
-    for (let s = 0; s <= steps; s++) {
-      const t = s / steps;
-      const x = Math.round(a.x + dx * t);
-      const y = Math.round(a.y + dy * t);
+    while (true) {
+      stampPixel(x0, y0, 230);
+      if (x0 == x1 && y0 == y1)
+        break;
 
-      if (x < 0 || x >= width || y < 0 || y >= height)
-        continue;
-
-      const idx = y * width + x;
-      luminanceData[idx] = Math.max(luminanceData[idx], 255);
-
-      // 8-neighbor touch-up so tiny diagonal raster holes don't sever the channel.
-      for (let ny = Math.max(0, y - 1); ny <= Math.min(height - 1, y + 1); ny++) {
-        for (let nx = Math.max(0, x - 1); nx <= Math.min(width - 1, x + 1); nx++) {
-          const nIdx = ny * width + nx;
-          luminanceData[nIdx] = Math.max(luminanceData[nIdx], 116);
-        }
+      const e2 = err * 2;
+      if (e2 > -dy) {
+        err -= dy;
+        x0 += sx;
+      }
+      if (e2 < dx) {
+        err += dx;
+        y0 += sy;
       }
     }
   }
@@ -81,7 +91,7 @@ function filterDisconnectedLightning(luminanceData, width, height, trunkPoints)
 {
   const connectedMask = new Uint8Array(width * height);
   const visitQueue = new Int32Array(width * height);
-  const minConnectedLum = 10;
+  const minConnectedLum = 26;
   let queueHead = 0;
   let queueTail = 0;
 

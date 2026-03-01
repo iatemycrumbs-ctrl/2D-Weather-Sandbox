@@ -72,6 +72,7 @@ uniform float displayVectorField;
 
 uniform float iterNum;
 uniform float lightningAnimIter;
+uniform float lightningTexturePhase;
 uniform int lightningShapeMode;
 
 out vec4 fragmentColor;
@@ -287,7 +288,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     return vec3(0.0);
 
   vec2 lightningTexCoord = texCoord;
-  lightningTexCoord.x -= mod(pos.x, 1.0);
+  float phaseDrift = fract(lightningTexturePhase + random2d(pos * 11.3) * 0.37);
+  lightningTexCoord.x -= mod(pos.x + phaseDrift * 0.22, 1.0);
   lightningTexCoord.y -= pos.y;
 
   float scaleMult = 1.0;
