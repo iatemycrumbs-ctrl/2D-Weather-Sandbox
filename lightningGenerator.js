@@ -19,9 +19,13 @@ onmessage = (event) => {
         const right = x + 1 < width ? rgba[i + 4] : 0;
         const up = y > 0 ? rgba[i - width * 4] : 0;
         const down = y + 1 < height ? rgba[i + width * 4] : 0;
-        const maxNeighbor = Math.max(left, right, up, down);
+        const upLeft = (x > 0 && y > 0) ? rgba[i - width * 4 - 4] : 0;
+        const upRight = (x + 1 < width && y > 0) ? rgba[i - width * 4 + 4] : 0;
+        const downLeft = (x > 0 && y + 1 < height) ? rgba[i + width * 4 - 4] : 0;
+        const downRight = (x + 1 < width && y + 1 < height) ? rgba[i + width * 4 + 4] : 0;
+        const maxNeighbor = Math.max(left, right, up, down, upLeft, upRight, downLeft, downRight);
 
-        luminanceData[idx] = Math.max(center, Math.floor(maxNeighbor * 0.74));
+        luminanceData[idx] = Math.max(center, Math.floor(maxNeighbor * 0.76));
       }
     }
 
@@ -55,6 +59,16 @@ function generateLightningBolt(width, height, seed)
     return `rgb(${c}, ${c}, ${c})`;
   }
 
+  function drawJunction(x, y, widthScale)
+  {
+    const radius = Math.max(0.75, widthScale * 0.55);
+    const glow = Math.max(120, Math.floor(Math.min(255, widthScale * 54.0)));
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0.0, Math.PI * 2.0);
+    ctx.fillStyle = `rgb(${glow}, ${glow}, ${glow})`;
+    ctx.fill();
+  }
+
   ctx.beginPath();
 
   let startX = width * (0.5 + (rand() - 0.5) * 0.08);
@@ -81,6 +95,7 @@ function generateLightningBolt(width, height, seed)
     if (rand() < 0.0048 * (1. - nextY / height)) {
       ctx.strokeStyle = genLightningColor(lineWidth);
       ctx.stroke();
+      drawJunction(nextX, nextY, lineWidth);
       drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.82, lineWidth * (0.26 + 0.12 * rand()));
       ctx.beginPath();
       ctx.moveTo(nextX, nextY);
@@ -113,6 +128,7 @@ function generateLightningBolt(width, height, seed)
   {
     let angle = targetAngle;
 
+    drawJunction(startX, startY, line_width);
     ctx.beginPath();
     ctx.moveTo(startX, startY);
     ctx.lineWidth = line_width;
@@ -140,6 +156,7 @@ function generateLightningBolt(width, height, seed)
         if (rand() < 0.025)
           drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.62, line_width * 0.82);
 
+        drawJunction(nextX, nextY, line_width);
         ctx.beginPath();
         ctx.moveTo(nextX, nextY);
         ctx.lineWidth = line_width;
