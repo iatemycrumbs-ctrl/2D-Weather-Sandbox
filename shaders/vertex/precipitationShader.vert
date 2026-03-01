@@ -298,7 +298,7 @@ void main()
   newDensity = density;   // determines fall speed
   feedback = vec4(0.0);
   deposition = vec2(0.0);
-  bool lightningWarmupDone = iterNum > 1200.0;
+  bool lightningWarmupDone = iterNum > 180.0;
 
   // Lightning Ground Strike tool: tap to force a cloud-to-ground strike near the cursor.
   if (userInputType == 26 && gl_VertexID == 0 && userInputValues.x >= 0.0 && userInputValues.x <= 1.0) {

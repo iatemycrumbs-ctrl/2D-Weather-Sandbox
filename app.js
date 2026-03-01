@@ -600,9 +600,9 @@ var lastFrameNum = 0;
 
 var iterNum = 0;
 var lightningVisualClock = 0;
-var lightningStartupWarmupIterations = 1200;
-var lightningStartupWarmupVisualFrames = 300;
-var lightningRenderCooldownFrames = 160;
+var lightningStartupWarmupIterations = 180;
+var lightningStartupWarmupVisualFrames = 45;
+var lightningRenderCooldownFrames = 70;
 var lightningMaxVisualLifetimeFrames = 90;
 var lastAcceptedLightningStartIter = -1;
 var lastAcceptedLightningVisualClock = -10000;
