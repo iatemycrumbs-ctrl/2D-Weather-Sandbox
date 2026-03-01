@@ -246,13 +246,13 @@ vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float sourceToGround = max(pos.y, 0.08);
   float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
 
-  float branchCurve = sin(verticalTravel * 8.4 + random2d(pos * 19.3) * 6.2831) * (0.075 + (1.0 - verticalTravel) * 0.06);
+  float branchCurve = sin(verticalTravel * 7.2 + random2d(pos * 19.3) * 6.2831) * (0.032 + (1.0 - verticalTravel) * 0.024);
   float leaderSeg = floor(verticalTravel * 24.0) / 24.0;
-  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.16 + (1.0 - verticalTravel) * 0.10);
-  float bow = sin(verticalTravel * 3.14159 * (1.9 + random2d(pos * 43.1))) * (0.05 + (1.0 - verticalTravel) * 0.08);
-  float microZag = sin(verticalTravel * 84.0 + random2d(pos * 53.2) * 6.2831) * 0.022;
-  float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.34;
-  uv.x = 0.5 + (wrappedDx + branchCurve + leaderJitter + bow + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 1.22;
+  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.070 + (1.0 - verticalTravel) * 0.050);
+  float bow = sin(verticalTravel * 3.14159 * (1.6 + random2d(pos * 43.1))) * (0.020 + (1.0 - verticalTravel) * 0.030);
+  float microZag = sin(verticalTravel * 72.0 + random2d(pos * 53.2) * 6.2831) * 0.010;
+  float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.16;
+  uv.x = 0.5 + (wrappedDx + branchCurve + leaderJitter + bow + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.86;
   uv.y = verticalTravel * 1.32;
   return uv;
 }
@@ -321,7 +321,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     pixVal *= icCloudBand * localCloudMask;
   } else {
     float belowSource = 1.0 - smoothstep(pos.y - 0.02, pos.y + 0.04, texCoord.y);
-    pixVal *= belowSource;
+    float cgLateralConfine = 1.0 - smoothstep(0.26, 0.62, abs(lightningTexCoord.x - 0.5));
+    pixVal *= belowSource * cgLateralConfine;
   }
 
   float channelFade = clamp(absIntensity * (strikeTypeSign > 0.0 ? 0.10 : 0.08), 0.0, 1.0);
@@ -421,19 +422,20 @@ vec4 getAirColor(vec2 fragCoordIn)
   vec2 precipNoiseUv = vec2(texCoord.x * resolution.x * 0.040 + iterNum * 0.010,
                             texCoord.y * resolution.y * 0.098 - iterNum * 0.064);
   float streakNoise = texture(noiseTex, precipNoiseUv).r;
-  float streakMask = smoothstep(0.48, 0.99, streakNoise + precipShaft * 0.36);
-  float shaftEnvelope = smoothstep(0.08, 0.92, texCoord.y) * (1.0 - smoothstep(0.92, 1.0, texCoord.y));
-  float precipShaftOpacity = precipShaft * streakMask * shaftEnvelope;
+  float streakMask = smoothstep(0.54, 1.00, streakNoise + precipShaft * 0.40);
+  float shaftEnvelope = smoothstep(0.05, 0.95, texCoord.y) * (1.0 - smoothstep(0.94, 1.0, texCoord.y));
+  float verticalCurtain = smoothstep(0.20, 0.92, texCoord.y);
+  float precipShaftOpacity = precipShaft * streakMask * shaftEnvelope * verticalCurtain;
 
   float sparkleNoise = texture(noiseTex, vec2(texCoord.x * resolution.x * 0.125 - iterNum * 0.025,
                                               texCoord.y * resolution.y * 0.185 + iterNum * 0.017)).r;
   float precipSparkleMask = smoothstep(0.76, 1.0, sparkleNoise + precipShaft * 0.30);
-  float precipSparkleGlow = precipSparkleMask * precipShaft * precipitationSparkle;
+  float precipSparkleGlow = precipSparkleMask * precipShaft * precipitationSparkle * 0.72;
 
   float silverLining = smoothstep(0.40, 0.98, cloudNoiseFine) * smoothstep(0.18, 0.88, cloudBody) * (0.34 + 0.86 * lightIntensity);
   vec3 cloudCoreCol = mix(vec3(0.60, 0.66, 0.74), vec3(0.92, 0.96, 1.0), clamp(cloudShade * 1.20, 0.0, 1.0));
   vec3 cloudShadowCol = vec3(0.27, 0.34, 0.46);
-  vec3 precipShaftCol = mix(vec3(0.55, 0.70, 0.98), vec3(0.84, 0.94, 1.0), clamp(precipitationSparkle * 0.9, 0.0, 1.0));
+  vec3 precipShaftCol = mix(vec3(0.46, 0.64, 0.96), vec3(0.78, 0.91, 1.0), clamp(precipitationSparkle * 0.8, 0.0, 1.0));
   vec3 precipMistCol = mix(vec3(0.72, 0.80, 0.92), vec3(0.50, 0.61, 0.84), clamp(precipitationMistStrength * 0.78, 0.0, 1.0));
 
   float cloudContrast = clamp(cloudShade * (0.74 + 0.34 * billow + cloudTower * 0.12), 0.0, 1.0);
@@ -442,13 +444,13 @@ vec4 getAirColor(vec2 fragCoordIn)
   cloudCol += vec3(0.07, 0.09, 0.12) * cauliflowerRidge;
   cloudCol = mix(cloudCol, cloudShadowCol * 0.85, cloudCavity * 0.22);
   cloudCol = mix(cloudCol, precipMistCol, precipMist * 0.52);
-  cloudCol += precipShaftCol * (precipShaftOpacity * 0.56 + precipSparkleGlow * 0.40);
+  cloudCol += precipShaftCol * (precipShaftOpacity * 0.88 + precipSparkleGlow * 0.24);
 
   float precipDensity = precipMass * (1.05 * precipitationShaftStrength + 0.76 * precipitationMistStrength);
   float totalDensity = cloudDensity + precipDensity;
 
   float cloudOpacity = clamp((1.0 - (1.0 / (1.0 + totalDensity))) * (0.95 + 0.24 * precipitationMistStrength), 0.0, 0.98);
-  cloudOpacity = max(cloudOpacity, clamp(precipShaftOpacity * 0.48 + precipMist * 0.30, 0.0, 0.80));
+  cloudOpacity = max(cloudOpacity, clamp(precipShaftOpacity * 0.62 + precipMist * 0.26, 0.0, 0.86));
 
   const vec3 smokeThinCol = vec3(0.8, 0.51, 0.26);
   const vec3 smokeThickCol = vec3(0., 0., 0.);
