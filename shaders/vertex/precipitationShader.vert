@@ -577,7 +577,7 @@ void main()
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
           float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.05, 0.52), 4.5 + abs(lightningData[INTENSITY]) * (1.9 + multiStrokeLightning * 1.35));
           bool lightningChannelFree = lightningWarmupDone && (lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold);
-          bool cloudAnchoredSource = water[CLOUD] > threshold * 1.10 && texCoord.y >= 0.14 && texCoord.y <= 0.97;
+          bool cloudAnchoredSource = water[CLOUD] > threshold * 1.30 && texCoord.y >= 0.22 && texCoord.y <= 0.96;
           bool overdueStormRecharge = lightningWarmupDone && lightningChannelFree && previousLightningAge > (72.0 + 24.0 * lightningMinInterval)
                                     && cloudPlusPrecipDensity > lightningCloudDensityThreshold + 0.22
                                     && electricPotential > 0.20

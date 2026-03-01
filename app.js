@@ -1168,9 +1168,11 @@ function createHdrFBO() { hdrFBO = new FBO(canvas.width, canvas.height, gl.RGBA1
 function createBloomFBOs()
 {
   let res = new Vec2D(canvas.width, canvas.height);
+  const cores = navigator.hardwareConcurrency || 4;
+  const maxBloomLevels = isMobileLikeDevice() ? 5 : (cores <= 4 ? 6 : 8);
 
   bloomFBOs.length = 0;           // empty array
-  for (let i = 0; i < 100; i++) { // max bloom iterations
+  for (let i = 0; i < maxBloomLevels; i++) { // capped bloom iterations for performance
     let width = res.x >> i;       // right shift to devide by 2 multiple times
     let height = res.y >> i;
 
@@ -1190,11 +1192,13 @@ function createAmbientLightFBOs()
   emittedLightFBO = new FBO(sim_res_x, sim_res_y, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.LINEAR);
 
   let res = new Vec2D(sim_res_x, sim_res_y);
+  const cores = navigator.hardwareConcurrency || 4;
+  const maxAmbientLevels = isMobileLikeDevice() ? 4 : (cores <= 4 ? 5 : 7);
 
   // console.log('createAmbientLightFBOs');
 
   ambientLightFBOs.length = 0;   // empty array
-  for (let i = 0; i < 80; i++) { // max iterations
+  for (let i = 0; i < maxAmbientLevels; i++) { // capped iterations for performance
     let width = res.x >> i;      // right shift to devide by 2 multiple times
     let height = res.y >> i;
 

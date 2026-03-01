@@ -179,12 +179,16 @@ function generateLightningBolt(width, height, seed)
   trunkPoints.push({x : startX, y : startY});
   ctx.lineWidth = lineWidth;
 
-  while (startY < height) {
-    const nextX = startX + Math.sin(angle) * 1.02;
-    const nextY = startY + Math.cos(angle) * 1.14;
+  const targetSegments = Math.max(1920, Math.floor(height * 1.55));
+  const baseStepY = height / targetSegments;
 
-    angle += (rand() - 0.5) * 0.74;
-    angle -= (angle - targetAngle) * 0.08;
+  for (let seg = 0; seg < targetSegments && startY < height; seg++) {
+    const progress = seg / Math.max(targetSegments - 1, 1);
+    const nextX = startX + Math.sin(angle) * (0.50 + baseStepY * 0.42);
+    const nextY = startY + Math.max(0.22, Math.cos(angle) * (baseStepY * 1.34));
+
+    angle += (rand() - 0.5) * (0.46 + (1.0 - progress) * 0.20);
+    angle -= (angle - targetAngle) * 0.11;
 
     ctx.lineTo(nextX, nextY);
     trunkPoints.push({x : nextX, y : nextY});
@@ -192,11 +196,12 @@ function generateLightningBolt(width, height, seed)
     startX = nextX;
     startY = nextY;
 
-    if (rand() < 0.0048 * (1. - nextY / height)) {
+    const branchChance = (0.0068 + (1.0 - progress) * 0.0055) * (1.0 + Math.max(lineWidth - 3.0, 0.0) * 0.05);
+    if (rand() < branchChance) {
       ctx.strokeStyle = genLightningColor(lineWidth);
       ctx.stroke();
       drawJunction(nextX, nextY, lineWidth);
-      drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.82, lineWidth * (0.26 + 0.12 * rand()));
+      drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.86, lineWidth * (0.24 + 0.14 * rand()));
       ctx.beginPath();
       ctx.moveTo(nextX, nextY);
       ctx.lineWidth = lineWidth;
