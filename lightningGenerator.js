@@ -69,6 +69,9 @@ function generateLightningBolt(width, height, seed)
     ctx.fill();
   }
 
+  const trunkXs = [];
+  const trunkYs = [];
+
   ctx.beginPath();
 
   let startX = width * (0.5 + (rand() - 0.5) * 0.08);
@@ -78,6 +81,8 @@ function generateLightningBolt(width, height, seed)
   const targetAngle = 0.0;
 
   ctx.moveTo(startX, startY);
+  trunkXs.push(startX);
+  trunkYs.push(startY);
   ctx.lineWidth = lineWidth;
 
   while (startY < height) {
@@ -88,6 +93,8 @@ function generateLightningBolt(width, height, seed)
     angle -= (angle - targetAngle) * 0.08;
 
     ctx.lineTo(nextX, nextY);
+    trunkXs.push(nextX);
+    trunkYs.push(nextY);
 
     startX = nextX;
     startY = nextY;
@@ -105,21 +112,17 @@ function generateLightningBolt(width, height, seed)
   ctx.strokeStyle = genLightningColor(lineWidth);
   ctx.stroke();
 
-  // Add a connected core pass to avoid perceived gaps between stepped segments.
+  // Re-stroke the exact trunk path as a thin plasma core so every CG segment stays linked.
   ctx.globalCompositeOperation = 'lighter';
-  ctx.beginPath();
-  ctx.moveTo(width * 0.5, 0.0);
-  let coreX = width * 0.5;
-  let coreAngle = 0.0;
-  for (let coreY = 0.0; coreY < height; coreY += 1.0) {
-    coreAngle += (rand() - 0.5) * 0.22;
-    coreAngle *= 0.92;
-    coreX += Math.sin(coreAngle) * 0.42;
-    ctx.lineTo(coreX, coreY + 1.0);
+  if (trunkXs.length > 1) {
+    ctx.beginPath();
+    ctx.moveTo(trunkXs[0], trunkYs[0]);
+    for (let i = 1; i < trunkXs.length; i++)
+      ctx.lineTo(trunkXs[i], trunkYs[i]);
+    ctx.lineWidth = Math.max(1.25, lineWidth * 0.24);
+    ctx.strokeStyle = 'rgb(228,228,228)';
+    ctx.stroke();
   }
-  ctx.lineWidth = Math.max(1.4, lineWidth * 0.22);
-  ctx.strokeStyle = 'rgb(220,220,220)';
-  ctx.stroke();
   ctx.globalCompositeOperation = 'source-over';
 
   return ctx.getImageData(0, 0, width, height);

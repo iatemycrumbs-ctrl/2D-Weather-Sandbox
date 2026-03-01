@@ -311,12 +311,16 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
                    texture(lightningTex, lightningTexCoord - vec2(px.x, 0.0)).r);
   float upDown = max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y)).r,
                      texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r);
-  float diag = max(max(texture(lightningTex, lightningTexCoord + vec2(px.x, px.y)).r,
-                       texture(lightningTex, lightningTexCoord + vec2(-px.x, px.y)).r),
-                   max(texture(lightningTex, lightningTexCoord + vec2(px.x, -px.y)).r,
-                       texture(lightningTex, lightningTexCoord + vec2(-px.x, -px.y)).r));
 
-  float pixVal = max(trunk, max(max(side, upDown) * 0.55, diag * 0.62));
+  float pixVal = max(trunk, max(side, upDown) * 0.55);
+  // Only CG requires diagonal bridge sampling; skipping this for IC reduces texture fetch cost.
+  if (strikeTypeSign > 0.0) {
+    float diag = max(max(texture(lightningTex, lightningTexCoord + vec2(px.x, px.y)).r,
+                         texture(lightningTex, lightningTexCoord + vec2(-px.x, px.y)).r),
+                     max(texture(lightningTex, lightningTexCoord + vec2(px.x, -px.y)).r,
+                         texture(lightningTex, lightningTexCoord + vec2(-px.x, -px.y)).r));
+    pixVal = max(pixVal, diag * 0.62);
+  }
 
   // Keep IC in cloud and CG mostly below source cloud.
   if (strikeTypeSign < 0.0) {
