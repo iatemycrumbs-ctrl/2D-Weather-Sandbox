@@ -246,13 +246,13 @@ vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float sourceToGround = max(pos.y, 0.08);
   float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
 
-  float branchCurve = sin(verticalTravel * 7.2 + random2d(pos * 19.3) * 6.2831) * (0.032 + (1.0 - verticalTravel) * 0.024);
+  float branchCurve = sin(verticalTravel * 8.0 + random2d(pos * 19.3) * 6.2831) * (0.022 + (1.0 - verticalTravel) * 0.016);
   float leaderSeg = floor(verticalTravel * 24.0) / 24.0;
-  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.070 + (1.0 - verticalTravel) * 0.050);
-  float bow = sin(verticalTravel * 3.14159 * (1.6 + random2d(pos * 43.1))) * (0.020 + (1.0 - verticalTravel) * 0.030);
-  float microZag = sin(verticalTravel * 72.0 + random2d(pos * 53.2) * 6.2831) * 0.010;
-  float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.16;
-  uv.x = 0.5 + (wrappedDx + branchCurve + leaderJitter + bow + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.86;
+  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.046 + (1.0 - verticalTravel) * 0.032);
+  float bow = sin(verticalTravel * 3.14159 * (1.7 + random2d(pos * 43.1))) * (0.014 + (1.0 - verticalTravel) * 0.022);
+  float microZag = sin(verticalTravel * 78.0 + random2d(pos * 53.2) * 6.2831) * 0.006;
+  float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.10;
+  uv.x = 0.5 + (wrappedDx + branchCurve + leaderJitter + bow + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.74;
   uv.y = verticalTravel * 1.32;
   return uv;
 }
@@ -321,7 +321,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     pixVal *= icCloudBand * localCloudMask;
   } else {
     float belowSource = 1.0 - smoothstep(pos.y - 0.02, pos.y + 0.04, texCoord.y);
-    float cgLateralConfine = 1.0 - smoothstep(0.26, 0.62, abs(lightningTexCoord.x - 0.5));
+    float cgLateralConfine = 1.0 - smoothstep(0.20, 0.48, abs(lightningTexCoord.x - 0.5));
     pixVal *= belowSource * cgLateralConfine;
   }
 

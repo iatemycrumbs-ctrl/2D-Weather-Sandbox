@@ -41,9 +41,9 @@ function generateLightningBolt(width, height, seed)
 
   ctx.beginPath();
 
-  let startX = width * (0.5 + (rand() - 0.5) * 0.16);
+  let startX = width * (0.5 + (rand() - 0.5) * 0.08);
   let startY = 0;
-  let angle = (rand() - 0.5) * 0.45;
+  let angle = (rand() - 0.5) * 0.24;
   let lineWidth = Math.max(4.2, width / 250.0);
   const targetAngle = 0.0;
 
@@ -54,7 +54,7 @@ function generateLightningBolt(width, height, seed)
     const nextX = startX + Math.sin(angle) * 1.18;
     const nextY = startY + Math.cos(angle) * 1.30;
 
-    angle += (rand() - 0.5) * 1.05;
+    angle += (rand() - 0.5) * 0.74;
     angle -= (angle - targetAngle) * 0.08;
 
     ctx.lineTo(nextX, nextY);
@@ -62,10 +62,10 @@ function generateLightningBolt(width, height, seed)
     startX = nextX;
     startY = nextY;
 
-    if (rand() < 0.008 * (1. - nextY / height)) {
+    if (rand() < 0.0048 * (1. - nextY / height)) {
       ctx.strokeStyle = genLightningColor(lineWidth);
       ctx.stroke();
-      drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 1.2, lineWidth * (0.32 + 0.18 * rand()));
+      drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.82, lineWidth * (0.26 + 0.12 * rand()));
       ctx.beginPath();
       ctx.moveTo(nextX, nextY);
       ctx.lineWidth = lineWidth;
@@ -88,7 +88,7 @@ function generateLightningBolt(width, height, seed)
       const nextX = startX + Math.sin(angle);
       const nextY = startY + Math.cos(angle);
 
-      angle += (rand() - 0.5) * 0.68;
+      angle += (rand() - 0.5) * 0.42;
       angle -= (angle - targetAngle) * 0.08;
 
       ctx.lineTo(nextX, nextY);
@@ -96,7 +96,7 @@ function generateLightningBolt(width, height, seed)
       startX = nextX;
       startY = nextY;
 
-      if (rand() < 0.018) {
+      if (rand() < 0.014) {
         ctx.strokeStyle = genLightningColor(line_width);
         ctx.stroke();
         line_width -= 0.2;
@@ -104,8 +104,8 @@ function generateLightningBolt(width, height, seed)
         if (line_width < 0.1)
           return;
 
-        if (rand() < 0.04)
-          drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.9, line_width * 0.86);
+        if (rand() < 0.025)
+          drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.62, line_width * 0.82);
 
         ctx.beginPath();
         ctx.moveTo(nextX, nextY);
