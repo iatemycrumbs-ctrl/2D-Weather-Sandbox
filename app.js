@@ -455,7 +455,7 @@ const guiControls_default = {
   aboveZeroThreshold : 1.0, // PRECIPITATION
   subZeroThreshold : 0.005, // 0.01
   spawnChance : 0.00005,
-  lightningChanceMult : 0.002,
+  lightningChanceMult : 0.004,
   lightningMinInterval : 1,// 30. 10 to 50
   snowDensity : 0.2,        // 0.3
   fallSpeed : 0.0003,
@@ -474,11 +474,15 @@ const guiControls_default = {
   month : 6.65, // Northern hemisphere summer solstice
   sunAngle : 9.9,
   dayNightCycle : true,
+  timeCycleRate : 1.0,
+  timeCycleSmoothing : 0.35,
   accelerateNight : true,
   greenhouseGases : 0.001,
   waterGreenHouseEffect : 0.0015,
   IR_rate : 1.0,
   radiationHaze : 1.0,
+  enableShaders : true,
+  animateSimulationUI : true,
   introShaderQuality : 1.0,
   introLightningVisualStrength : 1.0,
   introPrecipVisualStrength : 1.0,
@@ -532,7 +536,7 @@ const guiControls_default = {
   precipitationSizeSpectrum : 1.0,
   hailShatterFactor : 1.0,
   stormMoistureLift : 1.0,
-  lightningFrequencyBoost : 1.0,
+  lightningFrequencyBoost : 1.25,
   dryLightningAllowance : 0.35,
   stormPulseStrength : 0.0,
   lightningRecoveryBoost : 1.0,
@@ -1756,11 +1760,21 @@ function resetTransientSimulationObjects()
 
 function applyIntroShaderSettings()
 {
+  const introEnableShaders = getEl('introEnableShaders');
+  guiControls_default.enableShaders = !introEnableShaders || introEnableShaders.checked;
   guiControls_default.lightningBloomStrength = readNumericInput('introLightningFxSel', guiControls_default.lightningBloomStrength ?? 1.0);
   guiControls_default.precipitationShaftStrength = readNumericInput('introPrecipFxSel', guiControls_default.precipitationShaftStrength ?? 1.0);
   guiControls_default.precipitationMistStrength = clamp(guiControls_default.precipitationShaftStrength * 0.9, 0.35, 2.2);
   guiControls_default.precipitationSparkle = clamp(0.55 + guiControls_default.precipitationShaftStrength * 0.25, 0.1, 2.0);
   guiControls_default.radiationHaze = readNumericInput('introShaderQualitySel', guiControls_default.radiationHaze ?? 1.0);
+
+  if (!guiControls_default.enableShaders) {
+    guiControls_default.radiationHaze = 0.25;
+    guiControls_default.lightningBloomStrength = 0.25;
+    guiControls_default.precipitationShaftStrength = 0.30;
+    guiControls_default.precipitationMistStrength = 0.20;
+    guiControls_default.precipitationSparkle = 0.15;
+  }
 
   const introGraphicsPreset = getEl('introGraphicsPreset');
   if (introGraphicsPreset && introGraphicsPreset.value)
@@ -2130,7 +2144,7 @@ function ensureTornadoLabel()
   tornadoLabelEl.style.color = '#d8f0ff';
   tornadoLabelEl.style.font = '12px monospace';
   tornadoLabelEl.style.display = 'none';
-  tornadoLabelEl.innerText = '🌪 Tornado Signature';
+  tornadoLabelEl.innerText = '🌪 Vortex Signature';
   document.body.appendChild(tornadoLabelEl);
   return tornadoLabelEl;
 }
@@ -2146,34 +2160,68 @@ function updateTornadoLabel()
   let best = 0.0;
   let bestX = 0;
   let bestY = 0;
-  const samples = 28;
-  gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_0);
-  gl.readBuffer(gl.COLOR_ATTACHMENT0);
+  let bestCloud = 0.0;
+  let bestWallType = 1;
+  const samples = 36;
   const px = new Float32Array(4);
+  const wx = new Float32Array(4);
+  const wallPx = new Int8Array(4);
+
   for (let i = 0; i < samples; i++) {
     const sx = Math.floor((i / samples) * (sim_res_x - 1));
-    const sy = Math.floor(sim_res_y * 0.05 + (Math.sin(i * 2.73 + frameNum * 0.03) * 0.5 + 0.5) * sim_res_y * 0.28);
+    const sy = Math.floor(sim_res_y * 0.03 + (Math.sin(i * 2.73 + frameNum * 0.03) * 0.5 + 0.5) * sim_res_y * 0.35);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, frameBuff_0);
+    gl.readBuffer(gl.COLOR_ATTACHMENT0);
     gl.readPixels(sx, sy, 1, 1, gl.RGBA, gl.FLOAT, px);
+    gl.readBuffer(gl.COLOR_ATTACHMENT1);
+    gl.readPixels(sx, sy, 1, 1, gl.RGBA, gl.FLOAT, wx);
+    gl.readBuffer(gl.COLOR_ATTACHMENT2);
+    gl.readPixels(sx, sy, 1, 1, gl.RGBA_INTEGER, gl.BYTE, wallPx);
+
     const vx = px[0];
     const vy = px[1];
     const buoy = Math.max(px[3] - 290.0, 0.0);
-    const strength = Math.abs(vx * vy) + Math.max(vy, 0.0) * 0.7 + buoy * 0.0006;
+    const cloud = Math.max(wx[1], 0.0);
+    const lowLevel = 1.0 - sy / Math.max(sim_res_y, 1);
+    const strength = (Math.abs(vx * vy) + Math.max(vy, 0.0) * 0.7 + buoy * 0.0006) * (0.5 + cloud * 1.2) * (0.7 + lowLevel * 0.6);
+
     if (strength > best) {
       best = strength;
       bestX = sx;
       bestY = sy;
+      bestCloud = cloud;
+      bestWallType = wallPx[0];
     }
   }
 
-  if (best > 0.0035) {
-    label.style.display = 'block';
-    label.style.left = (simToScreenX(bestX) + 8) + 'px';
-    label.style.top = (simToScreenY(bestY) - 16) + 'px';
-    label.innerText = '🌪 Tornado Signature  ' + (best * 1000.0).toFixed(1);
-  } else {
+  if (best < 0.015 || bestCloud < 0.01) {
     label.style.display = 'none';
+    return;
   }
+
+  const overWater = bestWallType == 2;
+  const tornadoLikely = best > 0.040 && bestCloud > 0.08;
+  const waterspoutLikely = overWater && best > 0.020 && bestCloud > 0.05;
+  const landspoutLikely = !overWater && best > 0.020 && best < 0.050 && bestCloud > 0.04;
+
+  let vortexText = '🌪 Tornado';
+  let border = 'rgba(255,200,120,0.85)';
+  if (waterspoutLikely) {
+    vortexText = '🌊 Waterspout';
+    border = 'rgba(120,220,255,0.88)';
+  } else if (landspoutLikely && !tornadoLikely) {
+    vortexText = '🌫️ Landspout';
+    border = 'rgba(212,196,154,0.88)';
+  }
+
+  label.style.display = 'block';
+  label.style.left = (simToScreenX(bestX) + 8) + 'px';
+  label.style.top = (simToScreenY(bestY) - 16) + 'px';
+  label.style.borderColor = border;
+  label.innerText = `${vortexText} ${Math.round(clamp(best * 2500.0, 0.0, 99.0))}%`;
 }
+
 
 var soundingData;
 
@@ -4333,16 +4381,17 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningShapeMode'), getLightningShapeMode());
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
+    const shaderFxMult = guiControls.enableShaders ? 1.0 : 0.0;
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength * shaderFxMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength * shaderFxMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle * shaderFxMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), 0.35 * (1.0 - shaderFxMult) + guiControls.ambientScattering * shaderFxMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), 0.75 * (1.0 - shaderFxMult) + guiControls.cloudLayerComplexity * shaderFxMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength * shaderFxMult);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightIntensity'), guiControls.flashlightIntensity);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightFocus'), guiControls.flashlightFocus);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightRange'), guiControls.flashlightRange);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.radiationHaze);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.enableShaders ? guiControls.radiationHaze : 0.2);
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
     updateLightningRodUniforms();
@@ -4377,6 +4426,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   function setupDatGui(strGuiControls)
   {
     datGui = new dat.GUI();
+    if (datGui.domElement)
+      datGui.domElement.classList.toggle('sim-ui-animated', guiControls_default.animateSimulationUI);
     let loadedGuiControls = {};
     try {
       const parsedSettings = JSON.parse(strGuiControls); // load settings object
@@ -4435,25 +4486,25 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       if (profile == 'Calm') {
         guiControls.turbulentMix = 0.75;
         guiControls.stormOrganization = 0.75;
-        guiControls.lightningChanceMult = 0.0012;
+        guiControls.lightningChanceMult = 0.0024;
         guiControls.spawnChance = 0.00004;
         guiControls.precipitationEffectMult = 0.9;
       } else if (profile == 'Balanced') {
         guiControls.turbulentMix = 1.0;
         guiControls.stormOrganization = 1.0;
-        guiControls.lightningChanceMult = 0.002;
+        guiControls.lightningChanceMult = 0.004;
         guiControls.spawnChance = 0.00005;
         guiControls.precipitationEffectMult = 1.0;
       } else if (profile == 'Dynamic') {
         guiControls.turbulentMix = 1.25;
         guiControls.stormOrganization = 1.25;
-        guiControls.lightningChanceMult = 0.0032;
+        guiControls.lightningChanceMult = 0.0058;
         guiControls.spawnChance = 0.00006;
         guiControls.precipitationEffectMult = 1.18;
       } else {
         guiControls.turbulentMix = 1.55;
         guiControls.stormOrganization = 1.45;
-        guiControls.lightningChanceMult = 0.0040;
+        guiControls.lightningChanceMult = 0.0070;
         guiControls.spawnChance = 0.00007;
         guiControls.precipitationEffectMult = 1.30;
       }
@@ -4831,9 +4882,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1i(gl.getUniformLocation(boundaryProgram, 'allowCaves'), guiControls.allowCaves ? 1 : 0);
       })
       .name('Allow Caves');
-    var radiation_folder = datGui.addFolder('Radiation');
+    var radiation_folder = datGui.addFolder('Time & Radiation');
 
     radiation_folder.add(guiControls, 'timeOfDay', 0.0, 23.96, 0.01).onChange(onUpdateTimeOfDaySlider).name('Time of day').listen();
+    radiation_folder.add(guiControls, 'timeCycleRate', 0.1, 8.0, 0.05).name('Cycle Speed');
+    radiation_folder.add(guiControls, 'timeCycleSmoothing', 0.0, 0.95, 0.01).name('Cycle Smoothing');
 
     radiation_folder.add(guiControls, 'dayNightCycle').name('Day/Night Cycle').listen();
 
@@ -4877,7 +4930,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('IR Multiplier');
     radiation_folder.add(guiControls, 'radiationHaze', 0.2, 2.5, 0.01).name('Radiation Haze').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
-      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.radiationHaze);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.enableShaders ? guiControls.radiationHaze : 0.2);
     });
 
     var water_folder = datGui.addFolder('Water');
@@ -5133,7 +5186,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Lightning Recovery Boost');
 
-    precipitation_folder.add(guiControls, 'lightningChanceMult', 0, 10, 0.1)
+    precipitation_folder.add(guiControls, 'lightningChanceMult', 0, 10, 0.001)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.lightningChanceMult);
@@ -5425,6 +5478,26 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       applySimulationProfile(guiControls.simulationProfile);
     });
 
+    graphics_folder.add(guiControls, 'enableShaders').name('Enable Shader FX').onChange(function() { setGuiUniforms(); });
+    graphics_folder.add(guiControls, 'animateSimulationUI').name('Animated Simulation UI').onChange(function() {
+      if (datGui && datGui.domElement)
+        datGui.domElement.classList.toggle('sim-ui-animated', guiControls.animateSimulationUI);
+    });
+
+    var graphicsShader_folder = graphics_folder.addFolder('WebGL Shader Settings');
+    graphicsShader_folder.add(guiControls, 'radiationHaze', 0.2, 2.5, 0.01).name('Shader Atmosphere').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.enableShaders ? guiControls.radiationHaze : 0.2);
+    });
+    graphicsShader_folder.add(guiControls, 'ambientScattering', 0.3, 2.5, 0.01).name('Ambient Scatter').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
+    });
+    graphicsShader_folder.add(guiControls, 'lightningBloomStrength', 0.2, 2.5, 0.01).name('Lightning Bloom').onChange(function() {
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
+    });
+
     runtimeDeviceInfo = {
       summary : getDeviceInfoSummary(),
       resolution : `${window.innerWidth} x ${window.innerHeight}`,
@@ -5665,16 +5738,17 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningShapeMode'), getLightningShapeMode());
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
+    const shaderFxMult = guiControls.enableShaders ? 1.0 : 0.0;
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength * shaderFxMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength * shaderFxMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle * shaderFxMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), 0.35 * (1.0 - shaderFxMult) + guiControls.ambientScattering * shaderFxMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), 0.75 * (1.0 - shaderFxMult) + guiControls.cloudLayerComplexity * shaderFxMult);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength * shaderFxMult);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightIntensity'), guiControls.flashlightIntensity);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightFocus'), guiControls.flashlightFocus);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightRange'), guiControls.flashlightRange);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.radiationHaze);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.enableShaders ? guiControls.radiationHaze : 0.2);
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
     datGui.show(); // unhide
@@ -7782,11 +7856,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         else if (guiControls.tool == 'TOOL_WALL_INDUSTRIAL')
           inputType = 16;
         else if (guiControls.tool == 'TOOL_NUCLEAR_POWERPLANT')
-          inputType = 16;
+          inputType = 31;
         else if (guiControls.tool == 'TOOL_SUPER_INDUSTRIAL')
-          inputType = 16;
+          inputType = 30;
         else if (guiControls.tool == 'TOOL_SKYSCRAPER')
-          inputType = 24;
+          inputType = 32;
         else if (guiControls.tool == 'TOOL_LIGHTNING_ROD')
           inputType = -1;
         else if (guiControls.tool == 'TOOL_ARTIFICIAL_LIGHTNING')
@@ -7859,11 +7933,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         let nightAccelerationActive = !airplaneMode && guiControls.dayNightCycle && guiControls.accelerateNight && guiControls.sunAngle < 0.;
 
         if (guiControls.dayNightCycle && !guiControls.paused) {
-          if (airplaneMode) {
-            updateSunlight(1.0 / 3600.0 / 60);                                                                    // increase solar time at real speed: 1/60 seconds per frame
-          } else {
-            updateSunlight(timePerIteration * guiControls.IterPerFrame * (nightAccelerationActive ? 10.0 : 1.0)); // increase solar time
-          }
+          const cycleSpeed = Math.max(guiControls.timeCycleRate, 0.05);
+          const smoothing = clamp(guiControls.timeCycleSmoothing, 0.0, 0.95);
+          const cycleMult = nightAccelerationActive ? 2.4 : 1.0;
+          let deltaHours = airplaneMode ? (1.0 / 3600.0 / 60.0) : (timePerIteration * guiControls.IterPerFrame * cycleSpeed * cycleMult);
+          deltaHours *= (1.0 - smoothing * 0.8);
+          updateSunlight(deltaHours);
         }
 
         gl.useProgram(lightingProgram);

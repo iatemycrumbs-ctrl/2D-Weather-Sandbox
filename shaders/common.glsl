@@ -62,6 +62,9 @@ precision highp isampler2D;
 #define WALLTYPE_URBAN 4
 #define WALLTYPE_RUNWAY 5
 #define WALLTYPE_INDUSTRIAL 6
+#define WALLTYPE_SUPER_INDUSTRIAL 7
+#define WALLTYPE_SKYSCRAPER 8
+#define WALLTYPE_NUCLEAR 9
 
 #define DISTANCE 1      // manhattan distance to nearest wall                   0 to 127
 #define VERT_DISTANCE 2 // height above/below ground. Surface = 0               -127 to 127

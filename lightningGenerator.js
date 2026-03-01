@@ -59,6 +59,19 @@ function stampTrunkSnake(luminanceData, width, height, trunkPoints)
     luminanceData[idx] = Math.max(luminanceData[idx], value);
   }
 
+  function stampCore(x, y, value)
+  {
+    stampPixel(x, y, value);
+    stampPixel(x - 1, y, Math.floor(value * 0.82));
+    stampPixel(x + 1, y, Math.floor(value * 0.82));
+    stampPixel(x, y - 1, Math.floor(value * 0.82));
+    stampPixel(x, y + 1, Math.floor(value * 0.82));
+    stampPixel(x - 1, y - 1, Math.floor(value * 0.70));
+    stampPixel(x + 1, y - 1, Math.floor(value * 0.70));
+    stampPixel(x - 1, y + 1, Math.floor(value * 0.70));
+    stampPixel(x + 1, y + 1, Math.floor(value * 0.70));
+  }
+
   // Bresenham-style stamping keeps the trunk as a single continuous snake
   // without introducing chunky duplicated side segments.
   for (let i = 1; i < trunkPoints.length; i++) {
@@ -74,7 +87,7 @@ function stampTrunkSnake(luminanceData, width, height, trunkPoints)
     let err = dx - dy;
 
     while (true) {
-      stampPixel(x0, y0, 230);
+      stampCore(x0, y0, 232);
       if (x0 == x1 && y0 == y1)
         break;
 
