@@ -7309,6 +7309,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       : createFallbackLightningData(width, height);
 
     generateLightningTexture(pending.textureIndex, width, height, lumData);
+    pendingLightningBuildCount--;
+    maybeTerminateLightningWorker();
     pending.resolve(true);
   };
 
@@ -7320,14 +7322,27 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       pending.resolve(false);
     });
     pendingLightningTextureRequests.clear();
+    pendingLightningBuildCount = 0;
+    maybeTerminateLightningWorker();
   };
 
   const lightningTexturePlan = getLightningTexturePlan();
   numLightningTextures = Math.max(4, Math.min(lightningTexturePlan.count, 8));
+  let pendingLightningBuildCount = 0;
+  let lightningWorkerAlive = true;
+
+  function maybeTerminateLightningWorker()
+  {
+    if (lightningWorkerAlive && pendingLightningBuildCount <= 0) {
+      lightningGeneratorWorker.terminate();
+      lightningWorkerAlive = false;
+    }
+  }
 
   function requestLightningTextureForIndex(textureIndex, seed)
   {
     const reqId = lightningTextureRequestCounter++;
+    pendingLightningBuildCount++;
     return new Promise((resolve) => {
       const timeoutId = setTimeout(() => {
         const pending = pendingLightningTextureRequests.get(reqId);
@@ -7335,8 +7350,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           return;
         pendingLightningTextureRequests.delete(reqId);
         generateLightningTexture(textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height));
+        pendingLightningBuildCount--;
+        maybeTerminateLightningWorker();
         pending.resolve(false);
-      }, 2500);
+      }, 2200);
 
       pendingLightningTextureRequests.set(reqId, {
         resolve,
@@ -7356,12 +7373,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     });
   }
 
+  // Fast startup path: upload fallback textures immediately, then replace in background.
+  for (let i = 0; i < numLightningTextures; i++)
+    generateLightningTexture(i, lightningTexturePlan.width, lightningTexturePlan.height, createFallbackLightningData(lightningTexturePlan.width, lightningTexturePlan.height));
+
   for (let i = 0; i < numLightningTextures; i++) {
     const seed = (Date.now() + i * 2654435761) >>> 0;
-    await requestLightningTextureForIndex(i, seed);
+    requestLightningTextureForIndex(i, seed);
   }
-
-  lightningGeneratorWorker.terminate();
 
   await loadingBar.set(90, 'Setting up FBO`s');
 
