@@ -29,6 +29,44 @@ onmessage = (event) => {
       }
     }
 
+    // Keep only pixels connected to the top of frame so CG channels render as one continuous bolt.
+    // This removes anti-aliased speckles and detached branch fragments that appear as scattered segments.
+    const connectedMask = new Uint8Array(width * height);
+    const visitQueue = new Int32Array(width * height);
+    const minConnectedLum = 20;
+    let queueHead = 0;
+    let queueTail = 0;
+
+    for (let x = 0; x < width; x++) {
+      const idx = x;
+      if (luminanceData[idx] >= minConnectedLum) {
+        connectedMask[idx] = 1;
+        visitQueue[queueTail++] = idx;
+      }
+    }
+
+    while (queueHead < queueTail) {
+      const idx = visitQueue[queueHead++];
+      const x = idx % width;
+      const y = (idx / width) | 0;
+
+      for (let ny = Math.max(0, y - 1); ny <= Math.min(height - 1, y + 1); ny++) {
+        for (let nx = Math.max(0, x - 1); nx <= Math.min(width - 1, x + 1); nx++) {
+          const nIdx = ny * width + nx;
+          if (connectedMask[nIdx] || luminanceData[nIdx] < minConnectedLum)
+            continue;
+
+          connectedMask[nIdx] = 1;
+          visitQueue[queueTail++] = nIdx;
+        }
+      }
+    }
+
+    for (let i = 0; i < luminanceData.length; i++) {
+      if (!connectedMask[i])
+        luminanceData[i] = 0;
+    }
+
     postMessage({id : msg.id, width, height, luminanceData}, [ luminanceData.buffer ]);
   } catch (err) {
     const fallback = new Uint8Array(width * height);
