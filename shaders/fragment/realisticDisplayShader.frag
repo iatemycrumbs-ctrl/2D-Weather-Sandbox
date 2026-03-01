@@ -281,141 +281,59 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningIntensity)
 {
   float signedIntensity = currentLightningIntensity;
-  float strikeTypeSign = signedIntensity < 0.0 ? -1.0 : 1.0; // <0 IC, >0 CG
-  currentLightningIntensity = abs(currentLightningIntensity);
-  vec2 lightningTexCoord = texCoord;
+  float strikeTypeSign = signedIntensity < 0.0 ? -1.0 : 1.0;
+  float absIntensity = abs(currentLightningIntensity);
+  if (absIntensity < 0.00001)
+    return vec3(0.0);
 
+  vec2 lightningTexCoord = texCoord;
   lightningTexCoord.x -= mod(pos.x, 1.0);
   lightningTexCoord.y -= pos.y;
 
   float scaleMult = 1.0;
   if (strikeTypeSign < 0.0) {
-    // IC structural remap: horizontal channel sheet centered in-cloud.
     float icAnchorY = clamp(pos.y, 0.34, 0.88);
-    scaleMult = 1.0 / max(0.22 + abs(icAnchorY - 0.50), 0.30);
+    scaleMult = 1.0 / max(0.24 + abs(icAnchorY - 0.50), 0.34);
     lightningTexCoord = remapICLightningUV(lightningTexCoord, pos, scaleMult);
   } else {
-    // CG structural remap: origin in cloud, strong downward propagation toward ground.
     float cgSourceY = clamp(pos.y, 0.26, 0.72);
-    scaleMult = 1.0 / max(cgSourceY * 0.88, 0.14);
+    scaleMult = 1.0 / max(cgSourceY * 0.90, 0.18);
     lightningTexCoord = remapCGLightningUV(lightningTexCoord, pos, scaleMult);
   }
 
-  if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.60 || lightningTexCoord.y < -0.58 || lightningTexCoord.y > 1.68)
+  if (lightningTexCoord.x < -0.40 || lightningTexCoord.x > 1.40 || lightningTexCoord.y < -0.35 || lightningTexCoord.y > 1.40)
     return vec3(0.0);
 
-  float variantHash = random2d(pos * 83.13 + vec2(floor(lightningAnimIter * 0.017), floor(lightningAnimIter * 0.013)));
-  float variantMirror = variantHash > 0.5 ? -1.0 : 1.0;
-  lightningTexCoord.x = 0.5 + (lightningTexCoord.x - 0.5) * variantMirror;
-  lightningTexCoord.x += (variantHash - 0.5) * 0.14;
-
-  // Break fixed "snake" appearance by applying per-strike domain warping before sampling.
-  float strikeSeedA = random2d(pos * 61.7 + vec2(floor(lightningAnimIter * 0.031), 3.0));
-  float strikeSeedB = random2d(pos * 97.9 + vec2(7.0, floor(lightningAnimIter * 0.027)));
-  float shapeJitter = mix(0.004, 0.014, float(lightningShapeMode) / 3.0);
-  vec2 warp = vec2(
-    sin(lightningTexCoord.y * (22.0 + strikeSeedA * 45.0) + lightningTime * (1.2 + strikeSeedB * 2.6)) * shapeJitter,
-    sin(lightningTexCoord.x * (18.0 + strikeSeedB * 39.0) + lightningTime * (0.9 + strikeSeedA * 2.0)) * (shapeJitter * 0.55)
-  );
-  lightningTexCoord += warp;
-
-  // Channel model: texture-guided trunk + procedural meander + IC horizontal sweep.
-  lightningTexCoord += lightningWarpOffset(lightningTexCoord, lightningTime, pos, strikeTypeSign);
-
-  float trunk = texture(lightningTex, lightningTexCoord).r;
-  vec2 altOffset = vec2((strikeSeedA - 0.5) * 0.10, (strikeSeedB - 0.5) * 0.14);
-  float trunkVariant = texture(lightningTex, lightningTexCoord + altOffset).r;
-  trunk = mix(trunk, max(trunk, trunkVariant), 0.45 + 0.20 * float(lightningShapeMode > 1));
+  // Lightweight channel sampling to avoid perf spikes and overbright blocks.
   vec2 px = vec2(1.0 / lightningTexRes.x, 1.0 / lightningTexRes.y);
+  float trunk = texture(lightningTex, lightningTexCoord).r;
   float side = max(texture(lightningTex, lightningTexCoord + vec2(px.x, 0.0)).r,
                    texture(lightningTex, lightningTexCoord - vec2(px.x, 0.0)).r);
   float upDown = max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y)).r,
                      texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r);
-  float pixVal = max(trunk, max(side, upDown) * (0.50 + 0.22 * lightningBloomStrength));
-  float branchGhost = texture(lightningTex, lightningTexCoord + vec2(px.x * 2.0, -px.y * 3.0)).r;
-  branchGhost = max(branchGhost, texture(lightningTex, lightningTexCoord + vec2(-px.x * 2.5, -px.y * 4.0)).r);
-  float branchWide = texture(lightningTex, lightningTexCoord + vec2(px.x * 5.5, -px.y * 7.5)).r;
-  branchWide = max(branchWide, texture(lightningTex, lightningTexCoord + vec2(-px.x * 6.0, -px.y * 8.0)).r);
-  float branchFan = texture(lightningTex, lightningTexCoord + vec2(px.x * 8.0, -px.y * 11.0)).r;
-  branchFan = max(branchFan, texture(lightningTex, lightningTexCoord + vec2(-px.x * 8.6, -px.y * 10.5)).r);
-  float branchSpark = max(max(branchGhost, branchWide), branchFan);
-  float branchShapeMult = lightningShapeMode == 2 ? 1.35 : (lightningShapeMode == 3 ? 1.55 : (lightningShapeMode == 1 ? 0.82 : 1.0));
-  float branchBase = (branchGhost * (strikeTypeSign < 0.0 ? 0.70 : 0.60) + branchWide * (strikeTypeSign < 0.0 ? 0.44 : 0.38) + branchFan * (strikeTypeSign < 0.0 ? 0.30 : 0.28)) * branchShapeMult;
-  pixVal += branchBase;
 
+  float pixVal = max(trunk, max(side, upDown) * 0.55);
+
+  // Keep IC in cloud and CG mostly below source cloud.
   if (strikeTypeSign < 0.0) {
-    // Keep IC (purple) illumination confined to the cloud deck band in both texture-space and world-space.
-    float icEnvelope = smoothstep(0.08, 0.44, lightningTexCoord.y) * (1.0 - smoothstep(0.66, 0.94, lightningTexCoord.y));
     float icCloudBand = smoothstep(0.46, 0.58, texCoord.y) * (1.0 - smoothstep(0.92, 0.99, texCoord.y));
-    float icCenterFalloff = 1.0 - smoothstep(0.34, 0.66, abs(lightningTexCoord.y - 0.5));
-    float icLateralBranches = 1.0 - smoothstep(0.32, 0.92, abs(lightningTexCoord.x - 0.5));
-    float localCloudMask = smoothstep(0.028, 0.16, water[CLOUD] + water[PRECIPITATION] * 0.42);
-    pixVal *= clamp(icEnvelope * icCloudBand * max(icCenterFalloff, icLateralBranches * 0.65) * localCloudMask, 0.0, 1.0);
-    pixVal += branchBase * 0.42 * icCloudBand;
-    float nonVerticalBias = 1.0 - smoothstep(0.25, 0.90, abs(lightningTexCoord.x - 0.5));
-    pixVal *= mix(0.85, 1.0, nonVerticalBias);
+    float localCloudMask = smoothstep(0.028, 0.15, water[CLOUD] + water[PRECIPITATION] * 0.38);
+    pixVal *= icCloudBand * localCloudMask;
   } else {
-    // CG (blue): keep the origin inside cloud and maintain continuous channel reach toward terrain.
-    float sourceCloudMask = smoothstep(0.06, 0.22, texture(waterTex, vec2(mod(pos.x + 1.0, 1.0), clamp(pos.y, 0.26, 0.86))).r);
-    float cgAboveCloudFade = 1.0 - smoothstep(0.84, 0.97, texCoord.y);
-    float cgBelowSource = 1.0 - smoothstep(pos.y - 0.03, pos.y + 0.03, texCoord.y);
-    float cgGroundReach = 1.0 - smoothstep(0.00, 0.70, texCoord.y);
-    float cgLongChannel = 1.0 - smoothstep(max(pos.y - 0.60, 0.0), pos.y, texCoord.y);
-    pixVal *= clamp(cgAboveCloudFade * cgBelowSource * sourceCloudMask, 0.0, 1.0);
-    pixVal += trunk * max(cgGroundReach * 0.52, cgLongChannel * 0.40);
+    float belowSource = 1.0 - smoothstep(pos.y - 0.02, pos.y + 0.04, texCoord.y);
+    pixVal *= belowSource;
   }
 
-  const float branchShowFactor = 2.0;
-  float branchAxis = strikeTypeSign < 0.0 ? abs(lightningTexCoord.x - 0.5) * 0.95 : lightningTexCoord.y * 0.78;
-  float brightnessThreshold = clamp((strikeTypeSign < 0.0 ? 0.62 : 0.36) - lightningTime * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.66 : 0.42)) + branchAxis * (branchShowFactor * (strikeTypeSign < 0.0 ? 0.40 : 0.24)), 0.0, 1.0);
-  brightnessThreshold = mix(brightnessThreshold, strikeTypeSign < 0.0 ? 0.56 : 0.50, clamp(lightningTime - 0.85, 0.0, 1.0));
-  brightnessThreshold -= branchSpark * (strikeTypeSign < 0.0 ? 0.24 : 0.20);
-  brightnessThreshold = max(brightnessThreshold, 0.0);
-
-  if (strikeTypeSign < 0.0) {
-    float icGroundCutoff = smoothstep(0.44, 0.58, texCoord.y);
-    pixVal *= icGroundCutoff;
-  }
-
-  if (strikeTypeSign > 0.0) {
-    float cgMinCore = trunk * (1.0 - smoothstep(0.00, pos.y + 0.02, texCoord.y)) * 0.22;
-    pixVal = max(pixVal, cgMinCore);
-  }
-
-  pixVal = max(pixVal - brightnessThreshold, 0.0);
-  float persistentBranchFloor = branchBase * (strikeTypeSign < 0.0 ? 0.82 : 0.74);
-  pixVal = max(pixVal, persistentBranchFloor);
-  pixVal *= mix(1400.0, 2600.0, strikeTypeSign > 0.0 ? 1.0 : 0.62);
-
-  // Keep channel visible for the full event life; avoid mid-event disappearing bolts/branches.
-  float channelFade = clamp(currentLightningIntensity * (strikeTypeSign > 0.0 ? 0.17 : 0.12), 0.0, 1.0);
-  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.25 : 1.10, strikeTypeSign > 0.0 ? 2.75 : 2.45, lightningTime);
+  float channelFade = clamp(absIntensity * (strikeTypeSign > 0.0 ? 0.10 : 0.08), 0.0, 1.0);
+  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.0 : 0.9, strikeTypeSign > 0.0 ? 2.2 : 2.0, lightningTime);
   pixVal *= channelFade * max(tailFade, 0.0);
 
-  float lightningTemp = map_rangeC(currentLightningIntensity, 20000.0, 2600000.0, lightningTempMinK, lightningTempMaxK);
-  float thermalColorMix = map_rangeC(lightningTemp, lightningTempMinK, lightningTempMaxK, 0.0, 1.0) * lightningColorTempMult;
+  vec3 channelCoreCol = strikeTypeSign < 0.0 ? vec3(0.58, 0.44, 0.96) : vec3(0.52, 0.74, 1.0);
+  vec3 channelRimCol = strikeTypeSign < 0.0 ? vec3(0.92, 0.82, 1.0) : vec3(0.86, 0.95, 1.0);
+  vec3 lightningCol = mix(channelCoreCol, channelRimCol, 0.55);
 
-  // Reworked lightning palette: cooler electric core + warmer ionized rim with stronger branch readability.
-  vec3 channelCoreCol = strikeTypeSign < 0.0 ? vec3(0.62, 0.44, 1.0) : vec3(0.45, 0.72, 1.0);
-  vec3 channelRimCol = strikeTypeSign < 0.0 ? vec3(0.98, 0.80, 1.0) : vec3(0.86, 0.96, 1.0);
-  vec3 lightningCol = mix(channelCoreCol, channelRimCol, clamp(thermalColorMix, 0.0, 1.0));
-
-  float branchBoost = 1.0 + branchSpark * (strikeTypeSign < 0.0 ? 0.76 : 0.62);
-  float strikeContrast = strikeTypeSign < 0.0 ? 0.98 : 1.22;
-
-  float corona = smoothstep(0.12, 0.88, pixVal) * (0.34 + branchSpark * 0.46);
-  float filamentNoise = sin(lightningTexCoord.y * 280.0 + lightningTexCoord.x * 94.0 + lightningTime * 18.0 + random2d(pos * 11.3) * 6.2831) * 0.5 + 0.5;
-  float filament = smoothstep(0.72, 1.0, filamentNoise) * (0.18 + 0.42 * branchSpark);
-
-  vec3 coreHot = strikeTypeSign < 0.0 ? vec3(0.84, 0.58, 1.0) : vec3(0.72, 0.92, 1.0);
-  vec3 rimCold = strikeTypeSign < 0.0 ? vec3(0.46, 0.22, 0.95) : vec3(0.34, 0.62, 1.0);
-  vec3 coronaCol = mix(rimCold, coreHot, clamp(0.35 + thermalColorMix * 0.6, 0.0, 1.0));
-
-  vec3 rebuiltLightning = pixVal * lightningCol * strikeContrast * branchBoost;
-  rebuiltLightning += coronaCol * corona * 4200.0 * (0.55 + lightningBloomStrength * 0.45);
-  rebuiltLightning += coronaCol * filament * 2800.0;
-
-  return max(rebuiltLightning, vec3(0.0));
+  vec3 rebuiltLightning = pixVal * lightningCol * 1100.0;
+  return min(max(rebuiltLightning, vec3(0.0)), vec3(5000.0));
 }
 
 
