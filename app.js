@@ -8850,7 +8850,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     });
   }
 
-  function adjIterPerFrame(adj) { guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame + adj, 1, 50)); }
+  function adjIterPerFrame(adj, minIter = 1) { guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame + adj, minIter, 50)); }
 
   function isPageHidden() { return document.hidden || document.msHidden || document.webkitHidden || document.mozHidden; }
 
@@ -8884,10 +8884,19 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
         if (guiControls.auto_IterPerFrame && !airplaneMode) {
           const fpsTarget = 60;
-          adjIterPerFrame((FPS / fpsTarget - 1.0) * 5.0); // example: ((30 / 60)-1.0) = -0.5
+          const stablePhysicsFloor = Math.max(4, Math.floor((guiControls_default?.IterPerFrame ?? 10) * 0.6));
+          const iterPerSecond = FPS * guiControls.IterPerFrame;
+          const targetIterPerSecond = fpsTarget * Math.max(stablePhysicsFloor, 8);
+
+          // Keep simulation physics from crawling when rendering shaders get heavy.
+          // We still auto-tune for smoothness, but never below a floor that preserves evaporation/cloud evolution speed.
+          adjIterPerFrame((FPS / fpsTarget - 1.0) * 5.0, stablePhysicsFloor); // example: ((30 / 60)-1.0) = -0.5
 
           if (FPS == fpsTarget)
-            adjIterPerFrame(1);
+            adjIterPerFrame(1, stablePhysicsFloor);
+
+          if (iterPerSecond < targetIterPerSecond * 0.68)
+            guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame + 1, stablePhysicsFloor, 50));
         }
       }
       // calculate total amounts of water and smoke for verification of fluid simulation

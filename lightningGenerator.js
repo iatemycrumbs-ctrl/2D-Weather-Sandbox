@@ -5,8 +5,8 @@ onmessage = (event) => {
   const seed = (msg.seed ?? Date.now()) >>> 0;
 
   try {
-    const imageData = generateLightningBolt(width, height, seed);
-    const rgba = imageData.data;
+    const bolt = generateLightningBolt(width, height, seed);
+    const rgba = bolt.imageData.data;
     const luminanceData = new Uint8Array(width * height);
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -29,12 +29,108 @@ onmessage = (event) => {
       }
     }
 
+    // Repaint the trunk path as an explicit 1px snake spine so CG channels cannot break.
+    stampTrunkSnake(luminanceData, width, height, bolt.trunkPoints);
+
+    // Keep only lightning pixels connected to the trunk origin and remove detached speckles.
+    filterDisconnectedLightning(luminanceData, width, height, bolt.trunkPoints);
+
     postMessage({id : msg.id, width, height, luminanceData}, [ luminanceData.buffer ]);
   } catch (err) {
     const fallback = new Uint8Array(width * height);
     postMessage({id : msg.id, width, height, luminanceData : fallback, error : String(err)}, [ fallback.buffer ]);
   }
 };
+
+function stampTrunkSnake(luminanceData, width, height, trunkPoints)
+{
+  if (!trunkPoints || trunkPoints.length < 2)
+    return;
+
+  for (let i = 1; i < trunkPoints.length; i++) {
+    const a = trunkPoints[i - 1];
+    const b = trunkPoints[i];
+
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) * 1.6));
+
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const x = Math.round(a.x + dx * t);
+      const y = Math.round(a.y + dy * t);
+
+      if (x < 0 || x >= width || y < 0 || y >= height)
+        continue;
+
+      const idx = y * width + x;
+      luminanceData[idx] = Math.max(luminanceData[idx], 255);
+
+      // 8-neighbor touch-up so tiny diagonal raster holes don't sever the channel.
+      for (let ny = Math.max(0, y - 1); ny <= Math.min(height - 1, y + 1); ny++) {
+        for (let nx = Math.max(0, x - 1); nx <= Math.min(width - 1, x + 1); nx++) {
+          const nIdx = ny * width + nx;
+          luminanceData[nIdx] = Math.max(luminanceData[nIdx], 116);
+        }
+      }
+    }
+  }
+}
+
+function filterDisconnectedLightning(luminanceData, width, height, trunkPoints)
+{
+  const connectedMask = new Uint8Array(width * height);
+  const visitQueue = new Int32Array(width * height);
+  const minConnectedLum = 10;
+  let queueHead = 0;
+  let queueTail = 0;
+
+  if (trunkPoints && trunkPoints.length > 0) {
+    const seedCount = Math.min(4, trunkPoints.length);
+    for (let i = 0; i < seedCount; i++) {
+      const x = Math.round(trunkPoints[i].x);
+      const y = Math.round(trunkPoints[i].y);
+      if (x < 0 || x >= width || y < 0 || y >= height)
+        continue;
+      const idx = y * width + x;
+      connectedMask[idx] = 1;
+      visitQueue[queueTail++] = idx;
+    }
+  }
+
+  // Fallback if trunk seeds are unavailable.
+  if (queueTail == 0) {
+    for (let x = 0; x < width; x++) {
+      const idx = x;
+      if (luminanceData[idx] >= minConnectedLum) {
+        connectedMask[idx] = 1;
+        visitQueue[queueTail++] = idx;
+      }
+    }
+  }
+
+  while (queueHead < queueTail) {
+    const idx = visitQueue[queueHead++];
+    const x = idx % width;
+    const y = (idx / width) | 0;
+
+    for (let ny = Math.max(0, y - 1); ny <= Math.min(height - 1, y + 1); ny++) {
+      for (let nx = Math.max(0, x - 1); nx <= Math.min(width - 1, x + 1); nx++) {
+        const nIdx = ny * width + nx;
+        if (connectedMask[nIdx] || luminanceData[nIdx] < minConnectedLum)
+          continue;
+
+        connectedMask[nIdx] = 1;
+        visitQueue[queueTail++] = nIdx;
+      }
+    }
+  }
+
+  for (let i = 0; i < luminanceData.length; i++) {
+    if (!connectedMask[i])
+      luminanceData[i] = 0;
+  }
+}
 
 function generateLightningBolt(width, height, seed)
 {
@@ -69,8 +165,7 @@ function generateLightningBolt(width, height, seed)
     ctx.fill();
   }
 
-  const trunkXs = [];
-  const trunkYs = [];
+  const trunkPoints = [];
 
   ctx.beginPath();
 
@@ -81,8 +176,7 @@ function generateLightningBolt(width, height, seed)
   const targetAngle = 0.0;
 
   ctx.moveTo(startX, startY);
-  trunkXs.push(startX);
-  trunkYs.push(startY);
+  trunkPoints.push({x : startX, y : startY});
   ctx.lineWidth = lineWidth;
 
   while (startY < height) {
@@ -93,8 +187,7 @@ function generateLightningBolt(width, height, seed)
     angle -= (angle - targetAngle) * 0.08;
 
     ctx.lineTo(nextX, nextY);
-    trunkXs.push(nextX);
-    trunkYs.push(nextY);
+    trunkPoints.push({x : nextX, y : nextY});
 
     startX = nextX;
     startY = nextY;
@@ -114,18 +207,18 @@ function generateLightningBolt(width, height, seed)
 
   // Re-stroke the exact trunk path as a thin plasma core so every CG segment stays linked.
   ctx.globalCompositeOperation = 'lighter';
-  if (trunkXs.length > 1) {
+  if (trunkPoints.length > 1) {
     ctx.beginPath();
-    ctx.moveTo(trunkXs[0], trunkYs[0]);
-    for (let i = 1; i < trunkXs.length; i++)
-      ctx.lineTo(trunkXs[i], trunkYs[i]);
+    ctx.moveTo(trunkPoints[0].x, trunkPoints[0].y);
+    for (let i = 1; i < trunkPoints.length; i++)
+      ctx.lineTo(trunkPoints[i].x, trunkPoints[i].y);
     ctx.lineWidth = Math.max(1.25, lineWidth * 0.24);
     ctx.strokeStyle = 'rgb(228,228,228)';
     ctx.stroke();
   }
   ctx.globalCompositeOperation = 'source-over';
 
-  return ctx.getImageData(0, 0, width, height);
+  return {imageData : ctx.getImageData(0, 0, width, height), trunkPoints};
 
   function drawBranch(startX, startY, targetAngle, line_width)
   {
