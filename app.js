@@ -421,7 +421,7 @@ const guiControls_default = {
   airplaneThrottleResponse : 1.0,
   showTornadoLabels : true,
   electricFieldVizStrength : 1.0,
-  dynamicChargeSeparation : 1.0,
+  dynamicChargeSeparation : 1.15,
   electricFieldDiffusion : 1.0,
   cloudLifetimeBoost : 1.35,
   lightningRodRadiusKm : 25.0,
@@ -445,8 +445,8 @@ const guiControls_default = {
   sunIntensity : 1.0,
   waterTemperature : 25.0, // °C
   dynamicWaterTemperature : true,
-  landEvaporation : 0.00005,
-  waterEvaporation : 0.0001,
+  landEvaporation : 0.00006,
+  waterEvaporation : 0.00014,
   evapHeat : 2.90,          //  Real: 2260 J/g
   meltingHeat : 0.43,       //  Real:  334 J/g
   condensationRate : 0.0050,
@@ -588,6 +588,7 @@ var minShadowLight = 0.02;
 var saveFileName = '';
 var fpsCounterEl;
 var tornadoLabelEl;
+var dynamicCAPE_Jkg = 0.0;
 
 var guiControlsFromSaveFile = null;
 var datGui;
@@ -605,8 +606,8 @@ var lastFrameNum = 0;
 
 var iterNum = 0;
 var lightningVisualClock = 0;
-var lightningStartupWarmupIterations = 180;
-var lightningStartupWarmupVisualFrames = 45;
+var lightningStartupWarmupIterations = 35;
+var lightningStartupWarmupVisualFrames = 8;
 var lightningRenderCooldownFrames = 0;
 var lightningMaxVisualLifetimeFrames = 90;
 var lastAcceptedLightningStartIter = -1;
@@ -6042,6 +6043,21 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       c.stroke();
 
 
+      // Dynamic CAPE estimate from positive parcel buoyancy integral.
+      let parcelT = initialTemperature;
+      let cape = 0.0;
+      for (let y = simYpos + 1; y < sim_res_y; y++) {
+        let envT = baseTextureValues[4 * y + 3] - ((y / sim_res_y) * guiControls.simHeight * guiControls.dryLapseRate) / 1000.0;
+        let dz = guiControls.simHeight / sim_res_y;
+        let buoy = 9.81 * ((parcelT - envT) / max(envT, 220.0));
+        if (buoy > 0.0)
+          cape += buoy * dz;
+        parcelT += drylapsePerCell;
+      }
+      dynamicCAPE_Jkg = cape;
+      c.fillStyle = '#ffe58a';
+      c.fillText('CAPE ' + Math.round(dynamicCAPE_Jkg) + ' J/kg', 10, 20);
+      c.fillStyle = 'white';
       c.fillText('' + printDistance(map_range(simXpos, 0, sim_res_y, 0, guiControls.simHeight)), this.graphCanvas.width - 70, 20);
 
 
@@ -8217,7 +8233,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     } else {
       gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
     }
-    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'motionBlurStrength'), clamp(guiControls.lightningMotionBlur + lightningShakeHFAmplitude * 18.0, 0.0, 1.0));
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'motionBlurStrength'), 0.0);
 
     if (inputType == 0) {
       // clicking while tool is set to flashlight(NONE)
@@ -8271,61 +8287,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     guiControls.displayMode = sanitizeDisplayMode(guiControls.displayMode);
     if (guiControls.displayMode == 'DISP_REAL') {
 
-      { //  Abient Light Calculation
-        gl.bindVertexArray(postProcessingVao);
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, ambientLightFBOs[0].frameBuffer);
-        gl.viewport(0, 0, ambientLightFBOs[0].width, ambientLightFBOs[0].height);
-        gl.clearColor(0.0, 0.0, 0.0, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        let prevFBO = emittedLightFBO; // the previous FBO
-
-        gl.useProgram(bloomBlurProgram);
-        gl.uniform1i(gl.getUniformLocation(bloomBlurProgram, 'bloomTexture'), 0);
-
-        for (let blurTimes = 0; blurTimes < 2; blurTimes++) { // blur twice for smoother result
-
-          // downsample
-          for (let i = 1; i < ambientLightFBOs.length; i++) {
-            let destFBO = ambientLightFBOs[i];
-            gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
-
-            gl.viewport(0, 0, destFBO.width, destFBO.height);
-
-            // bind texture
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, prevFBO.texture);
-
-            gl.bindFramebuffer(gl.FRAMEBUFFER, destFBO.frameBuffer);
-            // gl.drawBuffers([ gl.BACK ]);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // draw to destFBO
-
-            prevFBO = destFBO;
-          }
-
-          // upsample and add
-          gl.blendFunc(gl.ONE, gl.ONE); // add to the existing texture in the framebuffer
-          gl.enable(gl.BLEND);
-
-          for (let i = ambientLightFBOs.length - 2; i >= 0; i--) {
-            let destFBO = ambientLightFBOs[i];
-
-            gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
-
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, prevFBO.texture);
-
-            gl.viewport(0, 0, destFBO.width, destFBO.height);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, destFBO.frameBuffer);
-            // gl.drawBuffers([ gl.BACK ]);
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // draw to destFBO
-
-            prevFBO = destFBO;
-          }
-          gl.disable(gl.BLEND);
-        }
-        gl.bindVertexArray(fluidVao);
+      { // Ambient light blur removed for performance.
       }
 
       gl.activeTexture(gl.TEXTURE0);
@@ -8364,7 +8326,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.activeTexture(gl.TEXTURE8);
       gl.bindTexture(gl.TEXTURE_2D, airplane.directionIsLeft ? A380Texture : A380_R_Texture); // A380Texture
       gl.activeTexture(gl.TEXTURE9);
-      gl.bindTexture(gl.TEXTURE_2D, ambientLightFBOs[0].texture);
+      gl.bindTexture(gl.TEXTURE_2D, emittedLightFBO.texture);
       gl.activeTexture(gl.TEXTURE10);
       gl.bindTexture(gl.TEXTURE_2D, A380GearTexture);
 
@@ -8423,7 +8385,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
 
       gl.activeTexture(gl.TEXTURE9);
-      gl.bindTexture(gl.TEXTURE_2D, ambientLightFBOs[0].texture);
+      gl.bindTexture(gl.TEXTURE_2D, emittedLightFBO.texture);
 
 
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // draw to hdr framebuffer
@@ -8435,64 +8397,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.bindVertexArray(postProcessingVao);
 
 
-      gl.useProgram(isolateBrightPartsProgram);
-
+      // Bloom/isolate blur pipeline removed for performance.
+      gl.useProgram(postProcessingProgram);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, hdrFBO.texture);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBOs[0].frameBuffer); // brightPartsFrameBuffer
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.clearColor(0.0, 0.0, 0.0, 1.0);                            // background color
-      gl.clear(gl.COLOR_BUFFER_BIT);
-
-      gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // render bright parts to seperate texture
-
-
-      // BLOOM
-
-      let prevFBO = bloomFBOs[0]; // the previous FBO
-
-      gl.useProgram(bloomBlurProgram);
-      gl.uniform1i(gl.getUniformLocation(bloomBlurProgram, 'bloomTexture'), 0);
-
-
-      // downsample
-      for (let i = 1; i < bloomFBOs.length; i++) {
-        let destFBO = bloomFBOs[i];
-        gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
-
-        gl.viewport(0, 0, destFBO.width, destFBO.height);
-
-        // bind texture
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, prevFBO.texture);
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, destFBO.frameBuffer);
-        // gl.drawBuffers([ gl.BACK ]);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // draw to destFBO
-
-        prevFBO = destFBO;
-      }
-
-      // upsample and add
-      gl.blendFunc(gl.ONE, gl.ONE); // add to the existing texture in the framebuffer
-      gl.enable(gl.BLEND);
-
-      for (let i = bloomFBOs.length - 2; i >= 0; i--) {
-        let destFBO = bloomFBOs[i];
-
-        gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
-
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, prevFBO.texture);
-
-        gl.viewport(0, 0, destFBO.width, destFBO.height);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, destFBO.frameBuffer);
-        // gl.drawBuffers([ gl.BACK ]);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // draw to destFBO
-
-        prevFBO = destFBO;
-      }
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, hdrFBO.texture);
 
       gl.disable(gl.BLEND);
 
@@ -8500,7 +8410,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, hdrFBO.texture);
       gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, bloomFBOs[0].texture);
+      gl.bindTexture(gl.TEXTURE_2D, hdrFBO.texture);
 
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -8803,6 +8713,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'minShadowLight'), minShadowLight);
     gl.useProgram(skyBackgroundDisplayProgram);
     gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'minShadowLight'), minShadowLight);
+    gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'sunAngle'), solarZenithAngle);
 
     if (guiControls.dayNightCycle && clockEl)
       clockEl.innerHTML = dateTimeStr(); // update clock

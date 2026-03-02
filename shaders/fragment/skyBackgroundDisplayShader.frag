@@ -17,6 +17,7 @@ uniform sampler2D planeGearTex;
 uniform sampler2D ambientLightTex;
 
 uniform float minShadowLight;
+uniform float sunAngle;
 
 uniform float iterNum;
 
@@ -157,6 +158,17 @@ void main()
   finalColor += ambientLight * 0.1 * airDensityFactor / standardSunBrightness;
 
   finalColor += airplaneLights;
+
+  // Sun & moon discs in sky background.
+  vec2 skyCenterSun = vec2(0.5 - sin(sunAngle) * 0.42, 0.58 + cos(sunAngle) * 0.20);
+  vec2 skyCenterMoon = vec2(0.5 + sin(sunAngle) * 0.42, 0.58 - cos(sunAngle) * 0.20);
+  vec2 dSun = vec2((texCoord.x - skyCenterSun.x) * aspectRatios.x, texCoord.y - skyCenterSun.y);
+  vec2 dMoon = vec2((texCoord.x - skyCenterMoon.x) * aspectRatios.x, texCoord.y - skyCenterMoon.y);
+  float sunDisc = exp(-pow(length(dSun) / 0.045, 2.0));
+  float moonDisc = exp(-pow(length(dMoon) / 0.030, 2.0));
+  float nightFactor = clamp(map_range(abs(sunAngle), 70.0 * deg2rad, 96.0 * deg2rad, 0.0, 1.0), 0.0, 1.0);
+  finalColor += vec3(1.00, 0.90, 0.72) * sunDisc * (0.35 + light);
+  finalColor += vec3(0.78, 0.84, 1.00) * moonDisc * nightFactor * 0.55;
 
   fragmentColor = vec4(finalColor, 1.0);
 }

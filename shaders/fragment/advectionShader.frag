@@ -253,11 +253,14 @@ void main()
         else if (wall[TYPE] == WALLTYPE_FIRE)
           landTypeFactor = 1.55;
 
-        float ambientHumidityBrake = map_rangeC(water[TOTAL], 0.0, 14.0, 1.12, 0.56);
-        float evaporation = vaporDeficit * 0.0000072 * windDrying * moistureAvail * landTypeFactor * ambientHumidityBrake;
+        float ambientHumidityBrake = map_rangeC(water[TOTAL], 0.0, 14.0, 1.20, 0.54);
+        float thermalBoost = map_rangeC(tempC, -5.0, 40.0, 0.55, 2.10);
+        float convectiveMixBoost = map_rangeC(max(baseX0Yp[VY], 0.0), 0.0, 0.020, 1.0, 1.65);
+        float evaporation = vaporDeficit * 0.0000096 * windDrying * moistureAvail * landTypeFactor * ambientHumidityBrake * thermalBoost * convectiveMixBoost;
         evaporation = min(evaporation, water[SOIL_MOISTURE] * 0.11 + 0.0009);
         water[SOIL_MOISTURE] -= evaporation;
-        water[TOTAL] += evaporation * 0.78;
+        water[TOTAL] += evaporation * 0.84;
+        base[VY] += evaporation * 0.0009;
       }
     }
   }
