@@ -237,10 +237,10 @@ vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float sourceToGround = max(pos.y, 0.08);
   float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
 
-  float trunkSway = sin(verticalTravel * 10.0 + random2d(pos * 19.3) * 6.2831) * (0.020 + (1.0 - verticalTravel) * 0.028);
+  float trunkSway = sin(verticalTravel * 10.0 + random2d(pos * 19.3) * 6.2831) * (0.012 + (1.0 - verticalTravel) * 0.016);
   float leaderSeg = floor(verticalTravel * 30.0) / 30.0;
-  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 13.0, pos.y * 17.0)) - 0.5) * (0.026 + (1.0 - verticalTravel) * 0.028);
-  float zig = sin(verticalTravel * 90.0 + random2d(pos * 37.0) * 6.2831) * 0.010;
+  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 13.0, pos.y * 17.0)) - 0.5) * (0.015 + (1.0 - verticalTravel) * 0.014);
+  float zig = sin(verticalTravel * 90.0 + random2d(pos * 37.0) * 6.2831) * 0.006;
 
   vec2 uv;
   uv.x = (wrappedDx + trunkSway + leaderJitter + zig) * scaleMult * aspectRatios[0] * 1.12;
@@ -261,23 +261,26 @@ float dynamicLightningChannel(vec2 uv, float T, vec2 seed, float strikeTypeSign)
   else if (lightningShapeMode == 3)
     shapeWarp = 1.52;
 
-  float mainPath = sin(axis * 30.0 + T * 3.5 + random2d(seed * 4.9) * 6.2831) * 0.042 * shapeWarp;
-  mainPath += sin(axis * 74.0 + T * 6.4 + random2d(seed * 9.1) * 6.2831) * 0.018 * shapeWarp;
-  mainPath += sin(axis * 140.0 + T * 11.0 + random2d(seed * 2.3) * 6.2831) * 0.008 * shapeWarp;
+  float mainPath = sin(axis * 30.0 + T * 3.5 + random2d(seed * 4.9) * 6.2831) * 0.026 * shapeWarp;
+  mainPath += sin(axis * 74.0 + T * 6.4 + random2d(seed * 9.1) * 6.2831) * 0.011 * shapeWarp;
+  mainPath += sin(axis * 140.0 + T * 11.0 + random2d(seed * 2.3) * 6.2831) * 0.0045 * shapeWarp;
 
-  float trunk = exp(-pow((side - mainPath) / (strikeTypeSign < 0.0 ? 0.040 : 0.031), 2.0));
+  float trunkWidth = strikeTypeSign < 0.0 ? 0.022 : 0.016;
+  float trunk = exp(-pow((side - mainPath) / trunkWidth, 2.0));
 
   float branchSeed = random2d(seed * 6.7 + vec2(floor(axis * 18.0), floor(axis * 9.0)));
   float branchGate = smoothstep(0.62, 0.96, branchSeed);
   float branchDir = branchSeed < 0.79 ? -1.0 : 1.0;
-  float branchCenter = mainPath + branchDir * (0.020 + fract(axis * 11.0 + branchSeed) * 0.08);
-  float branchWidth = mix(0.022, 0.060, fract(axis * 7.0 + branchSeed * 3.0));
-  float branch = exp(-pow((side - branchCenter) / branchWidth, 2.0)) * branchGate;
+  float branchReach = (0.010 + fract(axis * 11.0 + branchSeed) * 0.030) * smoothstep(0.0, 0.75, axis);
+  float branchCenter = mainPath + branchDir * branchReach;
+  float branchWidth = mix(0.006, 0.018, fract(axis * 7.0 + branchSeed * 3.0));
+  float branchTaper = 1.0 - smoothstep(0.55, 1.0, axis);
+  float branch = exp(-pow((side - branchCenter) / branchWidth, 2.0)) * branchGate * branchTaper;
 
   float micro = sin((axis * 270.0 + side * 48.0) + T * 15.0 + random2d(seed * 11.7) * 6.2831);
   float plasmaNoise = 0.84 + 0.16 * micro;
 
-  float channel = max(trunk, branch * (strikeTypeSign < 0.0 ? 0.55 : 0.68));
+  float channel = max(trunk, branch * (strikeTypeSign < 0.0 ? 0.42 : 0.52));
   return channel * plasmaNoise;
 }
 
@@ -334,8 +337,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   } else {
     float belowSource = 1.0 - smoothstep(pos.y - 0.02, pos.y + 0.04, texCoord.y);
     float nearGround = smoothstep(0.56, 1.0, lightningCoord.y);
-    float corridorWidth = mix(0.24, 0.42, nearGround);
-    float cgLateralConfine = 1.0 - smoothstep(corridorWidth, corridorWidth + 0.34, abs(lightningCoord.x));
+    float corridorWidth = mix(0.12, 0.22, nearGround);
+    float cgLateralConfine = 1.0 - smoothstep(corridorWidth, corridorWidth + 0.20, abs(lightningCoord.x));
     float cgCloudGate = smoothstep(0.012, 0.065, water[CLOUD] + water[PRECIPITATION] * 0.22);
     float gateByHeight = smoothstep(0.00, 0.35, lightningCoord.y);
     channel *= belowSource * max(cgLateralConfine, 0.14) * max(cgCloudGate, gateByHeight);
