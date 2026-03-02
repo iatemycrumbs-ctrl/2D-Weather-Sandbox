@@ -607,14 +607,13 @@ var iterNum = 0;
 var lightningVisualClock = 0;
 var lightningStartupWarmupIterations = 180;
 var lightningStartupWarmupVisualFrames = 45;
-var lightningRenderCooldownFrames = 70;
+var lightningRenderCooldownFrames = 0;
 var lightningMaxVisualLifetimeFrames = 90;
 var lastAcceptedLightningStartIter = -1;
 var lastAcceptedLightningVisualClock = -10000;
 var activeLightningTextureIndex = 0;
 var previousLightningTextureIndex = -1;
 var lightningTexturePhase = 0.0;
-var adaptivePrecipitationStride = 1;
 var adaptiveShaderPerfScale = 1.0;
 
 var lightningShakeOffsetX = 0.0;
@@ -8078,7 +8077,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             gl.bindFramebuffer(gl.FRAMEBUFFER, precipitationFeedbackFrameBuff);
             gl.clear(gl.COLOR_BUFFER_BIT);         // clear precipitation feedback
 
-            const shouldRunPrecip = guiControls.enablePrecipitation && ((iterNum % adaptivePrecipitationStride) == 0);
+            const shouldRunPrecip = guiControls.enablePrecipitation;
             if (shouldRunPrecip) { // move precipitation, HUGE PERFORMANCE BOTTLENECK!
 
               gl.useProgram(precipitationProgram);
@@ -8146,9 +8145,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
                   && lightningX >= 0.0 && lightningX <= 1.0 && lightningY >= 0.0 && lightningY <= 1.0;
                 const warmupDone = iterNum > lightningStartupWarmupIterations && lightningVisualClock > lightningStartupWarmupVisualFrames;
                 const newStrikeIter = lightningStartIter > lastAcceptedLightningStartIter;
-                const cooldownDone = (lightningVisualClock - lastAcceptedLightningVisualClock) > lightningRenderCooldownFrames;
-
-                if (validStrike && warmupDone && newStrikeIter && cooldownDone) {
+                if (validStrike && warmupDone && newStrikeIter) {
                   lastAcceptedLightningStartIter = lightningStartIter;
                   lastAcceptedLightningVisualClock = lightningVisualClock;
                   const lightningIntensity = Math.pow(clamp(Math.abs(lightningSignedIntensity), 0.0, 1.1), 2.0);
@@ -8995,16 +8992,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           // We still auto-tune for smoothness, but never below a floor that preserves evaporation/cloud evolution speed.
           adjIterPerFrame((FPS / fpsTarget - 1.0) * 5.0, stablePhysicsFloor); // example: ((30 / 60)-1.0) = -0.5
 
-          if (FPS < 30) {
-            adaptivePrecipitationStride = 3;
+          if (FPS < 30)
             adaptiveShaderPerfScale = 0.55;
-          } else if (FPS < 42) {
-            adaptivePrecipitationStride = 2;
+          else if (FPS < 42)
             adaptiveShaderPerfScale = 0.75;
-          } else {
-            adaptivePrecipitationStride = 1;
+          else
             adaptiveShaderPerfScale = 1.0;
-          }
 
           if (FPS == fpsTarget)
             adjIterPerFrame(1, stablePhysicsFloor);
