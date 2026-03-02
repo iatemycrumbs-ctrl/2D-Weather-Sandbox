@@ -20,6 +20,7 @@ uniform float minShadowLight;
 uniform float sunAngle;
 
 uniform float iterNum;
+uniform float birdFlockAmount;
 
 uniform float simHeight;
 
@@ -37,6 +38,33 @@ const float dryLapse = 0.; // definition needed for common.glsl
 #include "common.glsl"
 
 #include "commonDisplay.glsl"
+
+
+
+float birdWingShape(vec2 p)
+{
+  float wingL = smoothstep(0.045, 0.0, length(p - vec2(-0.03, 0.0)));
+  float wingR = smoothstep(0.045, 0.0, length(p - vec2(0.03, 0.0)));
+  return max(wingL, wingR);
+}
+
+float birdFlockField(vec2 uv, float t)
+{
+  float flock = 0.0;
+  float activity = clamp(birdFlockAmount, 0.0, 1.8);
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    float phase = t * (0.30 + fi * 0.07) + fi * 1.7;
+    vec2 center = vec2(mod(0.12 + fi * 0.14 + t * (0.010 + fi * 0.002), 1.2) - 0.1,
+                      0.74 + sin(phase) * (0.015 + fi * 0.004));
+    vec2 p = uv - center;
+    p.x *= aspectRatios.x;
+    p *= 1.0 + fi * 0.10;
+    p.y += sin(t * 12.0 + fi * 2.2) * 0.004;
+    flock += birdWingShape(p) * (0.8 - fi * 0.10);
+  }
+  return flock * activity;
+}
 
 vec4 displayA380(vec2 pos, float angle, out vec3 emittedLight, out vec3 onLight)
 {
@@ -169,6 +197,9 @@ void main()
   float nightFactor = clamp(map_range(abs(sunAngle), 70.0 * deg2rad, 96.0 * deg2rad, 0.0, 1.0), 0.0, 1.0);
   finalColor += vec3(1.00, 0.90, 0.72) * sunDisc * (0.35 + light);
   finalColor += vec3(0.78, 0.84, 1.00) * moonDisc * nightFactor * 0.55;
+
+  float flockMask = birdFlockField(texCoord, iterNum * 0.015);
+  finalColor = mix(finalColor, finalColor * 0.45, clamp(flockMask, 0.0, 0.7));
 
   fragmentColor = vec4(finalColor, 1.0);
 }

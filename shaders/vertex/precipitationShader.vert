@@ -529,10 +529,10 @@ void main()
           float pressureFactor = map_rangeC(base[PRESSURE], -0.06, 0.12, 0.82, 1.35);
           float mixedPhaseCharge = mixedPhaseFactor * map_rangeC(water[CLOUD], threshold, threshold * 5.5, 0.55, 1.75);
           float separationIndex = max(base[VY], 0.0) * (1.0 + abs(base[VX]) * 12.0) * mixedPhaseCharge;
-          float electricPotential = (chargeDipole * 0.72 + separationIndex * 0.48) * pressureFactor * map_rangeC(base[VY], -0.01, 0.02, 0.65, 1.35);
+          float electricPotential = (chargeDipole * 0.84 + separationIndex * 0.62) * pressureFactor * map_rangeC(base[VY], -0.01, 0.02, 0.72, 1.46);
 
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
-          lightningSpawnChance *= (0.38 + electricPotential * 2.62);
+          lightningSpawnChance *= (0.50 + electricPotential * 2.95);
           lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.12, 0.60) * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.85, 1.75);
           lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.55) * lightningFrequencyBoost;
 
@@ -565,19 +565,19 @@ void main()
             }
           }
 
-          lightningSpawnChance *= mix(1.0, 1.35, rodAttraction);
+          lightningSpawnChance *= mix(1.0, 1.55, rodAttraction);
 
           float planeDx = wrappedDistX(texCoord.x, airplanePosNorm.x);
           float planeDy = max(texCoord.y - airplanePosNorm.y, 0.0);
           float planeDist = length(vec2(planeDx, planeDy));
           float airplaneAttraction = smoothstep(0.30, 0.0, planeDist) * airplaneLightningAttractor;
-          lightningSpawnChance *= mix(1.0, 1.55, airplaneAttraction);
+          lightningSpawnChance *= mix(1.0, 1.70, airplaneAttraction);
           lightningSpawnChance *= map_rangeC(mobileLightningVisibility, 0.8, 2.2, 0.92, 1.28);
-          lightningSpawnChance = clamp(lightningSpawnChance, 0.00008, 0.88);
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.00016, 0.92);
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
-          float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.05, 0.52), 4.5 + abs(lightningData[INTENSITY]) * (1.9 + multiStrokeLightning * 1.35));
+          float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.82, 0.38), 2.0 + abs(lightningData[INTENSITY]) * (1.4 + multiStrokeLightning * 0.95));
           bool lightningChannelFree = (lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold);
           bool cloudAnchoredSource = water[CLOUD] > threshold * 1.55 && sampleCloudStrength(texCoord) > 0.055 && texCoord.y >= 0.24 && texCoord.y <= 0.94;
           bool overdueStormRecharge = lightningChannelFree && previousLightningAge > (44.0 + 18.0 * lightningMinInterval)
@@ -700,7 +700,7 @@ void main()
 
       // Hail growth enhancement:
       if (realTemp < CtoK(0.0) && water[CLOUD] > 0.0 && newDensity >= 1.0) { // below freezing
-        growth += surfaceArea * (water[PRECIPITATION] * 0.0030 + supersat * 0.0015);            // rain/supersat accretion onto hail
+        growth += surfaceArea * (water[PRECIPITATION] * 0.0038 + supersat * 0.0020);            // rain/supersat accretion onto hail
       }
 
       feedback[VAPOR] -= growth * 1.0; // takes water from the air
@@ -718,7 +718,7 @@ void main()
 
         if (newMass[ICE] > 0.08) {
           float hailGrowthFactor = map_rangeC(water[PRECIPITATION] + max(base[VY], 0.0) * 30.0, 0.0, 1.8, 0.0, 1.0);
-          newDensity = min(max(newDensity, 1.0) + hailGrowthFactor * 0.18, 1.35);
+          newDensity = min(max(newDensity, 1.0) + hailGrowthFactor * 0.24, 1.40);
         }
 
       } else {                                                                                                    // above freezing
@@ -775,9 +775,9 @@ void main()
       newPos.x += (base[VX] / resolution.x) * 2.0 * horizontalDrift + lateralTurb;
 
       float verticalCarry = base[VY] * map_rangeC(newDensity, snowDensity, 1.3, 0.16, 0.06);
-      float hailRebound = max(updraft - (0.0025 + hailFraction * 0.0015), 0.0) * 0.24 * hailFraction;
+      float hailRebound = max(updraft - (0.0021 + hailFraction * 0.0012), 0.0) * 0.30 * hailFraction;
       newPos.y += ((verticalCarry + hailRebound * inertia) / resolution.y) * 2.0;
-      newPos.y -= fallVelocity * mix(1.0, 1.38, hailFraction);
+      newPos.y -= fallVelocity * mix(1.0, 1.48, hailFraction);
 
       // dry slots rapidly erode suspended hydrometeors and encourage fallout recycling.
       float drySlot = map_rangeC(maxWater(wetBulbTemp) - water[TOTAL], 0.0, 12.0, 0.0, 1.0);

@@ -458,7 +458,7 @@ vec4 getAirColor(vec2 fragCoordIn)
   float silverLining = smoothstep(0.40, 0.98, cloudNoiseFine) * smoothstep(0.18, 0.88, cloudBody) * (0.34 + 0.86 * lightIntensity);
   vec3 cloudCoreCol = mix(vec3(0.60, 0.66, 0.74), vec3(0.92, 0.96, 1.0), clamp(cloudShade * 1.20, 0.0, 1.0));
   vec3 cloudShadowCol = vec3(0.27, 0.34, 0.46);
-  vec3 precipShaftCol = mix(vec3(0.46, 0.64, 0.96), vec3(0.78, 0.91, 1.0), clamp(precipitationSparkle * 0.8, 0.0, 1.0));
+  vec3 precipShaftCol = mix(vec3(0.40, 0.58, 0.90), vec3(0.66, 0.83, 0.98), clamp(precipitationSparkle * 0.85, 0.0, 1.0));
   vec3 precipMistCol = mix(vec3(0.72, 0.80, 0.92), vec3(0.50, 0.61, 0.84), clamp(precipitationMistStrength * 0.78, 0.0, 1.0));
 
   float cloudContrast = clamp(cloudShade * (0.74 + 0.34 * billow + cloudTower * 0.12), 0.0, 1.0);
@@ -469,7 +469,7 @@ vec4 getAirColor(vec2 fragCoordIn)
   cloudCol = mix(cloudCol, cloudShadowCol * 0.85, cloudCavity * 0.22);
   cloudCol = mix(cloudCol, cloudShadowCol * 0.80, entrainment * 0.18);
   cloudCol = mix(cloudCol, precipMistCol, precipMist * 0.52);
-  cloudCol += precipShaftCol * (precipShaftOpacity * 0.88 + precipSparkleGlow * 0.24);
+  cloudCol += precipShaftCol * (precipShaftOpacity * 0.82 + precipSparkleGlow * 0.20);
 
   float precipDensity = precipMass * (1.05 * precipitationShaftStrength + 0.76 * precipitationMistStrength);
   float totalDensity = cloudDensity + precipDensity;

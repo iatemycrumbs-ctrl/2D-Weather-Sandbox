@@ -517,6 +517,9 @@ const guiControls_default = {
   precipitationMistStrength : 0.9,
   precipitationSparkle : 0.75,
   enablePrecipitationShaft : true,
+  birdFlockAmount : 0.65,
+  lightningThunderBoost : 2.5,
+  enableUpdateLogs : true,
   renderScale : 1.0,
   pixelRatioScale : 0.1,
   graphicsPreset : 'High',
@@ -589,6 +592,7 @@ var saveFileName = '';
 var fpsCounterEl;
 var tornadoLabelEl;
 var dynamicCAPE_Jkg = 0.0;
+var lastSimulationUpdateLogFrame = -1000;
 
 var guiControlsFromSaveFile = null;
 var datGui;
@@ -2632,7 +2636,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
       let soundArray = intensity > 1.0 ? this.thunderCGSounds : this.thunderCCSounds;
       let randomThunderSound = soundArray[Math.floor(Math.random() * soundArray.length)];
-      this.playOnce(randomThunderSound, intensity / (distance * 0.001), leftRightBalance, soundDelay);
+      const thunderGain = (intensity / (distance * 0.001)) * (guiControls.lightningThunderBoost || 1.0);
+      this.playOnce(randomThunderSound, thunderGain, leftRightBalance, soundDelay);
     }
 
     playOnce(buffer, volume = 1, leftRightBalance = 0, delay = 0)
@@ -2642,7 +2647,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       const pan = this.audioCtx.createStereoPanner();
       src.buffer = buffer;
       src.loop = false;
-      gain.gain.value = volume;
+      gain.gain.value = clamp(volume, 0.0, 4.0);
       pan.pan.value = clamp(leftRightBalance, -1., 1.);
       src.connect(gain).connect(pan).connect(this.audioCtx.destination);
       src.start(this.audioCtx.currentTime + delay);
@@ -2655,7 +2660,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       const pan = this.audioCtx.createStereoPanner();
       src.buffer = buffer;
       src.loop = true;
-      gain.gain.value = volume;
+      gain.gain.value = clamp(volume, 0.0, 4.0);
       pan.pan.value = clamp(leftRightBalance, -1., 1.);
       src.connect(gain).connect(pan).connect(this.audioCtx.destination);
       src.start();
@@ -4397,6 +4402,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightFocus'), guiControls.flashlightFocus);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightRange'), guiControls.flashlightRange);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.enableShaders ? guiControls.radiationHaze : 0.2);
+    gl.useProgram(skyBackgroundDisplayProgram);
+    gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'birdFlockAmount'), guiControls.birdFlockAmount);
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
     updateLightningRodUniforms();
@@ -4575,6 +4582,21 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         hideOrShowGraph();
         updateSunlight();
       }
+    };
+
+    guiControls.resetAtmosphere = function() {
+      guiControls.globalHeating = guiControls_default.globalHeating;
+      guiControls.globalDrying = guiControls_default.globalDrying;
+      guiControls.soundingForcing = guiControls_default.soundingForcing;
+      guiControls.waterTemperature = guiControls_default.waterTemperature;
+      guiControls.waterEvaporation = guiControls_default.waterEvaporation;
+      guiControls.landEvaporation = guiControls_default.landEvaporation;
+      guiControls.sunIntensity = guiControls_default.sunIntensity;
+      guiControls.IR_rate = guiControls_default.IR_rate;
+      guiControls.dynamicChargeSeparation = guiControls_default.dynamicChargeSeparation;
+      guiControls.lightningChanceMult = guiControls_default.lightningChanceMult;
+      setGuiUniforms();
+      updateSunlight('MANUAL_ANGLE');
     };
 
     var fluidParams_folder = datGui.addFolder('Fluid');
@@ -4881,6 +4903,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     });
     UI_folder.add(guiControls, 'allowEditingWhenPaused').name('Edit While Paused');
     UI_folder.add(guiControls, 'uiSounds').name('UI Sounds');
+    UI_folder.add(guiControls, 'birdFlockAmount', 0.0, 1.6, 0.01).name('Bird Flock Activity').onChange(function() {
+      gl.useProgram(skyBackgroundDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'birdFlockAmount'), guiControls.birdFlockAmount);
+    });
+    UI_folder.add(guiControls, 'enableUpdateLogs').name('Simulation Update Logs');
     UI_folder.add(guiControls, 'allowCaves')
       .onChange(function() {
         if (!gl)
@@ -5403,6 +5430,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     precipitation_folder.add(guiControls, 'inactiveDroplets', 0, NUM_DROPLETS).listen().name('Inactive Droplets');
 
     var lightning_folder = datGui.addFolder('Lightning & Shake');
+    lightning_folder.add(guiControls, 'lightningThunderBoost', 1.0, 4.0, 0.05).name('Lightning Thunder Boost');
 
     lightning_folder.add(guiControls, 'cameraShake').name('Camera Shake');
     lightning_folder.add(guiControls, 'shakeFrequency', 1.0, 20.0, 1.0).name('Shake Frequency');
@@ -5547,7 +5575,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .listen();
     display_folder.add(guiControls, 'exposure', 0.5, 5.0, 0.01)
       .onChange(function() {
-        gl.useProgram(postProcessingProgram);
+        gl.useProgram(skyBackgroundDisplayProgram);
+    gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'birdFlockAmount'), guiControls.birdFlockAmount);
+    gl.useProgram(postProcessingProgram);
         gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
       })
       .name('Exposure');
@@ -5666,6 +5696,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       }
     });
 
+    advanced_folder.add(guiControls, 'resetAtmosphere').name('Reset Atmosphere');
     advanced_folder.add(guiControls, 'resetSettings').name('Reset all settings');
 
     datGui.add(guiControls, 'paused').onChange(handlePause).name('Paused').listen();
@@ -5761,6 +5792,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightFocus'), guiControls.flashlightFocus);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightRange'), guiControls.flashlightRange);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.enableShaders ? guiControls.radiationHaze : 0.2);
+    gl.useProgram(skyBackgroundDisplayProgram);
+    gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'birdFlockAmount'), guiControls.birdFlockAmount);
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
     datGui.show(); // unhide
@@ -7667,6 +7700,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1i(gl.getUniformLocation(skyBackgroundDisplayProgram, 'precipFeedbackTex'), 7);
   gl.uniform1i(gl.getUniformLocation(skyBackgroundDisplayProgram, 'planeTex'), 8);
   gl.uniform1i(gl.getUniformLocation(skyBackgroundDisplayProgram, 'planeGearTex'), 10);
+  gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'birdFlockAmount'), guiControls.birdFlockAmount);
 
   gl.useProgram(universalDisplayProgram);
   gl.uniform2f(gl.getUniformLocation(universalDisplayProgram, 'resolution'), sim_res_x, sim_res_y);
@@ -8225,6 +8259,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       cursorType = 0;     // cursor off sig
     }
 
+    gl.useProgram(skyBackgroundDisplayProgram);
+    gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'birdFlockAmount'), guiControls.birdFlockAmount);
     gl.useProgram(postProcessingProgram);
 
     if (cursorType != 0 && !sunIsUp) {
@@ -8239,6 +8275,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       // clicking while tool is set to flashlight(NONE)
       // enable flashlight
       cursorType += 0.55;
+    }
+
+    if (guiControls.enableUpdateLogs && frameNum - lastSimulationUpdateLogFrame >= 180) {
+      lastSimulationUpdateLogFrame = frameNum;
+      console.log('[update]', 'frame=' + frameNum, 'iter=' + iterNum, 'sun=' + guiControls.sunAngle.toFixed(1), 'CAPE=' + dynamicCAPE_Jkg.toFixed(0), 'lightningChance=' + guiControls.lightningChanceMult.toFixed(4), 'evap=' + guiControls.waterEvaporation.toFixed(5));
     }
 
     // Follow droplet
@@ -8398,7 +8439,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
 
       // Bloom/isolate blur pipeline removed for performance.
-      gl.useProgram(postProcessingProgram);
+      gl.useProgram(skyBackgroundDisplayProgram);
+    gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'birdFlockAmount'), guiControls.birdFlockAmount);
+    gl.useProgram(postProcessingProgram);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, hdrFBO.texture);
       gl.activeTexture(gl.TEXTURE1);
@@ -8406,7 +8449,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
       gl.disable(gl.BLEND);
 
-      gl.useProgram(postProcessingProgram);
+      gl.useProgram(skyBackgroundDisplayProgram);
+    gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'birdFlockAmount'), guiControls.birdFlockAmount);
+    gl.useProgram(postProcessingProgram);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, hdrFBO.texture);
       gl.activeTexture(gl.TEXTURE1);
