@@ -325,7 +325,7 @@ void main()
       water[TOTAL] += trail * 0.8;
       water[CLOUD] += trail * 1.1;
       base[VY] += trail * 0.0016;
-      base[VX] += sin(iterNum * 0.05 + texCoord.x * 18.0) * trail * 0.0006;
+      base[VX] += sin((texCoord.x + texCoord.y) * 18.0) * trail * 0.0006;
 
     } else if (userInputType == 27) { // local heating + drying
       float heating = userInputValues[BRUSH_INTENSITY] * 55.0;
