@@ -133,8 +133,8 @@ vec3 getWallColor(float depth)
     vec3 concrete = mix(vec3(0.42, 0.45, 0.50), vec3(0.30, 0.33, 0.38), broadPatch);
     vec3 asphalt = mix(vec3(0.18, 0.19, 0.21), vec3(0.24, 0.24, 0.26), finePatch);
     color = mix(concrete, asphalt, blockGrid * 0.45 + depth * 0.08);
-  } else if (wall[TYPE] == WALLTYPE_INDUSTRIAL) {
-    bool skyscraperProxy = wall[VEGETATION] < 10;
+  } else if (wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[TYPE] == WALLTYPE_NUCLEAR) {
+    bool skyscraperProxy = wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[VEGETATION] < 10;
     if (skyscraperProxy) {
       float verticalBands = step(0.48, fract(texCoord.x * resolution.x * 0.26));
       float windowRows = step(0.44, fract(texCoord.y * resolution.y * 0.24));
@@ -166,8 +166,6 @@ vec3 getWallColor(float depth)
   return color;
 }
 
-const vec2 lightningTexRes = vec2(2500, 5000);
-const float lightningTexAspect = lightningTexRes.x / lightningTexRes.y;
 
 float calcLightningTime(float startIterNum)
 {
@@ -216,46 +214,71 @@ vec2 lightningWarpOffset(vec2 uv, float lightningTime, vec2 seed, float strikeTy
 
 vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
 {
-  vec2 uv = vec2(0.5);
   float wrappedDx = mod((texCoord.x - pos.x) + 1.5, 1.0) - 0.5;
   vec2 rel = vec2(wrappedDx, texCoord.y - pos.y);
 
-  float branchAngle = (random2d(pos * 27.9) - 0.5) * 0.80;
-  float driftAngle = (random2d(pos * 41.7 + vec2(1.0)) - 0.5) * 0.40;
-  float angle = branchAngle + driftAngle;
-
-  vec2 dir = normalize(vec2(cos(angle), sin(angle) * 0.32));
+  float tilt = (random2d(pos * 31.9) - 0.5) * 0.85;
+  vec2 dir = normalize(vec2(cos(tilt), sin(tilt) * 0.34));
   vec2 perp = vec2(-dir.y, dir.x);
 
   float along = dot(rel, dir);
   float across = dot(rel, perp);
-  float cloudDrift = sin((texCoord.y - pos.y) * 18.0 + random2d(pos * 21.7) * 6.2831) * 0.08;
-  float anvilShear = (texCoord.y - pos.y) * 0.20;
+  float shear = sin((texCoord.y - pos.y) * 22.0 + random2d(pos * 23.1) * 6.2831) * 0.08;
 
-  uv.x = 0.5 + (along + cloudDrift + anvilShear) * scaleMult * aspectRatios[0] * 2.12;
-  uv.y = 0.5 + across * scaleMult * 1.18;
+  vec2 uv;
+  uv.x = along * scaleMult * 2.25 + shear;
+  uv.y = across * scaleMult * 1.35;
   return uv;
 }
 
 vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
 {
-  vec2 uv = vec2(0.5);
   float wrappedDx = mod((texCoord.x - pos.x) + 1.5, 1.0) - 0.5;
-
-  // Normalize vertical texture traversal so the channel head starts near the cloud source
-  // and can continue all the way down to terrain instead of collapsing into short stubs.
   float sourceToGround = max(pos.y, 0.08);
   float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
 
-  float branchCurve = sin(verticalTravel * 8.0 + random2d(pos * 19.3) * 6.2831) * (0.022 + (1.0 - verticalTravel) * 0.016);
-  float leaderSeg = floor(verticalTravel * 32.0) / 32.0;
-  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.034 + (1.0 - verticalTravel) * 0.020);
-  float bow = sin(verticalTravel * 3.14159 * (1.7 + random2d(pos * 43.1))) * (0.014 + (1.0 - verticalTravel) * 0.022);
-  float microZag = sin(verticalTravel * 78.0 + random2d(pos * 53.2) * 6.2831) * 0.006;
-  float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.10;
-  uv.x = 0.5 + (wrappedDx + branchCurve + leaderJitter + bow + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.74;
-  uv.y = verticalTravel * 1.26;
+  float trunkSway = sin(verticalTravel * 10.0 + random2d(pos * 19.3) * 6.2831) * (0.020 + (1.0 - verticalTravel) * 0.028);
+  float leaderSeg = floor(verticalTravel * 30.0) / 30.0;
+  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 13.0, pos.y * 17.0)) - 0.5) * (0.026 + (1.0 - verticalTravel) * 0.028);
+  float zig = sin(verticalTravel * 90.0 + random2d(pos * 37.0) * 6.2831) * 0.010;
+
+  vec2 uv;
+  uv.x = (wrappedDx + trunkSway + leaderJitter + zig) * scaleMult * aspectRatios[0] * 1.12;
+  uv.y = verticalTravel;
   return uv;
+}
+
+float dynamicLightningChannel(vec2 uv, float T, vec2 seed, float strikeTypeSign)
+{
+  float axis = strikeTypeSign < 0.0 ? uv.x : uv.y;
+  float side = strikeTypeSign < 0.0 ? uv.y : uv.x;
+
+  float shapeWarp = 1.0;
+  if (lightningShapeMode == 1)
+    shapeWarp = 0.78;
+  else if (lightningShapeMode == 2)
+    shapeWarp = 1.22;
+  else if (lightningShapeMode == 3)
+    shapeWarp = 1.52;
+
+  float mainPath = sin(axis * 30.0 + T * 3.5 + random2d(seed * 4.9) * 6.2831) * 0.042 * shapeWarp;
+  mainPath += sin(axis * 74.0 + T * 6.4 + random2d(seed * 9.1) * 6.2831) * 0.018 * shapeWarp;
+  mainPath += sin(axis * 140.0 + T * 11.0 + random2d(seed * 2.3) * 6.2831) * 0.008 * shapeWarp;
+
+  float trunk = exp(-pow((side - mainPath) / (strikeTypeSign < 0.0 ? 0.040 : 0.031), 2.0));
+
+  float branchSeed = random2d(seed * 6.7 + vec2(floor(axis * 18.0), floor(axis * 9.0)));
+  float branchGate = smoothstep(0.62, 0.96, branchSeed);
+  float branchDir = branchSeed < 0.79 ? -1.0 : 1.0;
+  float branchCenter = mainPath + branchDir * (0.020 + fract(axis * 11.0 + branchSeed) * 0.08);
+  float branchWidth = mix(0.022, 0.060, fract(axis * 7.0 + branchSeed * 3.0));
+  float branch = exp(-pow((side - branchCenter) / branchWidth, 2.0)) * branchGate;
+
+  float micro = sin((axis * 270.0 + side * 48.0) + T * 15.0 + random2d(seed * 11.7) * 6.2831);
+  float plasmaNoise = 0.84 + 0.16 * micro;
+
+  float channel = max(trunk, branch * (strikeTypeSign < 0.0 ? 0.55 : 0.68));
+  return channel * plasmaNoise;
 }
 
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
@@ -281,85 +304,55 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
 
 vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningIntensity)
 {
-  float signedIntensity = currentLightningIntensity;
-  float strikeTypeSign = signedIntensity < 0.0 ? -1.0 : 1.0;
+  float strikeTypeSign = currentLightningIntensity < 0.0 ? -1.0 : 1.0;
   float absIntensity = abs(currentLightningIntensity);
   if (absIntensity < 0.00001)
     return vec3(0.0);
 
-  vec2 lightningTexCoord = texCoord;
-  float phaseDrift = fract(lightningTexturePhase + random2d(pos * 11.3) * 0.37);
-  lightningTexCoord.x -= mod(pos.x + phaseDrift * 0.22, 1.0);
-  lightningTexCoord.y -= pos.y;
-
-  float scaleMult = 1.0;
+  vec2 lightningCoord;
+  float scaleMult;
   if (strikeTypeSign < 0.0) {
     float icAnchorY = clamp(pos.y, 0.34, 0.88);
-    scaleMult = 1.0 / max(0.24 + abs(icAnchorY - 0.50), 0.34);
-    lightningTexCoord = remapICLightningUV(lightningTexCoord, pos, scaleMult);
+    scaleMult = 1.0 / max(0.22 + abs(icAnchorY - 0.50), 0.34);
+    lightningCoord = remapICLightningUV(texCoord, pos, scaleMult);
   } else {
     float cgSourceY = clamp(pos.y, 0.26, 0.72);
-    scaleMult = 1.0 / max(cgSourceY * 0.90, 0.18);
-    lightningTexCoord = remapCGLightningUV(lightningTexCoord, pos, scaleMult);
+    scaleMult = 1.0 / max(cgSourceY * 0.88, 0.16);
+    lightningCoord = remapCGLightningUV(texCoord, pos, scaleMult);
   }
 
-  if (lightningTexCoord.x < -0.40 || lightningTexCoord.x > 1.40 || lightningTexCoord.y < -0.35 || lightningTexCoord.y > 1.40)
+  if (abs(lightningCoord.x) > 1.9 || lightningCoord.y < -0.28 || lightningCoord.y > 1.45)
     return vec3(0.0);
 
-  // Lightweight channel sampling to avoid perf spikes and overbright blocks.
-  vec2 px = vec2(1.0 / lightningTexRes.x, 1.0 / lightningTexRes.y);
-  float trunk = texture(lightningTex, lightningTexCoord).r;
-  float side = max(texture(lightningTex, lightningTexCoord + vec2(px.x, 0.0)).r,
-                   texture(lightningTex, lightningTexCoord - vec2(px.x, 0.0)).r);
-  float upDown = max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y)).r,
-                     texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r);
+  vec2 seed = vec2(pos.x + lightningTexturePhase, pos.y + fract(lightningTexturePhase * 1.73));
+  float channel = dynamicLightningChannel(lightningCoord, lightningTime, seed, strikeTypeSign);
 
-  float pixVal = max(trunk, max(side, upDown) * 0.55);
-  // Only CG requires diagonal bridge sampling; skipping this for IC reduces texture fetch cost.
-  if (strikeTypeSign > 0.0) {
-    float diag = max(max(texture(lightningTex, lightningTexCoord + vec2(px.x, px.y)).r,
-                         texture(lightningTex, lightningTexCoord + vec2(-px.x, px.y)).r),
-                     max(texture(lightningTex, lightningTexCoord + vec2(px.x, -px.y)).r,
-                         texture(lightningTex, lightningTexCoord + vec2(-px.x, -px.y)).r));
-    pixVal = max(pixVal, diag * 0.62);
-
-    // Continuity bridge: sample a short vertical segment in texture space so missing
-    // staircase pixels cannot split the CG trunk into disconnected chunks.
-    float segBridge = max(
-      texture(lightningTex, lightningTexCoord + vec2(0.0, px.y * 1.5)).r,
-      texture(lightningTex, lightningTexCoord - vec2(0.0, px.y * 1.5)).r
-    );
-    segBridge = max(segBridge,
-                    max(texture(lightningTex, lightningTexCoord + vec2(px.x * 0.75, px.y * 1.2)).r,
-                        texture(lightningTex, lightningTexCoord + vec2(-px.x * 0.75, -px.y * 1.2)).r));
-    pixVal = max(pixVal, segBridge * 0.58);
-  }
-
-  // Keep IC in cloud and CG mostly below source cloud.
   if (strikeTypeSign < 0.0) {
     float icCloudBand = smoothstep(0.46, 0.58, texCoord.y) * (1.0 - smoothstep(0.92, 0.99, texCoord.y));
     float localCloudMask = smoothstep(0.028, 0.15, water[CLOUD] + water[PRECIPITATION] * 0.38);
-    pixVal *= icCloudBand * localCloudMask;
+    channel *= icCloudBand * localCloudMask;
   } else {
     float belowSource = 1.0 - smoothstep(pos.y - 0.02, pos.y + 0.04, texCoord.y);
-    float nearGround = smoothstep(0.55, 1.00, lightningTexCoord.y);
-    float corridorWidth = mix(0.22, 0.40, nearGround);
-    float cgLateralConfine = 1.0 - smoothstep(corridorWidth, corridorWidth + 0.30, abs(lightningTexCoord.x - 0.5));
-    cgLateralConfine = max(cgLateralConfine, 0.16);
-    pixVal *= belowSource * cgLateralConfine;
+    float nearGround = smoothstep(0.56, 1.0, lightningCoord.y);
+    float corridorWidth = mix(0.24, 0.42, nearGround);
+    float cgLateralConfine = 1.0 - smoothstep(corridorWidth, corridorWidth + 0.34, abs(lightningCoord.x));
+    float cgCloudGate = smoothstep(0.012, 0.065, water[CLOUD] + water[PRECIPITATION] * 0.22);
+    float gateByHeight = smoothstep(0.00, 0.35, lightningCoord.y);
+    channel *= belowSource * max(cgLateralConfine, 0.14) * max(cgCloudGate, gateByHeight);
   }
 
-  float channelFade = clamp(absIntensity * (strikeTypeSign > 0.0 ? 0.10 : 0.08), 0.0, 1.0);
-  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.0 : 0.9, strikeTypeSign > 0.0 ? 2.2 : 2.0, lightningTime);
-  pixVal *= channelFade * max(tailFade, 0.0);
+  float channelFade = clamp(absIntensity * (strikeTypeSign > 0.0 ? 0.11 : 0.09), 0.0, 1.0);
+  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.05 : 0.95, strikeTypeSign > 0.0 ? 2.30 : 2.10, lightningTime);
+  channel *= channelFade * max(tailFade, 0.0);
 
-  vec3 channelCoreCol = strikeTypeSign < 0.0 ? vec3(0.58, 0.44, 0.96) : vec3(0.52, 0.74, 1.0);
-  vec3 channelRimCol = strikeTypeSign < 0.0 ? vec3(0.92, 0.82, 1.0) : vec3(0.86, 0.95, 1.0);
+  vec3 channelCoreCol = strikeTypeSign < 0.0 ? vec3(0.62, 0.47, 0.98) : vec3(0.50, 0.76, 1.0);
+  vec3 channelRimCol = strikeTypeSign < 0.0 ? vec3(0.95, 0.84, 1.0) : vec3(0.88, 0.97, 1.0);
   vec3 lightningCol = mix(channelCoreCol, channelRimCol, 0.55);
 
-  vec3 rebuiltLightning = pixVal * lightningCol * 1100.0;
+  vec3 rebuiltLightning = channel * lightningCol * 1180.0;
   return min(max(rebuiltLightning, vec3(0.0)), vec3(5000.0));
 }
+
 
 
 float saturate(float x) { return min(1.0, max(0.0, x)); }
@@ -638,6 +631,9 @@ void main()
 
     case WALLTYPE_URBAN:
     case WALLTYPE_INDUSTRIAL:
+    case WALLTYPE_SUPER_INDUSTRIAL:
+    case WALLTYPE_SKYSCRAPER:
+    case WALLTYPE_NUCLEAR:
     case WALLTYPE_FIRE:
     case WALLTYPE_LAND:
 
@@ -775,7 +771,7 @@ void main()
           color = texCol.rgb;
           opacity = texCol.a;
         }
-      } else if (wallX0Ym[TYPE] == WALLTYPE_INDUSTRIAL) {
+      } else if (wallX0Ym[TYPE] == WALLTYPE_INDUSTRIAL || wallX0Ym[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wallX0Ym[TYPE] == WALLTYPE_SKYSCRAPER || wallX0Ym[TYPE] == WALLTYPE_NUCLEAR) {
 
         float heightAboveGround = localY + float(wall[VERT_DISTANCE] - 1);
 

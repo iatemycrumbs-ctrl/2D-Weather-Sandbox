@@ -243,20 +243,21 @@ void main()
 
       if (water[SOIL_MOISTURE] > 0.0 && tempC > 0.0) { // water evaporating from ground
         float vaporDeficit = max(maxWater(CtoK(tempC)) - water[TOTAL], 0.0);
-        float windDrying = map_rangeC(length(baseX0Yp.xy), 0.0, 0.03, 0.85, 1.95);
-        float moistureAvail = map_rangeC(water[SOIL_MOISTURE], 0.0, 60.0, 0.45, 1.35);
+        float windDrying = map_rangeC(length(baseX0Yp.xy), 0.0, 0.03, 0.88, 1.75);
+        float moistureAvail = map_rangeC(water[SOIL_MOISTURE], 0.0, 60.0, 0.35, 1.25);
         float landTypeFactor = 1.0;
         if (wall[TYPE] == WALLTYPE_URBAN)
           landTypeFactor = 0.68;
-        else if (wall[TYPE] == WALLTYPE_INDUSTRIAL)
+        else if (wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[TYPE] == WALLTYPE_NUCLEAR)
           landTypeFactor = 0.52;
         else if (wall[TYPE] == WALLTYPE_FIRE)
           landTypeFactor = 1.55;
 
-        float evaporation = vaporDeficit * 0.0000085 * windDrying * moistureAvail * landTypeFactor;
-        evaporation = min(evaporation, water[SOIL_MOISTURE] * 0.14 + 0.0012);
+        float ambientHumidityBrake = map_rangeC(water[TOTAL], 0.0, 14.0, 1.12, 0.56);
+        float evaporation = vaporDeficit * 0.0000072 * windDrying * moistureAvail * landTypeFactor * ambientHumidityBrake;
+        evaporation = min(evaporation, water[SOIL_MOISTURE] * 0.11 + 0.0009);
         water[SOIL_MOISTURE] -= evaporation;
-        water[TOTAL] += evaporation * 0.85;
+        water[TOTAL] += evaporation * 0.78;
       }
     }
   }
@@ -364,7 +365,7 @@ void main()
           }
           break;
         case 15:                                               // set runway
-          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL) &&
+          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[TYPE] == WALLTYPE_NUCLEAR) &&
               texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) { // if land wall and no wall above
             wall[TYPE] = WALLTYPE_RUNWAY;
           }
@@ -377,10 +378,40 @@ void main()
           break;
 
         case 24: // skyscraper tool (dense high-rise district proxy)
-          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL) &&
+          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[TYPE] == WALLTYPE_NUCLEAR) &&
               texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) {
-            wall[TYPE] = WALLTYPE_INDUSTRIAL;
-            wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 0.0, 8.0));
+            wall[TYPE] = WALLTYPE_SKYSCRAPER;
+            wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 0.0, 6.0));
+            water[SOIL_MOISTURE] = max(water[SOIL_MOISTURE] - 0.8, 0.0);
+          }
+          break;
+
+
+
+        case 30: // set super industrial
+          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_RUNWAY || wall[TYPE] == WALLTYPE_INDUSTRIAL) &&
+              texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) {
+            wall[TYPE] = WALLTYPE_SUPER_INDUSTRIAL;
+            wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 0.0, 5.0));
+            water[SOIL_MOISTURE] = max(water[SOIL_MOISTURE] - 1.2, 0.0);
+          }
+          break;
+
+        case 31: // set nuclear powerplant
+          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_RUNWAY || wall[TYPE] == WALLTYPE_INDUSTRIAL) &&
+              texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) {
+            wall[TYPE] = WALLTYPE_NUCLEAR;
+            wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 0.0, 4.0));
+            water[SOIL_MOISTURE] = max(water[SOIL_MOISTURE] - 1.6, 0.0);
+            base[TEMPERATURE] += 10.0 * max(userInputValues[BRUSH_INTENSITY], 0.0);
+          }
+          break;
+
+        case 32: // set skyscraper district
+          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[TYPE] == WALLTYPE_NUCLEAR) &&
+              texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) {
+            wall[TYPE] = WALLTYPE_SKYSCRAPER;
+            wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 0.0, 6.0));
             water[SOIL_MOISTURE] = max(water[SOIL_MOISTURE] - 0.8, 0.0);
           }
           break;
@@ -401,13 +432,13 @@ void main()
           }
           break;
         case 21:                                               // add snow
-          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL) &&
+          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[TYPE] == WALLTYPE_NUCLEAR) &&
               texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) { // if land wall and no wall above
             water[SNOW] += userInputValues[BRUSH_INTENSITY] * 0.5;
           }
           break;
         case 22:                                               // add vegetation
-          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_FIRE || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL) &&
+          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_FIRE || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[TYPE] == WALLTYPE_NUCLEAR) &&
               texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) { // if land wall and no wall above
             wall[VEGETATION] += 1;                             // add vegetation
           }
@@ -438,8 +469,17 @@ void main()
           } else if (userInputType == 15) {
             if (wall[TYPE] == WALLTYPE_RUNWAY) // remove runway
               wall[TYPE] = WALLTYPE_LAND;
-          } else if (userInputType == 16 || userInputType == 24) {
-            if (wall[TYPE] == WALLTYPE_INDUSTRIAL) // remove industry/skyscraper
+          } else if (userInputType == 16) {
+            if (wall[TYPE] == WALLTYPE_INDUSTRIAL) // remove industry
+              wall[TYPE] = WALLTYPE_LAND;
+          } else if (userInputType == 30) {
+            if (wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL)
+              wall[TYPE] = WALLTYPE_LAND;
+          } else if (userInputType == 31) {
+            if (wall[TYPE] == WALLTYPE_NUCLEAR)
+              wall[TYPE] = WALLTYPE_LAND;
+          } else if (userInputType == 24 || userInputType == 32) {
+            if (wall[TYPE] == WALLTYPE_SKYSCRAPER)
               wall[TYPE] = WALLTYPE_LAND;
           } else if (userInputType == 28) {
             water[SOIL_MOISTURE] = min(water[SOIL_MOISTURE] + abs(userInputValues[BRUSH_INTENSITY]) * 10.0, 40.0);

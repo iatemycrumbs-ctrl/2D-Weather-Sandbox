@@ -160,10 +160,10 @@ float computeSedimentationVelocity(float totalMass,
   float baseTerminal = fallSpeed * massTerminal * phaseBoost * spectrumBoost * airDensityBoost;
 
   // force a minimum settling component aloft so precip cannot remain suspended indefinitely.
-  float altitudeSettlingFloor = fallSpeed * mix(0.42, 0.95, clamp(altitudeNorm, 0.0, 1.0));
+  float altitudeSettlingFloor = fallSpeed * mix(0.56, 1.20, clamp(altitudeNorm, 0.0, 1.0));
 
   // updrafts can reduce settling but not fully cancel it; downdrafts accelerate fallout.
-  float cappedUpdraftAssist = min(max(updraft, 0.0) * (0.24 + turbulenceMixing * 0.04), baseTerminal * 0.68);
+  float cappedUpdraftAssist = min(max(updraft, 0.0) * (0.18 + turbulenceMixing * 0.03), baseTerminal * 0.48);
   float downdraftAssist = max(downdraft, 0.0) * (0.30 + microburstStrength * 0.25 + turbulenceMixing * 0.03);
 
   return max(baseTerminal + altitudeSettlingFloor + downdraftAssist - cappedUpdraftAssist, fallSpeed * 0.35);
@@ -355,7 +355,7 @@ void main()
     ivec2 sourceCell = ivec2(clamp(int(sourceX * resolution.x), 0, int(resolution.x) - 1), clamp(int(sourceY * resolution.y), 0, int(resolution.y) - 1));
     int sourceWallType = texelFetch(wallTex, sourceCell, 0)[TYPE];
 
-    if (sourceWallType == WALLTYPE_INDUSTRIAL) {
+    if (sourceWallType == WALLTYPE_INDUSTRIAL || sourceWallType == WALLTYPE_SUPER_INDUSTRIAL || sourceWallType == WALLTYPE_SKYSCRAPER || sourceWallType == WALLTYPE_NUCLEAR) {
       float bestScore = 0.0;
       vec2 bestCloudPos = vec2(sourceX, sourceY);
       float radius = clamp(lightningCloudLinkRadiusNorm, texelSize.x * 12.0, 0.45);
@@ -530,7 +530,7 @@ void main()
           float electricPotential = chargeDipole * pressureFactor * map_rangeC(base[VY], -0.01, 0.02, 0.6, 1.25);
 
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
-          lightningSpawnChance *= (0.28 + electricPotential * 2.45);
+          lightningSpawnChance *= (0.34 + electricPotential * 2.40);
           lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.12, 0.60) * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.85, 1.75);
           lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.55) * lightningFrequencyBoost;
 
@@ -544,7 +544,7 @@ void main()
           float aerosolElectric = map_rangeC(aerosolLoad, 0.2, 2.5, 0.7, 1.25);
           lightningSpawnChance *= cgBoost * organizationElectric * aerosolElectric;
           lightningSpawnChance *= map_rangeC(lightningBranching * lightningComplexity, 0.2, 4.0, 0.68, 1.95);
-          float stratiformFloor = max(cloudPlusPrecipDensity - (lightningCloudDensityThreshold + 0.04), 0.0) * 0.030;
+          float stratiformFloor = max(cloudPlusPrecipDensity - (lightningCloudDensityThreshold + 0.05), 0.0) * 0.026;
           lightningSpawnChance = max(lightningSpawnChance, stratiformFloor * lightningFrequencyBoost);
 
           float rodAttraction = 0.0;
@@ -563,7 +563,7 @@ void main()
             }
           }
 
-          lightningSpawnChance *= mix(1.0, 1.8, rodAttraction);
+          lightningSpawnChance *= mix(1.0, 1.35, rodAttraction);
 
           float planeDx = wrappedDistX(texCoord.x, airplanePosNorm.x);
           float planeDy = max(texCoord.y - airplanePosNorm.y, 0.0);
@@ -571,14 +571,14 @@ void main()
           float airplaneAttraction = smoothstep(0.30, 0.0, planeDist) * airplaneLightningAttractor;
           lightningSpawnChance *= mix(1.0, 1.55, airplaneAttraction);
           lightningSpawnChance *= map_rangeC(mobileLightningVisibility, 0.8, 2.2, 0.92, 1.28);
-          lightningSpawnChance = clamp(lightningSpawnChance, 0.00002, 0.92);
+          lightningSpawnChance = clamp(lightningSpawnChance, 0.00005, 0.82);
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
           float previousLightningAge = iterNum - lightningData[START_ITERNUM];
           float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.05, 0.52), 4.5 + abs(lightningData[INTENSITY]) * (1.9 + multiStrokeLightning * 1.35));
           bool lightningChannelFree = lightningWarmupDone && (lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold);
-          bool cloudAnchoredSource = water[CLOUD] > threshold * 1.30 && texCoord.y >= 0.22 && texCoord.y <= 0.96;
-          bool overdueStormRecharge = lightningWarmupDone && lightningChannelFree && previousLightningAge > (72.0 + 24.0 * lightningMinInterval)
+          bool cloudAnchoredSource = water[CLOUD] > threshold * 1.55 && sampleCloudStrength(texCoord) > 0.055 && texCoord.y >= 0.24 && texCoord.y <= 0.94;
+          bool overdueStormRecharge = lightningWarmupDone && lightningChannelFree && previousLightningAge > (64.0 + 24.0 * lightningMinInterval)
                                     && cloudPlusPrecipDensity > lightningCloudDensityThreshold + 0.22
                                     && electricPotential > 0.20
                                     && cloudAnchoredSource;
@@ -587,7 +587,7 @@ void main()
             isActive = false;
             gl_PointSize = 1.0;
 
-            bool forceCG = rodAttraction > 0.04 || airplaneAttraction > 0.06;
+            bool forceCG = rodAttraction > 0.12 || airplaneAttraction > 0.08;
             float chargeStratification = map_rangeC(water[CLOUD], threshold * 1.3, threshold * 4.8, 0.0, 1.0);
             bool canBeIC = texCoord.y > 0.26 && water[CLOUD] > threshold * 1.40 && chargeStratification > 0.18;
             float icModeBoost = map_rangeC(chargeStratification * max(base[VY], 0.0), 0.0, 0.04, 1.0, 1.35);
@@ -779,9 +779,9 @@ void main()
 
       // dry slots rapidly erode suspended hydrometeors and encourage fallout recycling.
       float drySlot = map_rangeC(maxWater(wetBulbTemp) - water[TOTAL], 0.0, 12.0, 0.0, 1.0);
-      if (drySlot > 0.65 && altitudeNorm > 0.35) {
-        newMass[WATER] *= 0.96;
-        newMass[ICE] *= 0.97;
+      if (drySlot > 0.58 && altitudeNorm > 0.30) {
+        newMass[WATER] *= 0.93;
+        newMass[ICE] *= 0.95;
       }
 
       newPos.x = mod(newPos.x + 1., 2.) - 1.; // wrap horizontal position around map edges

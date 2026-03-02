@@ -786,6 +786,23 @@
             }
         }
 
+
+
+        .dg.sim-ui-animated .cr,
+        .dg.sim-ui-animated .title {
+            transition: background-color 220ms ease, color 220ms ease, transform 220ms ease;
+        }
+
+        .dg.sim-ui-animated .cr:hover,
+        .dg.sim-ui-animated .title:hover {
+            transform: translateX(2px);
+            background-color: rgba(60, 120, 170, 0.35) !important;
+        }
+
+        .dg.sim-ui-animated .folder ul {
+            transition: max-height 240ms ease;
+        }
+
     </style>
 </head>
 
@@ -913,6 +930,16 @@
                                 <output id="introShaderQualityShow">1.00x</output>
                             </td>
                             <td>Controls startup haze/scattering shader intensity presets.</td>
+                        </tr>
+                        <tr>
+                            <td><b>Enable shader FX</b></td>
+                            <td>
+                                <label style="display:inline-flex;align-items:center;gap:8px;">
+                                    <input type="checkbox" id="introEnableShaders" checked />
+                                    <span>Enabled</span>
+                                </label>
+                            </td>
+                            <td>Disables bloom/scattering-heavy visual shaders for lower-end devices while keeping simulation active.</td>
                         </tr>
                         <tr>
                             <td><b>Lightning shader FX</b></td>
