@@ -5,7 +5,8 @@ onmessage = (event) => {
   const seed = (msg.seed ?? Date.now()) >>> 0;
 
   try {
-    const bolt = generateLightningBolt(width, height, seed);
+    const profile = normalizeLightningProfile(msg.profile || {});
+    const bolt = generateLightningBolt(width, height, seed, profile);
     const rgba = bolt.imageData.data;
     const luminanceData = new Uint8Array(width * height);
     for (let y = 0; y < height; y++) {
@@ -45,6 +46,15 @@ onmessage = (event) => {
     postMessage({id : msg.id, width, height, luminanceData : fallback, error : String(err)}, [ fallback.buffer ]);
   }
 };
+
+
+function normalizeLightningProfile(profile)
+{
+  const style = typeof profile.style == 'string' ? profile.style : 'Forked Classic';
+  const branchScale = Number.isFinite(profile.branchScale) ? Math.min(Math.max(profile.branchScale, 0.5), 2.5) : 1.0;
+  const complexity = Number.isFinite(profile.complexity) ? Math.min(Math.max(profile.complexity, 0.5), 2.5) : 1.0;
+  return {style, branchScale, complexity};
+}
 
 function stampTrunkSnake(luminanceData, width, height, trunkPoints)
 {
@@ -193,7 +203,7 @@ function bridgeDiagonalGaps(luminanceData, width, height)
   }
 }
 
-function generateLightningBolt(width, height, seed)
+function generateLightningBolt(width, height, seed, profile)
 {
   const lightningCanvas = new OffscreenCanvas(width, height);
   const ctx = lightningCanvas.getContext('2d', {alpha : true, desynchronized : true});
@@ -240,7 +250,8 @@ function generateLightningBolt(width, height, seed)
   trunkPoints.push({x : startX, y : startY});
   ctx.lineWidth = lineWidth;
 
-  const targetSegments = Math.max(1920, Math.floor(height * 1.55));
+  const stylePhase = profile.style == 'Chaotic Fractal' ? 1.35 : profile.style == 'Branch Spider' ? 1.2 : profile.style == 'Ribbon Arc' ? 0.85 : 1.0;
+  const targetSegments = Math.max(1920, Math.floor(height * 1.55 * profile.complexity));
   const baseStepY = height / targetSegments;
 
   for (let seg = 0; seg < targetSegments && startY < height; seg++) {
@@ -248,8 +259,8 @@ function generateLightningBolt(width, height, seed)
     const nextX = startX + Math.sin(angle) * (0.50 + baseStepY * 0.42);
     const nextY = startY + Math.max(0.22, Math.cos(angle) * (baseStepY * 1.34));
 
-    angle += (rand() - 0.5) * (0.46 + (1.0 - progress) * 0.20);
-    angle -= (angle - targetAngle) * 0.11;
+    angle += (rand() - 0.5) * (0.46 * stylePhase + (1.0 - progress) * 0.20 * profile.complexity);
+    angle -= (angle - targetAngle) * (0.11 / stylePhase);
 
     ctx.lineTo(nextX, nextY);
     trunkPoints.push({x : nextX, y : nextY});
@@ -257,12 +268,12 @@ function generateLightningBolt(width, height, seed)
     startX = nextX;
     startY = nextY;
 
-    const branchChance = (0.0068 + (1.0 - progress) * 0.0055) * (1.0 + Math.max(lineWidth - 3.0, 0.0) * 0.05);
+    const branchChance = (0.0068 + (1.0 - progress) * 0.0055) * (1.0 + Math.max(lineWidth - 3.0, 0.0) * 0.05) * profile.branchScale * (0.9 + 0.25 * profile.complexity);
     if (rand() < branchChance) {
       ctx.strokeStyle = genLightningColor(lineWidth);
       ctx.stroke();
       drawJunction(nextX, nextY, lineWidth);
-      drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.86, lineWidth * (0.24 + 0.14 * rand()));
+      drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.86 * stylePhase, lineWidth * (0.24 + 0.14 * rand()) * profile.branchScale);
       ctx.beginPath();
       ctx.moveTo(nextX, nextY);
       ctx.lineWidth = lineWidth;
@@ -299,15 +310,15 @@ function generateLightningBolt(width, height, seed)
       const nextX = startX + Math.sin(angle);
       const nextY = startY + Math.cos(angle);
 
-      angle += (rand() - 0.5) * 0.42;
-      angle -= (angle - targetAngle) * 0.08;
+      angle += (rand() - 0.5) * (0.42 * stylePhase);
+      angle -= (angle - targetAngle) * (0.08 / stylePhase);
 
       ctx.lineTo(nextX, nextY);
 
       startX = nextX;
       startY = nextY;
 
-      if (rand() < 0.014) {
+      if (rand() < 0.014 * profile.complexity) {
         ctx.strokeStyle = genLightningColor(line_width);
         ctx.stroke();
         line_width -= 0.2;
@@ -315,8 +326,8 @@ function generateLightningBolt(width, height, seed)
         if (line_width < 0.1)
           return;
 
-        if (rand() < 0.025)
-          drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.62, line_width * 0.82);
+        if (rand() < 0.025 * profile.branchScale)
+          drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.62 * stylePhase, line_width * 0.82);
 
         drawJunction(nextX, nextY, line_width);
         ctx.beginPath();
