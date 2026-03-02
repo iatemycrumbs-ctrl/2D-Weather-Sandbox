@@ -265,7 +265,7 @@ float dynamicLightningChannel(vec2 uv, float T, vec2 seed, float strikeTypeSign)
   mainPath += sin(axis * 74.0 + T * 6.4 + random2d(seed * 9.1) * 6.2831) * 0.011 * shapeWarp;
   mainPath += sin(axis * 140.0 + T * 11.0 + random2d(seed * 2.3) * 6.2831) * 0.0045 * shapeWarp;
 
-  float trunkWidth = strikeTypeSign < 0.0 ? 0.022 : 0.016;
+  float trunkWidth = strikeTypeSign < 0.0 ? 0.014 : 0.010;
   float trunk = exp(-pow((side - mainPath) / trunkWidth, 2.0));
 
   float branchSeed = random2d(seed * 6.7 + vec2(floor(axis * 18.0), floor(axis * 9.0)));
@@ -273,7 +273,7 @@ float dynamicLightningChannel(vec2 uv, float T, vec2 seed, float strikeTypeSign)
   float branchDir = branchSeed < 0.79 ? -1.0 : 1.0;
   float branchReach = (0.010 + fract(axis * 11.0 + branchSeed) * 0.030) * smoothstep(0.0, 0.75, axis);
   float branchCenter = mainPath + branchDir * branchReach;
-  float branchWidth = mix(0.006, 0.018, fract(axis * 7.0 + branchSeed * 3.0));
+  float branchWidth = mix(0.0035, 0.010, fract(axis * 7.0 + branchSeed * 3.0));
   float branchTaper = 1.0 - smoothstep(0.55, 1.0, axis);
   float branch = exp(-pow((side - branchCenter) / branchWidth, 2.0)) * branchGate * branchTaper;
 
@@ -282,6 +282,22 @@ float dynamicLightningChannel(vec2 uv, float T, vec2 seed, float strikeTypeSign)
 
   float channel = max(trunk, branch * (strikeTypeSign < 0.0 ? 0.42 : 0.52));
   return channel * plasmaNoise;
+}
+
+
+float lightningRapidFlicker(float T, vec2 lightningPos, bool isIC)
+{
+  float seed = random2d(lightningPos * 17.3);
+  float pulseCount = floor(mix(4.0, 8.99, seed));
+  float pulseTrain = 0.0;
+  for (int i = 0; i < 8; i++) {
+    if (float(i) >= pulseCount)
+      break;
+    float center = 0.08 + float(i) * (isIC ? 0.12 : 0.10) + random2d(lightningPos * (6.0 + float(i))) * 0.02;
+    float width = isIC ? 0.048 : 0.038;
+    pulseTrain += exp(-pow((T - center) / width, 2.0));
+  }
+  return clamp(0.28 + pulseTrain * 1.25, 0.0, 2.6);
 }
 
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
@@ -301,8 +317,9 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
   float flickerLF = 0.95 + 0.05 * sin(T * (isIC ? 4.8 : 3.6) + phase);
   float flickerHF = 0.92 + 0.08 * sin(T * (isIC ? 32.0 : 28.0) + phase * 1.9);
 
+  float rapidFlicker = lightningRapidFlicker(T, lightningPos, isIC);
   float dampedIntensity = pow(clamp(absIntensity, 0.0, 4.0), 1.45);
-  return channelEnvelope * max(flickerLF * flickerHF, 0.82) * dampedIntensity;
+  return channelEnvelope * max(flickerLF * flickerHF, 0.82) * rapidFlicker * dampedIntensity;
 }
 
 vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningIntensity)
@@ -348,11 +365,12 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.05 : 0.95, strikeTypeSign > 0.0 ? 2.30 : 2.10, lightningTime);
   channel *= channelFade * max(tailFade, 0.0);
 
-  vec3 channelCoreCol = strikeTypeSign < 0.0 ? vec3(0.62, 0.47, 0.98) : vec3(0.50, 0.76, 1.0);
-  vec3 channelRimCol = strikeTypeSign < 0.0 ? vec3(0.95, 0.84, 1.0) : vec3(0.88, 0.97, 1.0);
-  vec3 lightningCol = mix(channelCoreCol, channelRimCol, 0.55);
+  vec3 channelCoreCol = strikeTypeSign < 0.0 ? vec3(0.58, 0.82, 1.0) : vec3(0.55, 0.84, 1.0);
+  vec3 channelRimCol = vec3(0.95, 0.98, 1.0);
+  float whiteFlash = smoothstep(0.0, 0.25, absIntensity) * (0.6 + 0.4 * sin(lightningTime * 52.0));
+  vec3 lightningCol = mix(channelCoreCol, channelRimCol, 0.62 + whiteFlash * 0.22);
 
-  vec3 rebuiltLightning = channel * lightningCol * 1180.0;
+  vec3 rebuiltLightning = channel * lightningCol * (980.0 + whiteFlash * 380.0);
   return min(max(rebuiltLightning, vec3(0.0)), vec3(5000.0));
 }
 
@@ -684,6 +702,12 @@ void main()
         color = airColor.rgb;
       } else {
         color = vec3(0, 0.5, 1.0); // water
+        float fishBand = smoothstep(0.08, 0.32, fract(fragCoord.y));
+        float fishSwim = sin(fragCoord.x * 0.10 + iterNum * 0.045) * 0.5 + 0.5;
+        float fish = smoothstep(0.965, 1.0, sin(fragCoord.x * 0.22 + iterNum * 0.09 + fract(fragCoord.y) * 24.0));
+        float fishMask = fishBand * fish * (0.45 + 0.55 * fishSwim);
+        vec3 fishCol = mix(vec3(1.0, 0.55, 0.18), vec3(0.22, 0.95, 0.78), fract(fragCoord.x * 0.013));
+        color = mix(color, fishCol, fishMask * 0.85);
       }
 
       // draw 45° slopes under water
@@ -742,7 +766,7 @@ void main()
       // ivec4 wallX0Ym = texture(wallTex, texCoordX0Ym);
 
 #define texAspect 2560. / 4096. // height / width of tree texture
-#define maxTreeHeight 40.       // height in meters when vegetation max = 127
+#define maxTreeHeight 58.       // taller tree rendering scale
 #define maxBuildingHeight 400.  // height in meters upto wich the urban texture reaches
 
 
@@ -801,6 +825,15 @@ void main()
           }
           color = texCol.rgb;
           opacity = texCol.a;
+
+          if (wallX0Ym[TYPE] == WALLTYPE_SUPER_INDUSTRIAL) {
+            float tx = fract(fragCoord.x / 80.0);
+            float towerCols =
+              step(abs(tx - 0.10), 0.018) + step(abs(tx - 0.22), 0.018) + step(abs(tx - 0.34), 0.018) +
+              step(abs(tx - 0.46), 0.018) + step(abs(tx - 0.58), 0.018) + step(abs(tx - 0.70), 0.018);
+            float towerMask = towerCols * smoothstep(0.02, 0.72, heightAboveGround / max(urbanTexHeightNorm, 0.01));
+            color = mix(color, vec3(0.76, 0.82, 0.88), clamp(towerMask, 0.0, 1.0));
+          }
         }
       }
 

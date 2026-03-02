@@ -52,7 +52,7 @@ void main()
   vec3 rainCol = mix(vec3(0.08, 0.34, 0.90), vec3(0.36, 0.80, 1.00), clamp(rainFrac * 1.2, 0.0, 1.0));
   vec3 snowCol = vec3(0.96, 0.98, 1.00);
   vec3 graupelCol = vec3(0.76, 0.90, 1.00);
-  vec3 hailCol = vec3(0.55, 0.80, 1.00);
+  vec3 hailCol = vec3(0.98, 0.99, 1.00);
 
   vec3 iceCol = density_out >= 1.08 ? hailCol : mix(snowCol, graupelCol, smoothstep(0.20, 1.08, density_out));
   vec3 phaseCol = mix(iceCol, rainCol, rainFrac);
@@ -65,7 +65,10 @@ void main()
   phaseCol += vec3(0.18, 0.24, 0.33) * wakeTail * (0.35 + 0.65 * rainFrac);
   phaseCol += vec3(0.12, 0.18, 0.27) * streakTrail * rainFrac;
 
-  fragmentColor = vec4(clamp(phaseCol, 0.0, 1.0), clamp(opacity, 0.0, 1.0));
+  float hailShard = step(1.08, density_out) * pow(max(1.0 - abs(r - 0.22) * 4.0, 0.0), 7.0) * (0.5 + 0.5 * shimmer);
+  phaseCol += vec3(0.82, 0.86, 0.95) * hailShard;
+
+  fragmentColor = vec4(clamp(phaseCol, 0.0, 1.0), clamp(opacity + hailShard * 0.18, 0.0, 1.0));
 
   // fragmentColor = vec4(1.0, 1.0, 0.0, 1.0); // all highly visible for DEBUG
 }

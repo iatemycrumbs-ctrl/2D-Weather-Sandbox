@@ -320,6 +320,13 @@ void main()
       water[SMOKE] += userInputValues[BRUSH_INTENSITY];
       water[SMOKE] = min(max(water[SMOKE], 0.0), 2.0);
 
+    } else if (userInputType == 33 && wall[DISTANCE] != 0) { // artificial cloud seeding airplane trail
+      float trail = max(userInputValues[BRUSH_INTENSITY], 0.0);
+      water[TOTAL] += trail * 0.8;
+      water[CLOUD] += trail * 1.1;
+      base[VY] += trail * 0.0016;
+      base[VX] += sin(iterNum * 0.05 + texCoord.x * 18.0) * trail * 0.0006;
+
     } else if (userInputType == 27) { // local heating + drying
       float heating = userInputValues[BRUSH_INTENSITY] * 55.0;
       base[TEMPERATURE] += heating;
@@ -395,7 +402,7 @@ void main()
           if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_RUNWAY || wall[TYPE] == WALLTYPE_INDUSTRIAL) &&
               texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) {
             wall[TYPE] = WALLTYPE_SUPER_INDUSTRIAL;
-            wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 0.0, 5.0));
+            wall[VEGETATION] = int(clamp(float(wall[VEGETATION]), 0.0, 8.0));
             water[SOIL_MOISTURE] = max(water[SOIL_MOISTURE] - 1.2, 0.0);
           }
           break;

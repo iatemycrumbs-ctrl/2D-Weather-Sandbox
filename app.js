@@ -369,6 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
   createPresetSelect();
   stationSelector = createStationSelect();
   prepareSounding();
+  initializeStartupUpdateLogUI();
 });
 
 
@@ -522,6 +523,8 @@ const guiControls_default = {
   enableUpdateLogs : true,
   renderScale : 1.0,
   pixelRatioScale : 0.1,
+  dynamicSimulationResolution : true,
+  useRealTimeDay : true,
   graphicsPreset : 'High',
   simulationProfile : 'Balanced',
   ambientScattering : 1.0,
@@ -597,6 +600,10 @@ var lastSimulationUpdateLogFrame = -1000;
 var guiControlsFromSaveFile = null;
 var datGui;
 var runtimeDeviceInfo = null;
+var devicePerfHudEl = null;
+var deviceRendererName = 'GPU n/a';
+var simulationUiOverlayState = {open : false, pauseBeforeOpen : false};
+var autoIterUpperBound = guiControls_default.IterPerFrame;
 
 var sim_res_x;
 var sim_res_y;
@@ -686,6 +693,23 @@ function getDeviceInfoSummary()
   return `${navigator.platform || 'unknown platform'} • DPR ${((window.devicePixelRatio || 1.0)).toFixed(2)} • ${memory} • ${cores}`;
 }
 
+function refreshDevicePerfHud(FPS = 0)
+{
+  if (!devicePerfHudEl)
+    return;
+  const cpu = navigator.hardwareConcurrency ? `${navigator.hardwareConcurrency} threads` : 'CPU n/a';
+  const mem = navigator.deviceMemory ? `${navigator.deviceMemory}GB` : 'RAM n/a';
+  const fpsText = FPS > 0 ? `${Math.round(FPS)} FPS` : 'warming up';
+  devicePerfHudEl.innerHTML = `GPU: ${deviceRendererName}<br>CPU: ${cpu} • ${mem}<br>${fpsText}`;
+}
+
+function getBrushResponseMult()
+{
+  const size = clamp(guiControls?.brushSize ?? 20, 1, 2000);
+  const taper = map_range(size, 1, 2000, 1.22, 0.46);
+  return clamp(taper, 0.40, 1.25);
+}
+
 function getAdaptiveEvapRate()
 {
   const baseRate = guiControls?.evapRate ?? guiControls_default.evapRate;
@@ -693,7 +717,87 @@ function getAdaptiveEvapRate()
   const windAssist = guiControls?.coastalMixing ?? guiControls_default.coastalMixing;
   const tempFactor = map_range(Math.min(Math.max(waterTemp, -5.0), 35.0), -5.0, 35.0, 0.78, 1.34);
   const windFactor = map_range(Math.min(Math.max(windAssist, 0.2), 2.5), 0.2, 2.5, 0.9, 1.22);
-  return baseRate * tempFactor * windFactor;
+  const capeFactor = map_range(clamp(dynamicCAPE_Jkg || 0.0, 0.0, 6000.0), 0.0, 6000.0, 0.88, 1.34);
+  const diurnalFactor = map_range(Math.sin(((guiControls?.sunAngle ?? 0.0) + 5.0) * degToRad), -1.0, 1.0, 0.78, 1.22);
+  const cloudDamping = map_range(clamp(guiControls?.cloudLayerComplexity ?? 1.0, 0.5, 2.5), 0.5, 2.5, 1.14, 0.86);
+  return baseRate * tempFactor * windFactor * capeFactor * diurnalFactor * cloudDamping;
+}
+
+function getDynamicSurfaceEvaporation()
+{
+  const landBase = guiControls?.landEvaporation ?? guiControls_default.landEvaporation;
+  const waterBase = guiControls?.waterEvaporation ?? guiControls_default.waterEvaporation;
+  const moistureLift = clamp(guiControls?.stormMoistureLift ?? 1.0, 0.6, 2.5);
+  const convection = map_range(clamp(dynamicCAPE_Jkg || 0.0, 0.0, 6000.0), 0.0, 6000.0, 0.92, 1.30);
+  const turbulence = map_range(clamp(guiControls?.coastalMixing ?? 1.0, 0.2, 2.5), 0.2, 2.5, 0.88, 1.24);
+  const radiation = map_range(clamp(guiControls?.sunIntensity ?? 1.0, 0.0, 2.0), 0.0, 2.0, 0.74, 1.26);
+  const cloudShield = map_range(clamp(guiControls?.cloudLayerComplexity ?? 1.0, 0.5, 2.5), 0.5, 2.5, 1.12, 0.82);
+  const stormPulse = 1.0 + clamp(guiControls?.stormPulseStrength ?? 0.0, 0.0, 2.0) * 0.16;
+  const multiplier = convection * turbulence * radiation * cloudShield * stormPulse;
+
+  return {
+    land : landBase * multiplier * map_range(moistureLift, 0.6, 2.5, 0.92, 1.12),
+    water : waterBase * multiplier * map_range(moistureLift, 0.6, 2.5, 0.96, 1.20)
+  };
+}
+
+function getDynamicCloudGrowthProfile()
+{
+  const baseGrowth0 = guiControls?.growthRate0C ?? guiControls_default.growthRate0C;
+  const baseGrowthCold = guiControls?.growthRate_30C ?? guiControls_default.growthRate_30C;
+  const baseLifetime = guiControls?.cloudLifetimeBoost ?? guiControls_default.cloudLifetimeBoost;
+  const moistureLift = clamp(guiControls?.stormMoistureLift ?? 1.0, 0.6, 2.5);
+  const organization = clamp(guiControls?.stormOrganization ?? 1.0, 0.6, 2.5);
+  const aerosol = clamp(guiControls?.aerosolLoad ?? 1.0, 0.2, 2.5);
+  const cloudComplexity = clamp(guiControls?.cloudLayerComplexity ?? 1.0, 0.5, 2.5);
+  const capeBoost = map_range(clamp(dynamicCAPE_Jkg || 0.0, 0.0, 6000.0), 0.0, 6000.0, 0.94, 1.34);
+  const aerosolMicrophysics = map_range(aerosol, 0.2, 2.5, 0.90, 1.16);
+  const turbulenceCloudLift = map_range(clamp(guiControls?.turbulentMix ?? 1.0, 0.2, 2.5), 0.2, 2.5, 0.86, 1.22);
+  const cloudPulse = 1.0 + clamp(guiControls?.stormPulseStrength ?? 0.0, 0.0, 2.0) * 0.22;
+
+  return {
+    growthRate0C : baseGrowth0 * capeBoost * moistureLift * aerosolMicrophysics * turbulenceCloudLift,
+    growthRate_30C : baseGrowthCold * capeBoost * map_range(organization, 0.6, 2.5, 0.94, 1.24) * cloudPulse,
+    cloudLifetimeBoost : baseLifetime * map_range(cloudComplexity, 0.5, 2.5, 0.92, 1.18) * map_range(organization, 0.6, 2.5, 0.90, 1.18) * cloudPulse
+  };
+}
+
+function getLightningGenerationProfile()
+{
+  const complexity = clamp(guiControls?.lightningComplexity ?? 1.0, 0.5, 2.5);
+  const branching = clamp(guiControls?.lightningBranching ?? 1.0, 0.5, 2.5);
+  const shape = guiControls?.lightningShapeType ?? 'Forked Classic';
+  return {
+    style : shape,
+    branchScale : branching,
+    complexity
+  };
+}
+
+function initializeStartupUpdateLogUI()
+{
+  const modal = getEl('startupUpdateLogModal');
+  if (!modal)
+    return;
+
+  const closeBtn = getEl('startupUpdateLogClose');
+  const key = '2dws-update-log-v2026-03';
+  const hasSeen = localStorage.getItem(key) === 'seen';
+
+  if (!hasSeen)
+    modal.style.display = 'flex';
+
+  function closeModal()
+  {
+    modal.style.display = 'none';
+    localStorage.setItem(key, 'seen');
+  }
+
+  closeBtn?.addEventListener('click', closeModal);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal)
+      closeModal();
+  });
 }
 
 
@@ -787,6 +891,26 @@ function installSimulationControlFx()
     return;
   root.dataset.fxInstalled = '1';
 
+  const launcher = getEl('simControlsLauncher');
+  const openBtn = getEl('simControlsOpen');
+  const pauseBtn = getEl('simControlsPause');
+  if (launcher)
+    launcher.style.display = 'flex';
+
+  const setOverlay = (open) => {
+    simulationUiOverlayState.open = open;
+    root.classList.toggle('fullscreen-controls', open);
+    if (open) {
+      simulationUiOverlayState.pauseBeforeOpen = guiControls.paused;
+      guiControls.paused = true;
+      playUiBeep(0.85);
+    } else {
+      guiControls.paused = simulationUiOverlayState.pauseBeforeOpen;
+      playUiBeep(0.50);
+    }
+    handlePause();
+  };
+
   const pulseRow = (target) => {
     const row = target && target.closest ? target.closest('.cr') : null;
     if (!row)
@@ -810,6 +934,18 @@ function installSimulationControlFx()
 
   root.addEventListener('input', onInput, true);
   root.addEventListener('change', onChange, true);
+
+  openBtn?.addEventListener('click', () => setOverlay(!simulationUiOverlayState.open));
+  pauseBtn?.addEventListener('click', () => {
+    guiControls.paused = !guiControls.paused;
+    handlePause();
+    playUiBeep(guiControls.paused ? 0.8 : 0.45);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.code == 'Escape' && simulationUiOverlayState.open)
+      setOverlay(false);
+  });
 }
 
 let hdrFBO;
@@ -923,14 +1059,17 @@ function maxWater(Td)
 
 function dewpoint(W, tempK = 273.15)
 {
-  // Reworked dew point from absolute humidity using ideal-gas vapor pressure relation.
+  // Blended dewpoint: ideal-gas vapor pressure estimate + saturation-ratio correction for very moist/cloudy cells.
   const absHumidity = Math.max(W, 0.00001); // g/m^3
   const safeTempK = clamp(tempK, 170.0, 340.0);
   const vaporDensity = absHumidity * 0.001; // kg/m^3
   const vaporPressure_hPa = clamp((vaporDensity * 461.5 * safeTempK) / 100.0, 0.01, 110.0);
   const lnRatio = Math.log(vaporPressure_hPa / 6.112);
-  const TdC = (243.5 * lnRatio) / (17.67 - lnRatio);
-  return CtoK(clamp(TdC, -90.0, 55.0));
+  const TdIdealC = (243.5 * lnRatio) / (17.67 - lnRatio);
+
+  const satRatio = clamp(absHumidity / Math.max(maxWater(safeTempK), 0.0001), 0.0, 2.0);
+  const humidBiasC = map_range(satRatio, 0.0, 2.0, -1.2, 1.6);
+  return CtoK(clamp(TdIdealC + humidBiasC, -90.0, 55.0));
 }
 
 function relativeHumd(T, W) { return (W / maxWater(T)) * 100.0; }
@@ -2640,6 +2779,30 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       this.playOnce(randomThunderSound, thunderGain, leftRightBalance, soundDelay);
     }
 
+
+
+    soundHailBurst(intensity = 0.4)
+    {
+      const now = this.audioCtx.currentTime;
+      for (let i = 0; i < 6; i++) {
+        const noise = this.audioCtx.createBufferSource();
+        const buffer = this.audioCtx.createBuffer(1, 2048, this.audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let j = 0; j < data.length; j++)
+          data[j] = (Math.random() * 2.0 - 1.0) * Math.exp(-j / 220.0);
+        noise.buffer = buffer;
+        const bp = this.audioCtx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 900 + Math.random() * 2200;
+        const gain = this.audioCtx.createGain();
+        gain.gain.setValueAtTime(0.0001, now + i * 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.03 * intensity, now + i * 0.01 + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.01 + 0.08);
+        noise.connect(bp).connect(gain).connect(this.audioCtx.destination);
+        noise.start(now + i * 0.01);
+      }
+    }
+
     playOnce(buffer, volume = 1, leftRightBalance = 0, delay = 0)
     {
       const src = this.audioCtx.createBufferSource();
@@ -2756,6 +2919,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         }
 
         this.setSoundGainAndPan(this.rain_sound, rainVolume);
+
+        if (tempC < 1.5 && rainVolume > 0.22 && Math.random() < 0.07)
+          this.soundHailBurst(clamp(rainVolume * 1.2, 0.2, 1.0));
+
 
         //    console.log(distVolumeMult, rainVolume, windVolume);
       }
@@ -4231,6 +4398,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     stencil : false,
   };
   gl = canvas.getContext('webgl2', contextAttributes);
+  if (gl) {
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    if (dbg)
+      deviceRendererName = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || deviceRendererName;
+  }
   // console.log(gl.getContextAttributes());
 
   if (!gl) {
@@ -4278,10 +4450,13 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     if (!gl)
       return;
 
+    const dynamicEvap = getDynamicSurfaceEvaporation();
+    const cloudGrowth = getDynamicCloudGrowthProfile();
+
     gl.useProgram(boundaryProgram);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vorticity'), guiControls.vorticity);
-    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'landEvaporation'), guiControls.landEvaporation);
-    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterEvaporation'), guiControls.waterEvaporation);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'landEvaporation'), dynamicEvap.land);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterEvaporation'), dynamicEvap.water);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dynamicWaterTemperature'), guiControls.dynamicWaterTemperature ? 1.0 : 0.0);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'evapHeat'), guiControls.evapHeat);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterWeight'), guiControls.waterWeight);
@@ -4292,7 +4467,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'urbanHeatIslandStrength'), guiControls.urbanHeatIslandStrength);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'coastalMixing'), guiControls.coastalMixing);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterAlbedoShift'), guiControls.waterAlbedoShift);
-    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudLifetimeBoost'), guiControls.cloudLifetimeBoost);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudLifetimeBoost'), cloudGrowth.cloudLifetimeBoost);
     gl.useProgram(velocityProgram);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'dragMultiplier'), guiControls.dragMultiplier);
     gl.uniform1f(gl.getUniformLocation(velocityProgram, 'wind'), guiControls.wind);
@@ -4360,8 +4535,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'mobileLightningVisibility'), getMobileLightningVisibility());
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'snowDensity'), guiControls.snowDensity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'fallSpeed'), guiControls.fallSpeed);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), guiControls.growthRate0C);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate_30C'), guiControls.growthRate_30C);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate0C'), cloudGrowth.growthRate0C);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'growthRate_30C'), cloudGrowth.growthRate_30C);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'freezingRate'), guiControls.freezingRate);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'meltingRate'), guiControls.meltingRate);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapRate'), getAdaptiveEvapRate());
@@ -4843,6 +5018,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       {key : 'skyscraper', label : 'Skyscraper', id : 'TOOL_SKYSCRAPER'},
       {key : 'lightningRod', label : 'Lightning Rod', id : 'TOOL_LIGHTNING_ROD'},
       {key : 'lightningGenerator', label : 'Artificial Lightning Generator', id : 'TOOL_ARTIFICIAL_LIGHTNING'},
+      {key : 'cloudSeederPlane', label : 'Artificial Cloud (Airplane)', id : 'TOOL_ARTIFICIAL_CLOUD_PLANE'},
       {key : 'nuclearPowerplant', label : 'Nuclear Powerplant', id : 'TOOL_NUCLEAR_POWERPLANT'},
       {key : 'superIndustrial', label : 'Super Industrial', id : 'TOOL_SUPER_INDUSTRIAL'},
       {key : 'weatherStation', label : 'Weather Station', id : 'TOOL_STATION', hotkey : 'KeyM'},
@@ -4920,6 +5096,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     var radiation_folder = datGui.addFolder('Time & Radiation');
 
     radiation_folder.add(guiControls, 'timeOfDay', 0.0, 23.96, 0.01).onChange(onUpdateTimeOfDaySlider).name('Time of day').listen();
+    radiation_folder.add(guiControls, 'useRealTimeDay').name('Use Real-Time Day').listen();
     radiation_folder.add(guiControls, 'timeCycleRate', 0.1, 8.0, 0.05).name('Cycle Speed');
     radiation_folder.add(guiControls, 'timeCycleSmoothing', 0.0, 0.95, 0.01).name('Cycle Smoothing');
 
@@ -5511,6 +5688,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     graphicsQuality_folder.add(guiControls, 'pixelRatioScale', 0.05, 1.5, 0.01).name('Pixel Ratio Scale').onChange(function() {
       resizeCanvasAndPostFx();
     });
+    graphicsQuality_folder.add(guiControls, 'dynamicSimulationResolution').name('Dynamic Simulation Resolution');
     graphicsQuality_folder.add(guiControls, 'simulationProfile', ['Calm', 'Balanced', 'Dynamic', 'Extreme']).name('Simulation Profile').onChange(function() {
       applySimulationProfile(guiControls.simulationProfile);
     });
@@ -5712,6 +5890,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     installSimulationControlFx();
 
     datGui.width = 400;
+    autoIterUpperBound = Math.max(8, Math.round(guiControls.IterPerFrame));
   }
 
   // guiControls.paused = true; // pause before first iteration for debugging
@@ -5809,6 +5988,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     simDateTime = new Date(2000, Math.floor(guiControls.month) - 1, (guiControls.month % 1) * 30.417);
 
+    devicePerfHudEl = getEl('devicePerfHud');
+    refreshDevicePerfHud();
+
     if (!fpsCounterEl) {
       fpsCounterEl = document.createElement('div');
       document.body.appendChild(fpsCounterEl);
@@ -5880,7 +6062,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       var c = this.ctx;
 
       c.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
-      c.fillStyle = '#00000055';
+      const bgGrad = c.createLinearGradient(0, 0, 0, graphCanvas.height);
+      bgGrad.addColorStop(0.0, 'rgba(8,16,28,0.80)');
+      bgGrad.addColorStop(1.0, 'rgba(4,8,14,0.62)');
+      c.fillStyle = bgGrad;
       c.fillRect(0, 0, graphCanvas.width, graphCanvas.height);
 
       drawIsotherms();
@@ -6090,6 +6275,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       dynamicCAPE_Jkg = cape;
       c.fillStyle = '#ffe58a';
       c.fillText('CAPE ' + Math.round(dynamicCAPE_Jkg) + ' J/kg', 10, 20);
+      const selectedTempC = baseTextureValues[4 * simYpos + 3] - ((simYpos / sim_res_y) * guiControls.simHeight * guiControls.dryLapseRate) / 1000.0 - 273.15;
+      const selectedDewC = KtoC(dewpoint(waterTextureValues[4 * simYpos], CtoK(selectedTempC)));
+      c.fillStyle = '#9ad8ff';
+      c.fillText('T-Td Spread ' + (selectedTempC - selectedDewC).toFixed(1) + '°', 10, 40);
       c.fillStyle = 'white';
       c.fillText('' + printDistance(map_range(simXpos, 0, sim_res_y, 0, guiControls.simHeight)), this.graphCanvas.width - 70, 20);
 
@@ -7510,7 +7699,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         width : lightningTexturePlan.width,
         height : lightningTexturePlan.height,
         quality : lightningTexturePlan.quality,
-        seed : seed >>> 0
+        seed : seed >>> 0,
+        profile : getLightningGenerationProfile()
       });
     });
   }
@@ -7926,6 +8116,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = -1;
         else if (guiControls.tool == 'TOOL_ARTIFICIAL_LIGHTNING')
           inputType = 25;
+        else if (guiControls.tool == 'TOOL_ARTIFICIAL_CLOUD_PLANE')
+          inputType = 33;
 
         // Surface environment modifiers
         else if (guiControls.tool == 'TOOL_WALL_MOIST')
@@ -7935,7 +8127,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         else if (guiControls.tool == 'TOOL_VEGETATION')
           inputType = 22;
 
-        var intensity = guiControls.brushIntensity;
+        var intensity = guiControls.brushIntensity * getBrushResponseMult();
         if (guiControls.tool == 'TOOL_LOCAL_HEAT_DRY')
           intensity *= 1.4;
         else if (guiControls.tool == 'TOOL_NUCLEAR_POWERPLANT')
@@ -8279,7 +8471,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     if (guiControls.enableUpdateLogs && frameNum - lastSimulationUpdateLogFrame >= 180) {
       lastSimulationUpdateLogFrame = frameNum;
-      console.log('[update]', 'frame=' + frameNum, 'iter=' + iterNum, 'sun=' + guiControls.sunAngle.toFixed(1), 'CAPE=' + dynamicCAPE_Jkg.toFixed(0), 'lightningChance=' + guiControls.lightningChanceMult.toFixed(4), 'evap=' + guiControls.waterEvaporation.toFixed(5));
+      const dynamicEvap = getDynamicSurfaceEvaporation();
+      console.log('[update]', 'frame=' + frameNum, 'iter=' + iterNum, 'sun=' + guiControls.sunAngle.toFixed(1), 'CAPE=' + dynamicCAPE_Jkg.toFixed(0), 'lightningChance=' + guiControls.lightningChanceMult.toFixed(4), 'evap=' + dynamicEvap.water.toFixed(5));
     }
 
     // Follow droplet
@@ -8693,12 +8886,17 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   {
     if (!simDateTime)
       simDateTime = new Date();
+    if (guiControls.useRealTimeDay && deltaT_hours != 'MANUAL_ANGLE') {
+      simDateTime = new Date();
+      guiControls.timeOfDay = simDateTime.getHours() + simDateTime.getMinutes() / 60. + simDateTime.getSeconds() / 3600.;
+      guiControls.month = simDateTime.getMonth() + 1 + simDateTime.getDate() / 30.5 + simDateTime.getHours() / 720.;
+    }
     if (deltaT_hours != 'MANUAL_ANGLE') {
-      if (deltaT_hours != null) {                                                   // increment time
+      if (deltaT_hours != null && !guiControls.useRealTimeDay) {                                                   // increment time
         simDateTime = new Date(simDateTime.getTime() + deltaT_hours * 3600 * 1000); // convert hours to ms and add to current date
         guiControls.timeOfDay = simDateTime.getHours() + simDateTime.getMinutes() / 60. + simDateTime.getSeconds() / 3600.;
         guiControls.month = simDateTime.getMonth() + 1 + simDateTime.getDate() / 30.5 + simDateTime.getHours() / 720.;
-      } else {
+      } else if (deltaT_hours == null) {
         for (i = 0; i < weatherStations.length; i++) {
           weatherStations[i].clearChart();
         }
@@ -8917,6 +9115,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       lastFrameNum = frameNum;
 
 
+      refreshDevicePerfHud(FPS);
       if (runtimeDeviceInfo) {
         runtimeDeviceInfo.summary = getDeviceInfoSummary();
         runtimeDeviceInfo.resolution = `${window.innerWidth} x ${window.innerHeight}`;
@@ -8946,7 +9145,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
           // Keep simulation physics from crawling when rendering shaders get heavy.
           // We still auto-tune for smoothness, but never below a floor that preserves evaporation/cloud evolution speed.
-          adjIterPerFrame((FPS / fpsTarget - 1.0) * 5.0, stablePhysicsFloor); // example: ((30 / 60)-1.0) = -0.5
+          adjIterPerFrame((FPS / fpsTarget - 1.0) * 5.0, stablePhysicsFloor);
+          guiControls.IterPerFrame = Math.min(guiControls.IterPerFrame, autoIterUpperBound); // example: ((30 / 60)-1.0) = -0.5
 
           if (FPS < 30)
             adaptiveShaderPerfScale = 0.55;
@@ -8959,7 +9159,17 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             adjIterPerFrame(1, stablePhysicsFloor);
 
           if (iterPerSecond < targetIterPerSecond * 0.68)
-            guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame + 1, stablePhysicsFloor, 50));
+            guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame + 1, stablePhysicsFloor, autoIterUpperBound));
+
+          if (guiControls.dynamicSimulationResolution) {
+            const prevScale = guiControls.renderScale;
+            if (FPS < 45)
+              guiControls.renderScale = clamp(guiControls.renderScale - 0.03, 0.62, 1.2);
+            else if (FPS > 58)
+              guiControls.renderScale = clamp(guiControls.renderScale + 0.02, 0.62, 1.2);
+            if (Math.abs(guiControls.renderScale - prevScale) > 0.0001)
+              resizeCanvasAndPostFx();
+          }
         }
       }
       // calculate total amounts of water and smoke for verification of fluid simulation

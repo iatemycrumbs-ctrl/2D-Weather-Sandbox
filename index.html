@@ -803,6 +803,126 @@
             transition: max-height 240ms ease;
         }
 
+
+        .startup-log-modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.68);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+        }
+
+        .startup-log-card {
+            width: min(760px, 92vw);
+            max-height: 80vh;
+            overflow: auto;
+            border-radius: 16px;
+            padding: 20px 24px;
+            border: 1px solid rgba(110, 200, 255, 0.45);
+            background: linear-gradient(180deg, rgba(10,20,38,0.98), rgba(8,16,32,0.98));
+            box-shadow: 0 22px 52px rgba(0,0,0,0.45);
+        }
+
+        .startup-log-card h3 {
+            margin-top: 0;
+            margin-bottom: 8px;
+            color: #95dcff;
+            letter-spacing: 0.03em;
+        }
+
+        .startup-log-card ul {
+            margin-top: 8px;
+            padding-left: 22px;
+            line-height: 1.6;
+            color: #d6ecff;
+        }
+
+        .startup-log-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 14px;
+        }
+
+        .startup-log-actions button {
+            border: none;
+            padding: 10px 16px;
+            border-radius: 10px;
+            color: #00151f;
+            font-weight: 700;
+            background: linear-gradient(90deg, #7ce0ff, #91f2cc);
+            cursor: pointer;
+        }
+
+
+        .sim-controls-launcher {
+            position: fixed;
+            right: 14px;
+            top: 74px;
+            z-index: 60;
+            display: none;
+            gap: 8px;
+            flex-direction: column;
+        }
+
+        .sim-controls-launcher button {
+            border: 1px solid rgba(130, 200, 255, 0.5);
+            background: rgba(9, 22, 38, 0.84);
+            color: #d8f0ff;
+            border-radius: 12px;
+            width: 48px;
+            height: 48px;
+            font-size: 20px;
+            cursor: pointer;
+            transition: transform 180ms ease, box-shadow 180ms ease;
+        }
+
+        .sim-controls-launcher button:hover {
+            transform: scale(1.06);
+            box-shadow: 0 0 16px rgba(110, 205, 255, 0.34);
+        }
+
+        .dg.fullscreen-controls {
+            position: fixed !important;
+            inset: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 59 !important;
+            background: radial-gradient(circle at 10% 10%, rgba(26, 52, 84, 0.90), rgba(6, 12, 22, 0.95));
+            overflow: auto !important;
+            animation: controlsReveal 220ms ease;
+            padding: 18px 22px 120px 22px;
+            box-sizing: border-box;
+        }
+
+        .dg.fullscreen-controls .main {
+            width: min(980px, calc(100vw - 48px)) !important;
+            margin: 0 auto;
+        }
+
+        @keyframes controlsReveal {
+            from { opacity: 0.0; transform: translateY(6px); }
+            to { opacity: 1.0; transform: translateY(0px); }
+        }
+
+
+        #devicePerfHud {
+            position: fixed;
+            left: 12px;
+            bottom: 10px;
+            z-index: 65;
+            color: #bfe6ff;
+            background: rgba(6, 14, 24, 0.62);
+            border: 1px solid rgba(120, 205, 255, 0.35);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font: 12px/1.35 Arial, sans-serif;
+            pointer-events: none;
+            text-shadow: 0 1px 0 rgba(0,0,0,0.4);
+        }
+
     </style>
 </head>
 
@@ -826,6 +946,23 @@
             </a>
         </div>
     </nav>
+
+
+    <div id="startupUpdateLogModal" class="startup-log-modal">
+        <div class="startup-log-card">
+            <h3>Startup Update Log</h3>
+            <p>Major systems have been reworked for this run profile:</p>
+            <ul>
+                <li>Lightning visual structure upgraded with dynamic profile-based branching and complexity.</li>
+                <li>Cloud growth mechanics now use a dynamic CAPE + organization + aerosol response profile.</li>
+                <li>Surface and precipitation evaporation now use dynamic weather-aware evaporation instead of static global rates.</li>
+                <li>New atmospheric tuning hooks added for complex feature scaling at runtime.</li>
+            </ul>
+            <div class="startup-log-actions">
+                <button id="startupUpdateLogClose" type="button">Continue to Simulator</button>
+            </div>
+        </div>
+    </div>
 
     <div id="IntroScreen">
 
@@ -1203,6 +1340,14 @@
             <i>By Niels Daemen</i>
         </div>
     </div>
+
+
+    <div id="simControlsLauncher" class="sim-controls-launcher">
+        <button id="simControlsOpen" type="button" title="Open Fullscreen Controls">🎛️</button>
+        <button id="simControlsPause" type="button" title="Pause / Resume">⏯️</button>
+    </div>
+
+    <div id="devicePerfHud">GPU: detecting...</div>
 
     <canvas id="graphCanvas"></canvas>
     <canvas id="dropletInfoCanvas" width="90" height="50"

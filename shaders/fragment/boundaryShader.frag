@@ -151,10 +151,10 @@ void main()
     // rain removes smoke from air
     water[SMOKE] /= 1. + max(-precipFeedback[VAPOR] * 0.1, 0.0) + precipFeedback[MASS] * 0.000; // rain formation in clouds removes smoke
                                                                                                 // quickly , falling rain slower
-    water[SMOKE] -= precipFeedback[MASS] * 0.0001;                                              // linearly to remove last little bit
+    water[SMOKE] -= precipFeedback[MASS] * 0.00022;                                              // linearly to remove last little bit
 
 
-    water[SMOKE] -= max((water[SMOKE] - 4.0) * 0.01, 0.); // dissipate fire color to smoke
+    water[SMOKE] -= max((water[SMOKE] - 3.2) * 0.016, 0.); // dissipate fire color to smoke
 
     water[SMOKE] = max(water[SMOKE], 0.0);                // snow and smoke can't go below 0
 
@@ -382,14 +382,19 @@ void main()
         if (wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER || wall[TYPE] == WALLTYPE_NUCLEAR) { // exclude WALLTYPE_FIRE
           int texFragX = int(texCoord.x * resolution.x) % 80;
 
-          if (wall[VERT_DISTANCE] == 5 && (texFragX == 18 || texFragX == 22)) { // cooling towers
+          if (wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL && wall[VERT_DISTANCE] == 5 && (texFragX == 10 || texFragX == 14 || texFragX == 18 || texFragX == 22 || texFragX == 26 || texFragX == 30)) { // six cooling towers
+            water[TOTAL] += 0.42;
+            water[CLOUD] += 0.03;
+            base[TEMPERATURE] += 0.006;
+            base.xy *= 0.42;
+            base.y += 0.082;
+          } else if (wall[VERT_DISTANCE] == 5 && (texFragX == 18 || texFragX == 22)) { // cooling towers
             water[TOTAL] += 0.25;
-            // base[TEMPERATURE] += 0.02;
             base.xy *= 0.5;
             base.y += 0.05;
           }
 
-          else if (wall[VERT_DISTANCE] == 6 && texFragX == 29) { // smoke stack
+          else if (wall[VERT_DISTANCE] == 6 && (texFragX == 29 || (wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL && (texFragX == 34 || texFragX == 38)))) { // smoke stack(s)
             water[SMOKE] += 0.01;
             base[TEMPERATURE] += 0.02;
             base.xy *= 0.5;
@@ -501,9 +506,13 @@ void main()
         float realTempAboveSurface = potentialToRealT(baseAboveSurface[TEMPERATURE], texCoordX0Yp.y);
 
         float evaporation = calcEvaporation(realTempAboveSurface, waterAboveSurface[TOTAL], float(wall[VEGETATION]), water[SOIL_MOISTURE]) * 0.08;
+        float soilPulse = smoothstep(18.0, 70.0, water[SOIL_MOISTURE]) * map_rangeC(realTempAboveSurface, CtoK(5.0), CtoK(34.0), 0.0, 1.0);
+        float moistureUplift = soilPulse * (0.00055 + max(baseAboveSurface[VY], 0.0) * 0.12);
 
-        water[SOIL_MOISTURE] -= evaporation;
+        water[SOIL_MOISTURE] -= evaporation + moistureUplift * 80.0;
         water[SOIL_MOISTURE] += precipDeposition[RAIN_DEPOSITION] * 0.03 + waterAboveSurface[CLOUD] * 0.002;
+        waterAboveSurface[TOTAL] += moistureUplift;
+        waterAboveSurface[CLOUD] += moistureUplift * 0.28;
 
 
         if (int(iterNum) % 100 == 0) { // snow and soil moisture smoothing
@@ -568,6 +577,23 @@ void main()
               wall[VEGETATION] -= int(clamp(1.0 + gustStress * 30.0, 1.0, 8.0));
               wall[VEGETATION] = max(wall[VEGETATION], 0);
               water[SMOKE] += gustStress * 0.04; // debris/dust lofting
+            }
+          }
+
+
+          // Large hail impacts: shard burst, vegetation loss and localized structure damage.
+          float hailImpactSignal = precipDeposition[SNOW_DEPOSITION] * map_rangeC(realTempAboveSurface, CtoK(-18.0), CtoK(2.0), 1.20, 0.20);
+          if (hailImpactSignal > 0.032) {
+            float hailBlast = clamp((hailImpactSignal - 0.032) * 8.0, 0.0, 1.0);
+            water[SMOKE] += hailBlast * 0.06; // white debris / dust shards proxy
+            if (wall[TYPE] == WALLTYPE_LAND && wall[VEGETATION] > 8)
+              wall[VEGETATION] = max(wall[VEGETATION] - int(1.0 + hailBlast * 6.0), 0);
+
+            if ((wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_INDUSTRIAL || wall[TYPE] == WALLTYPE_SUPER_INDUSTRIAL || wall[TYPE] == WALLTYPE_SKYSCRAPER) &&
+                random2d(vec2(iterNum * 0.61 + fragCoord.x * 0.17, fragCoord.y * 0.29)) < hailBlast * 0.24) {
+              wall[TYPE] = WALLTYPE_LAND;
+              wall[VEGETATION] = max(wall[VEGETATION], 10);
+              water[SOIL_MOISTURE] = max(water[SOIL_MOISTURE], 8.0);
             }
           }
 
