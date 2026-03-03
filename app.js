@@ -9005,33 +9005,51 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   async function loadSourceFile(fileName)
   {
-    const fallbackFiles = [ fileName ];
-    if (fileName.endsWith('advectionShader.frag')) {
-      fallbackFiles.push('shaders/fragment/advectionShader.frag');
-      fallbackFiles.push('./shaders/fragment/advectionShader.frag');
+    const normalized = fileName.replace(/^\.\//, '');
+    const candidates = [];
+
+    function pushCandidate(path)
+    {
+      if (!path)
+        return;
+      if (candidates.indexOf(path) === -1)
+        candidates.push(path);
     }
 
-    for (let i = 0; i < fallbackFiles.length; i++) {
-      const candidate = fallbackFiles[i];
+    pushCandidate(fileName);
+    pushCandidate('./' + normalized);
+    pushCandidate(normalized);
+    pushCandidate('/' + normalized);
+
+    // Resolve relative to the current document path in case app is hosted in a subdirectory.
+    const basePath = (window.location && window.location.pathname)
+      ? window.location.pathname.replace(/[^/]*$/, '')
+      : '/';
+    pushCandidate(basePath + normalized);
+
+    let lastError = null;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
       try {
         var request = new XMLHttpRequest();
         request.open('GET', candidate, false);
         request.send(null);
-      } catch (error) {
-        if (i == fallbackFiles.length - 1) {
-          await loadingBar.showError('ERROR loading shader files! If you just opened index.html, try again using a local server!');
-          throw error;
-        }
-        continue;
-      }
 
-      if (request.status === 200)
-        return request.responseText;
-      if (request.status !== 404)
-        throw 'File loading error ' + request.status + ' at ' + candidate;
+        if (request.status === 200)
+          return request.responseText;
+
+        if (request.status !== 404)
+          lastError = 'File loading error ' + request.status + ' at ' + candidate;
+      } catch (error) {
+        lastError = error;
+      }
     }
 
-    throw 'File not found: ' + fileName;
+    await loadingBar.showError('ERROR loading shader files! Missing: ' + normalized + '. Tried: ' + candidates.join(', '));
+    if (lastError)
+      throw lastError;
+    throw 'File not found: ' + normalized;
   }
 
   async function loadShader(nameIn)
