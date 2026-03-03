@@ -5016,33 +5016,33 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     var UI_folder = datGui.addFolder('Simulation Controls');
 
     const toolDefinitions = [
-      {key : 'flashlight', label : 'Flashlight', id : 'TOOL_NONE', hotkey : 'Escape', wholeWidth : false},
-      {key : 'temperature', label : '🌡️ Temperature', id : 'TOOL_TEMPERATURE', hotkey : 'KeyQ'},
-      {key : 'water', label : '☁️ Water Vapor / Cloud', id : 'TOOL_WATER', hotkey : 'KeyW'},
-      {key : 'land', label : 'Land', id : 'TOOL_WALL_LAND', hotkey : 'KeyE'},
-      {key : 'sea', label : 'Lake / Sea', id : 'TOOL_WALL_SEA', hotkey : 'KeyR'},
-      {key : 'fire', label : 'Fire', id : 'TOOL_WALL_FIRE', hotkey : 'KeyT'},
-      {key : 'lava', label : '🌋 Lava', id : 'TOOL_LAVA', hotkey : 'KeyV'},
-      {key : 'smoke', label : '🌫️ Smoke / Dust', id : 'TOOL_SMOKE', hotkey : 'KeyY'},
-      {key : 'soilMoisture', label : 'Soil Moisture', id : 'TOOL_WALL_MOIST', hotkey : 'KeyU'},
-      {key : 'vegetation', label : 'Vegetation', id : 'TOOL_VEGETATION', hotkey : 'KeyI'},
-      {key : 'snow', label : 'Snow', id : 'TOOL_WALL_SNOW', hotkey : 'KeyO'},
-      {key : 'wind', label : 'Wind', id : 'TOOL_WIND', hotkey : 'KeyP'},
-      {key : 'urban', label : 'Urban', id : 'TOOL_WALL_URBAN', hotkey : 'BracketLeft'},
-      {key : 'runway', label : 'Runway', id : 'TOOL_WALL_RUNWAY', hotkey : 'BracketRight'},
-      {key : 'industrial', label : 'Industrial', id : 'TOOL_WALL_INDUSTRIAL', hotkey : 'Backslash'},
-      {key : 'sandTerrain', label : 'Sand Terrain', id : 'TOOL_SAND_TERRAIN', hotkey : 'KeyJ'},
-      {key : 'localHeatDry', label : 'Local Heating + Drying', id : 'TOOL_LOCAL_HEAT_DRY', hotkey : 'Semicolon'},
-      {key : 'lightningGround', label : '⚡ Lightning (Ground Strike)', id : 'TOOL_LIGHTNING_GROUND', hotkey : 'Quote'},
-      {key : 'lightningIC', label : '🟣 Lightning (IC Strike)', id : 'TOOL_LIGHTNING_IC', hotkey : 'KeyL'},
-      {key : 'skyscraper', label : 'Skyscraper', id : 'TOOL_SKYSCRAPER'},
-      {key : 'lightningRod', label : 'Lightning Rod', id : 'TOOL_LIGHTNING_ROD'},
-      {key : 'lightningGenerator', label : 'Artificial Lightning Generator', id : 'TOOL_ARTIFICIAL_LIGHTNING'},
-      {key : 'cloudSeederPlane', label : '✈️ Artificial Cloud (Airplane)', id : 'TOOL_ARTIFICIAL_CLOUD_PLANE'},
-      {key : 'nuclearPowerplant', label : 'Nuclear Powerplant', id : 'TOOL_NUCLEAR_POWERPLANT'},
-      {key : 'superIndustrial', label : 'Super Industrial', id : 'TOOL_SUPER_INDUSTRIAL'},
-      {key : 'weatherStation', label : 'Weather Station', id : 'TOOL_STATION', hotkey : 'KeyM'},
-      {key : 'weatherBalloon', label : 'Weather Balloon', id : 'TOOL_BALLOON'}
+      {key : 'flashlight', label : 'Flashlight', id : 'TOOL_NONE', hotkey : 'Escape', category : 'Core', wholeWidth : false},
+      {key : 'temperature', label : '🌡️ Temperature', id : 'TOOL_TEMPERATURE', hotkey : 'KeyQ', category : 'Atmosphere'},
+      {key : 'water', label : '☁️ Water Vapor / Cloud', id : 'TOOL_WATER', hotkey : 'KeyW', category : 'Atmosphere'},
+      {key : 'smoke', label : '🌫️ Smoke / Dust', id : 'TOOL_SMOKE', hotkey : 'KeyY', category : 'Atmosphere'},
+      {key : 'wind', label : 'Wind', id : 'TOOL_WIND', hotkey : 'KeyP', category : 'Atmosphere'},
+      {key : 'localHeatDry', label : 'Local Heating + Drying', id : 'TOOL_LOCAL_HEAT_DRY', hotkey : 'Semicolon', category : 'Atmosphere'},
+      {key : 'land', label : 'Land', id : 'TOOL_WALL_LAND', hotkey : 'KeyE', category : 'Surface'},
+      {key : 'sea', label : 'Lake / Sea', id : 'TOOL_WALL_SEA', hotkey : 'KeyR', category : 'Surface'},
+      {key : 'fire', label : 'Fire', id : 'TOOL_WALL_FIRE', hotkey : 'KeyT', category : 'Surface'},
+      {key : 'lava', label : '🌋 Lava', id : 'TOOL_LAVA', hotkey : 'KeyV', category : 'Surface'},
+      {key : 'soilMoisture', label : 'Soil Moisture', id : 'TOOL_WALL_MOIST', hotkey : 'KeyU', category : 'Surface'},
+      {key : 'vegetation', label : 'Vegetation', id : 'TOOL_VEGETATION', hotkey : 'KeyI', category : 'Surface'},
+      {key : 'snow', label : 'Snow', id : 'TOOL_WALL_SNOW', hotkey : 'KeyO', category : 'Surface'},
+      {key : 'sandTerrain', label : 'Sand Terrain', id : 'TOOL_SAND_TERRAIN', hotkey : 'KeyJ', category : 'Surface'},
+      {key : 'urban', label : 'Urban', id : 'TOOL_WALL_URBAN', hotkey : 'BracketLeft', category : 'Infrastructure'},
+      {key : 'runway', label : 'Runway', id : 'TOOL_WALL_RUNWAY', hotkey : 'BracketRight', category : 'Infrastructure'},
+      {key : 'industrial', label : 'Industrial', id : 'TOOL_WALL_INDUSTRIAL', hotkey : 'Backslash', category : 'Infrastructure'},
+      {key : 'superIndustrial', label : 'Super Industrial', id : 'TOOL_SUPER_INDUSTRIAL', category : 'Infrastructure'},
+      {key : 'nuclearPowerplant', label : 'Nuclear Powerplant', id : 'TOOL_NUCLEAR_POWERPLANT', category : 'Infrastructure'},
+      {key : 'skyscraper', label : 'Skyscraper', id : 'TOOL_SKYSCRAPER', category : 'Infrastructure'},
+      {key : 'lightningRod', label : 'Lightning Rod', id : 'TOOL_LIGHTNING_ROD', category : 'Lightning'},
+      {key : 'lightningGround', label : '⚡ Lightning (Ground Strike)', id : 'TOOL_LIGHTNING_GROUND', hotkey : 'Quote', category : 'Lightning'},
+      {key : 'lightningIC', label : '🟣 Lightning (IC Strike)', id : 'TOOL_LIGHTNING_IC', hotkey : 'KeyL', category : 'Lightning'},
+      {key : 'lightningGenerator', label : 'Artificial Lightning Generator', id : 'TOOL_ARTIFICIAL_LIGHTNING', category : 'Lightning'},
+      {key : 'cloudSeederPlane', label : '✈️ Artificial Cloud (Airplane)', id : 'TOOL_ARTIFICIAL_CLOUD_PLANE', category : 'Lightning'},
+      {key : 'weatherStation', label : 'Weather Station', id : 'TOOL_STATION', hotkey : 'KeyM', category : 'Utility'},
+      {key : 'weatherBalloon', label : 'Weather Balloon', id : 'TOOL_BALLOON', category : 'Utility'}
     ];
 
     const toolByHotkey = {};
@@ -5067,43 +5067,54 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     UI_folder.add(guiControls, 'tool', toolDropdownOptions).name('Active Tool').listen();
 
     var quickTools_folder = UI_folder.addFolder('Quick Tool Buttons');
+    const groupedToolFolders = {};
     for (let i = 0; i < toolDefinitions.length; i++) {
       const def = toolDefinitions[i];
-      quickTools_folder.add(toolActions, def.key).name(def.label);
+      const group = def.category || 'Other';
+      if (!groupedToolFolders[group])
+        groupedToolFolders[group] = quickTools_folder.addFolder(group);
+      groupedToolFolders[group].add(toolActions, def.key).name(def.label);
     }
 
-    UI_folder.add(guiControls, 'brushSize', 1, 2000, 1).name('Brush Diameter').listen();
-    UI_folder.add(guiControls, 'wholeWidth').name('Whole Width Brush').listen();
-    UI_folder.add(guiControls, 'brushIntensity', 0.005, 0.075, 0.001).name('Brush Intensity');
-    UI_folder.add(guiControls, 'flashlightIntensity', 0.2, 3.0, 0.01).name('Flashlight Intensity').onChange(function() {
+    var brush_folder = UI_folder.addFolder('Brush & Cursor');
+    brush_folder.add(guiControls, 'brushSize', 1, 2000, 1).name('Brush Diameter').listen();
+    brush_folder.add(guiControls, 'wholeWidth').name('Whole Width Brush').listen();
+    brush_folder.add(guiControls, 'brushIntensity', 0.005, 0.075, 0.001).name('Brush Intensity');
+
+    var runtime_folder = UI_folder.addFolder('Runtime & UX');
+    runtime_folder.add(guiControls, 'allowEditingWhenPaused').name('Edit While Paused');
+    runtime_folder.add(guiControls, 'uiSounds').name('UI Sounds');
+    runtime_folder.add(guiControls, 'enableUpdateLogs').name('Simulation Update Logs');
+
+    var visualControls_folder = UI_folder.addFolder('Visual Controls');
+    visualControls_folder.add(guiControls, 'flashlightIntensity', 0.2, 3.0, 0.01).name('Flashlight Intensity').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightIntensity'), guiControls.flashlightIntensity);
     });
-    UI_folder.add(guiControls, 'flashlightFocus', 0.4, 3.0, 0.01).name('Flashlight Focus').onChange(function() {
+    visualControls_folder.add(guiControls, 'flashlightFocus', 0.4, 3.0, 0.01).name('Flashlight Focus').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightFocus'), guiControls.flashlightFocus);
     });
-    UI_folder.add(guiControls, 'flashlightRange', 0.3, 2.5, 0.01).name('Flashlight Range').onChange(function() {
+    visualControls_folder.add(guiControls, 'flashlightRange', 0.3, 2.5, 0.01).name('Flashlight Range').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'flashlightRange'), guiControls.flashlightRange);
     });
-    UI_folder.add(guiControls, 'airplanePitchAuthority', 0.5, 2.2, 0.01).name('Airplane Pitch Authority');
-    UI_folder.add(guiControls, 'airplaneThrottleResponse', 0.4, 2.0, 0.01).name('Airplane Throttle Response');
-    UI_folder.add(guiControls, 'showTornadoLabels').name('Show Tornado Labels');
-    UI_folder.add(guiControls, 'enablePrecipitationShaft').name('Enable Precipitation Shaft').onChange(function() {
+    runtime_folder.add(guiControls, 'airplanePitchAuthority', 0.5, 2.2, 0.01).name('Airplane Pitch Authority');
+    runtime_folder.add(guiControls, 'airplaneThrottleResponse', 0.4, 2.0, 0.01).name('Airplane Throttle Response');
+    visualControls_folder.add(guiControls, 'showTornadoLabels').name('Show Tornado Labels');
+    visualControls_folder.add(guiControls, 'enablePrecipitationShaft').name('Enable Precipitation Shaft').onChange(function() {
       setGuiUniforms();
     });
-    UI_folder.add(guiControls, 'showLightningRods').name('Show Lightning Rods').onChange(function() {
+    visualControls_folder.add(guiControls, 'showLightningRods').name('Show Lightning Rods').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'showLightningRods'), guiControls.showLightningRods ? 1 : 0);
     });
-    UI_folder.add(guiControls, 'allowEditingWhenPaused').name('Edit While Paused');
-    UI_folder.add(guiControls, 'uiSounds').name('UI Sounds');
-    UI_folder.add(guiControls, 'birdFlockAmount', 0.0, 1.6, 0.01).name('Bird Flock Activity').onChange(function() {
+
+    visualControls_folder.add(guiControls, 'birdFlockAmount', 0.0, 1.6, 0.01).name('Bird Flock Activity').onChange(function() {
       gl.useProgram(skyBackgroundDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'birdFlockAmount'), guiControls.birdFlockAmount);
     });
-    UI_folder.add(guiControls, 'enableUpdateLogs').name('Simulation Update Logs');
+
     UI_folder.add(guiControls, 'allowCaves')
       .onChange(function() {
         if (!gl)
@@ -8994,21 +9005,33 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   async function loadSourceFile(fileName)
   {
-    try {
-      var request = new XMLHttpRequest();
-      request.open('GET', fileName, false);
-      request.send(null);
-    } catch (error) {
-      await loadingBar.showError('ERROR loading shader files! If you just opened index.html, try again using a local server!');
-      throw error;
+    const fallbackFiles = [ fileName ];
+    if (fileName.endsWith('advectionShader.frag')) {
+      fallbackFiles.push('shaders/fragment/advectionShader.frag');
+      fallbackFiles.push('./shaders/fragment/advectionShader.frag');
     }
 
-    if (request.status === 200)
-      return request.responseText;
-    else if (request.status === 404)
-      throw 'File not found: ' + fileName;
-    else
-      throw 'File loading error' + request.status;
+    for (let i = 0; i < fallbackFiles.length; i++) {
+      const candidate = fallbackFiles[i];
+      try {
+        var request = new XMLHttpRequest();
+        request.open('GET', candidate, false);
+        request.send(null);
+      } catch (error) {
+        if (i == fallbackFiles.length - 1) {
+          await loadingBar.showError('ERROR loading shader files! If you just opened index.html, try again using a local server!');
+          throw error;
+        }
+        continue;
+      }
+
+      if (request.status === 200)
+        return request.responseText;
+      if (request.status !== 404)
+        throw 'File loading error ' + request.status + ' at ' + candidate;
+    }
+
+    throw 'File not found: ' + fileName;
   }
 
   async function loadShader(nameIn)
