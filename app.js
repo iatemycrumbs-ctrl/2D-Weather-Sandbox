@@ -2173,7 +2173,7 @@ class LoadingBar
     this.loadingBar.style.color = '#d7f4ff';
     this.loadingBar.style.textAlign = 'center';
     this.loadingBar.style.background = 'linear-gradient(145deg, rgba(8,18,44,0.90), rgba(7,11,24,0.92))';
-    this.loadingBar.style.backdropFilter = 'blur(8px)';
+    this.loadingBar.style.backdropFilter = 'none';
     this.loadingBar.style.border = '1px solid rgba(90,225,255,0.52)';
     this.loadingBar.style.borderRadius = '18px';
     this.loadingBar.style.boxShadow = '0 16px 44px rgba(0,0,0,0.58), inset 0 0 30px rgba(41,190,255,0.14)';

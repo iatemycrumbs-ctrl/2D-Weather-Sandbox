@@ -653,11 +653,12 @@ void main()
             flashIntensity *= map_rangeC(mobileLightningVisibility, 0.8, 2.2, 0.9, 1.35);
             flashIntensity *= mix(1.0, 1.30, rodAttraction);
             float cgGroundBoost = map_rangeC(1.0 - texCoord.y, 0.0, 1.0, 0.9, 1.3);
-            float icChannelBoost = map_rangeC(texCoord.y, 0.22, 0.95, 0.95, 1.25);
-            flashIntensity *= isIC ? icChannelBoost : cgGroundBoost;
+            float elevatedChannelBoost = map_rangeC(texCoord.y, 0.22, 0.95, 0.95, 1.25);
+            bool elevatedStrike = (strikeMode == 0 || strikeMode == 2); // IC + CR are cloud/elevated channels
+            flashIntensity *= elevatedStrike ? elevatedChannelBoost : cgGroundBoost;
             flashIntensity *= mix(1.0, 1.55, clamp(lightningComplexity - 1.0, 0.0, 1.0));
             flashIntensity = clamp(flashIntensity, 0.08, 8.0);
-            feedback[INTENSITY] = isIC ? -flashIntensity * 0.72 : flashIntensity * 1.08;
+            feedback[INTENSITY] = elevatedStrike ? -flashIntensity * 0.72 : flashIntensity * 1.08;
             gl_Position = vec4(vec2(-1.0 + texelSize.x * 3.0, -1.0 + texelSize.y), 0.0, 1.0);
           }
         } else {
