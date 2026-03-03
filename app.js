@@ -5022,6 +5022,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       {key : 'land', label : 'Land', id : 'TOOL_WALL_LAND', hotkey : 'KeyE'},
       {key : 'sea', label : 'Lake / Sea', id : 'TOOL_WALL_SEA', hotkey : 'KeyR'},
       {key : 'fire', label : 'Fire', id : 'TOOL_WALL_FIRE', hotkey : 'KeyT'},
+      {key : 'lava', label : '🌋 Lava', id : 'TOOL_LAVA', hotkey : 'KeyV'},
       {key : 'smoke', label : '🌫️ Smoke / Dust', id : 'TOOL_SMOKE', hotkey : 'KeyY'},
       {key : 'soilMoisture', label : 'Soil Moisture', id : 'TOOL_WALL_MOIST', hotkey : 'KeyU'},
       {key : 'vegetation', label : 'Vegetation', id : 'TOOL_VEGETATION', hotkey : 'KeyI'},
@@ -8057,6 +8058,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           inputType = 12;
         else if (guiControls.tool == 'TOOL_WALL_FIRE')
           inputType = 13;
+        else if (guiControls.tool == 'TOOL_LAVA')
+          inputType = 34;
         else if (guiControls.tool == 'TOOL_WALL_URBAN')
           inputType = 14;
         else if (guiControls.tool == 'TOOL_WALL_RUNWAY')
@@ -8091,6 +8094,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           intensity *= 2.2;
         else if (guiControls.tool == 'TOOL_SUPER_INDUSTRIAL')
           intensity *= 3.2;
+        else if (guiControls.tool == 'TOOL_LAVA')
+          intensity *= 2.6;
 
         if (ctrlPressed) {
           intensity *= -1;

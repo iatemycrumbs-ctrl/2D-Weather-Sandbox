@@ -151,6 +151,22 @@ void main()
 
   terrainHeightNorm = max(terrainHeightNorm - valleyMask * 0.08 - riverCut * 0.06 + roughness, 0.0);
 
+  float volcanoRoll = noise2(vec2(seedA * 0.017, seedB * 0.023));
+  bool hasSuperVolcano = volcanoRoll < 0.025;
+  bool hasNormalVolcano = (!hasSuperVolcano) && (volcanoRoll < 0.125);
+  float volcanoCenter = noise2(vec2(seedA * 0.061, seedB * 0.071));
+  float volcanoHalfWidth = hasSuperVolcano ? 0.17 : (hasNormalVolcano ? 0.085 : 0.0);
+  float volcanoHeightBoost = hasSuperVolcano ? 0.26 : (hasNormalVolcano ? 0.14 : 0.0);
+
+  if (hasSuperVolcano || hasNormalVolcano) {
+    float dx = abs(texCoord.x - volcanoCenter);
+    dx = min(dx, 1.0 - dx);
+    float cone = max(1.0 - dx / max(volcanoHalfWidth, 0.0001), 0.0);
+    float crater = smoothstep(0.0, volcanoHalfWidth * 0.28, dx);
+    terrainHeightNorm += cone * crater * volcanoHeightBoost;
+    terrainHeightNorm = clamp(terrainHeightNorm, 0.0, 0.97);
+  }
+
   float terrainHeightM = terrainHeightNorm * simHeight;
   float slopeProbe = abs(terrainHeightNormR - terrainHeightNormL) * resolution.x * 0.38;
 
@@ -204,6 +220,19 @@ void main()
         }
       }
 
+      if (hasSuperVolcano || hasNormalVolcano) {
+        float dxV = abs(texCoord.x - volcanoCenter);
+        dxV = min(dxV, 1.0 - dxV);
+        float ventRadius = max(volcanoHalfWidth * (hasSuperVolcano ? 0.19 : 0.13), texelSize.x * 2.0);
+        if (dxV < ventRadius && terrainHeightNorm > 0.06) {
+          wall[TYPE] = WALLTYPE_FIRE;
+          wall[VEGETATION] = 0;
+          water[SOIL_MOISTURE] = 0.0;
+          water[SNOW] = 0.0;
+          base[TEMPERATURE] = CtoK(hasSuperVolcano ? 900.0 : 620.0);
+        }
+      }
+
       float snowBase = map_rangeC(terrainHeightM, 1800.0, 5200.0, 0.0, 180.0);
       float snowNoise = noise2(vec2(x * 1.75 + seedA * 0.2, seedB * 0.2));
       water[SNOW] = max(snowBase * mix(0.75, 1.25, snowNoise), 0.0);
@@ -220,6 +249,24 @@ void main()
       water[TOTAL] = maxWater(realTemp - 20.0);
 
     water[CLOUD] = max(water[TOTAL] - maxWater(realTemp), 0.0);
+
+    if (hasSuperVolcano || hasNormalVolcano) {
+      float dxV = abs(texCoord.x - volcanoCenter);
+      dxV = min(dxV, 1.0 - dxV);
+      float plumeRadius = hasSuperVolcano ? 0.060 : 0.035;
+      float plumeTop = hasSuperVolcano ? 0.96 : 0.88;
+      float plumeBase = clamp(terrainHeightNorm + 0.01, 0.03, 0.75);
+      if (dxV < plumeRadius && texCoord.y > plumeBase && texCoord.y < plumeTop) {
+        float radial = 1.0 - dxV / plumeRadius;
+        float vertical = 1.0 - clamp((texCoord.y - plumeBase) / max(plumeTop - plumeBase, 0.001), 0.0, 1.0);
+        float ashLift = radial * vertical;
+        water[SMOKE] += ashLift * (hasSuperVolcano ? 1.9 : 1.1);
+        water[TOTAL] += ashLift * (hasSuperVolcano ? 0.9 : 0.45);
+        water[CLOUD] += ashLift * (hasSuperVolcano ? 0.7 : 0.35);
+        base[VY] += ashLift * (hasSuperVolcano ? 0.010 : 0.006);
+        base[TEMPERATURE] += ashLift * (hasSuperVolcano ? 160.0 : 90.0);
+      }
+    }
   }
 
   wall[VERT_DISTANCE] = 100;

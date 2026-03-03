@@ -641,6 +641,15 @@ void main()
               wall[TYPE] = WALLTYPE_FIRE;
             }
 
+            // Branch-ground impacts: lower chance than main channel, but can ignite farther patches.
+            float branchReachRadius = strikeRadiusCells * 2.6;
+            float branchZone = clamp(1.0 - strikeDistanceCells / max(branchReachRadius, 0.001), 0.0, 1.0);
+            float branchIgnitionChance = ignitionChance * branchZone * 0.28;
+            if (strikeDistanceCells > strikeRadiusCells && strikeDistanceCells <= branchReachRadius &&
+                random2d(vec2(iterNum * 0.53 + fragCoord.x * 0.11, fragCoord.y * 0.73)) < branchIgnitionChance) {
+              wall[TYPE] = WALLTYPE_FIRE;
+            }
+
             // Lightning ground explosion: shock-heating, debris/smoke, and nearby tree ignition.
             float explosionRadiusCells = strikeRadiusCells * 1.55;
             if (strikeDistanceCells <= explosionRadiusCells) {

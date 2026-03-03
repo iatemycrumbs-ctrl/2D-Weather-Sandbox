@@ -327,6 +327,23 @@ void main()
       base[VY] += trail * 0.0016;
       base[VX] += sin((texCoord.x + texCoord.y) * 18.0) * trail * 0.0006;
 
+    } else if (userInputType == 34) { // lava tool: molten rock + erupting fiery ejecta
+      float lava = max(userInputValues[BRUSH_INTENSITY], 0.0);
+      float eruptionNoise = random2d(vec2(texCoord.x * 213.7 + iterNum * 0.07, texCoord.y * 147.3 - iterNum * 0.11));
+      base[TEMPERATURE] += lava * 140.0;
+      water[SMOKE] += lava * (0.20 + eruptionNoise * 0.35);
+      water[TOTAL] = max(water[TOTAL] - lava * 0.30, 0.0);
+      base[VY] += lava * (0.003 + eruptionNoise * 0.004);
+      if (wall[DISTANCE] == 0 && wall[TYPE] != WALLTYPE_WATER)
+        wall[TYPE] = WALLTYPE_FIRE;
+
+      // fire-rock ejecta proxy: intermittent hot particles lofted upward
+      if (wall[DISTANCE] != 0 && eruptionNoise > 0.92) {
+        water[PRECIPITATION] += lava * 0.55;
+        water[SMOKE] += lava * 0.35;
+        base[VY] += lava * 0.008;
+      }
+
     } else if (userInputType == 27) { // local heating + drying
       float heating = userInputValues[BRUSH_INTENSITY] * 55.0;
       base[TEMPERATURE] += heating;
@@ -470,7 +487,7 @@ void main()
       } else {
         if (wall[DISTANCE] == 0) {           // remove wall only if it is a wall and not bottem layer
 
-          if (userInputType == 13) {         // fire
+          if (userInputType == 13 || userInputType == 34) {         // fire/lava
             if (wall[TYPE] == WALLTYPE_FIRE) // extinguish fire
               wall[TYPE] = WALLTYPE_LAND;
           } else if (userInputType == 14) {

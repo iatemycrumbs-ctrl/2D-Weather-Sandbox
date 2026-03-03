@@ -552,7 +552,8 @@ void main()
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
           lightningSpawnChance *= (0.50 + electricPotential * 2.95);
           lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.12, 0.60) * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.85, 1.75);
-          lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.55) * lightningFrequencyBoost;
+          float ashElectrification = map_rangeC(water[SMOKE], 0.0, 1.6, 0.85, 1.55);
+          lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.55) * ashElectrification * lightningFrequencyBoost;
 
           float icWeight = max(icLightningRatio, 0.0);
           float ctgWeight = max(ctgLightningRatio, 0.0);
@@ -615,9 +616,10 @@ void main()
             float icModeBoost = map_rangeC(chargeStratification * max(base[VY], 0.0), 0.0, 0.04, 1.0, 1.35);
             float modeRand = random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity));
 
+            float branchGroundBoost = map_rangeC(lightningBranching, 0.5, 6.0, 1.0, 1.55);
             float pIC = icProb * icModeBoost;
-            float pCG = ctgWeight / modeNorm;
-            float pCR = crWeight / modeNorm;
+            float pCG = (ctgWeight / modeNorm) * branchGroundBoost;
+            float pCR = (crWeight / modeNorm) * map_rangeC(lightningBranching, 0.5, 6.0, 1.0, 0.78);
             float pGC = gcWeight / modeNorm;
             float norm = max(pIC + pCG + pCR + pGC, 0.001);
             pIC /= norm; pCG /= norm; pCR /= norm; pGC /= norm;
