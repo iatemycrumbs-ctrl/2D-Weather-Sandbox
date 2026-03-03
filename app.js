@@ -448,7 +448,7 @@ const guiControls_default = {
   dynamicWaterTemperature : true,
   landEvaporation : 0.00006,
   waterEvaporation : 0.00014,
-  evapHeat : 2.90,          //  Real: 2260 J/g
+  evapHeat : 4.20,          //  Real: 2260 J/g
   meltingHeat : 0.43,       //  Real:  334 J/g
   condensationRate : 0.0050,
   waterWeight : 0.25,       // 0.50
@@ -460,8 +460,8 @@ const guiControls_default = {
   lightningMinInterval : 1,// 30. 10 to 50
   snowDensity : 0.2,        // 0.3
   fallSpeed : 0.0003,
-  growthRate0C : 0.0001,    // 0.0005
-  growthRate_30C : 0.001,   // 0.01
+  growthRate0C : 0.0004,    // strengthened cloud growth baseline
+  growthRate_30C : 0.0026,   // strengthened warm-cloud growth baseline
   freezingRate : 0.01,
   meltingRate : 0.01,
   evapRate : 0.0008, // 0.0005
@@ -774,14 +774,14 @@ function getDynamicCloudGrowthProfile()
   const organization = clamp(guiControls?.stormOrganization ?? 1.0, 0.6, 2.5);
   const aerosol = clamp(guiControls?.aerosolLoad ?? 1.0, 0.2, 2.5);
   const cloudComplexity = clamp(guiControls?.cloudLayerComplexity ?? 1.0, 0.5, 2.5);
-  const capeBoost = map_range(clamp(dynamicCAPE_Jkg || 0.0, 0.0, 6000.0), 0.0, 6000.0, 0.94, 1.34);
-  const aerosolMicrophysics = map_range(aerosol, 0.2, 2.5, 0.90, 1.16);
-  const turbulenceCloudLift = map_range(clamp(guiControls?.turbulentMix ?? 1.0, 0.2, 2.5), 0.2, 2.5, 0.86, 1.22);
-  const cloudPulse = 1.0 + clamp(guiControls?.stormPulseStrength ?? 0.0, 0.0, 2.0) * 0.22;
+  const capeBoost = map_range(clamp(dynamicCAPE_Jkg || 0.0, 0.0, 6000.0), 0.0, 6000.0, 1.00, 1.56);
+  const aerosolMicrophysics = map_range(aerosol, 0.2, 2.5, 0.94, 1.22);
+  const turbulenceCloudLift = map_range(clamp(guiControls?.turbulentMix ?? 1.0, 0.2, 2.5), 0.2, 2.5, 0.92, 1.34);
+  const cloudPulse = 1.0 + clamp(guiControls?.stormPulseStrength ?? 0.0, 0.0, 2.0) * 0.28;
 
   return {
-    growthRate0C : baseGrowth0 * capeBoost * moistureLift * aerosolMicrophysics * turbulenceCloudLift,
-    growthRate_30C : baseGrowthCold * capeBoost * map_range(organization, 0.6, 2.5, 0.94, 1.24) * cloudPulse,
+    growthRate0C : baseGrowth0 * capeBoost * moistureLift * aerosolMicrophysics * turbulenceCloudLift * map_range(organization, 0.6, 2.5, 0.96, 1.26),
+    growthRate_30C : baseGrowthCold * capeBoost * map_range(organization, 0.6, 2.5, 1.00, 1.36) * cloudPulse * map_range(moistureLift, 0.6, 2.5, 0.92, 1.22),
     cloudLifetimeBoost : baseLifetime * map_range(cloudComplexity, 0.5, 2.5, 0.92, 1.18) * map_range(organization, 0.6, 2.5, 0.90, 1.18) * cloudPulse
   };
 }

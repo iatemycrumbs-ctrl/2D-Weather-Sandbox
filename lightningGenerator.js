@@ -39,47 +39,67 @@ function createRng(seed)
   };
 }
 
+function getStyleTuning(profile)
+{
+  if (profile.style == 'Chaotic Fractal') {
+    return {meander : 1.18, branchProb : 1.25, branchLen : 1.15, trunkWidth : 0.95};
+  }
+  if (profile.style == 'Branch Spider') {
+    return {meander : 1.08, branchProb : 1.35, branchLen : 0.95, trunkWidth : 0.92};
+  }
+  if (profile.style == 'Ribbon Arc') {
+    return {meander : 0.82, branchProb : 0.78, branchLen : 1.05, trunkWidth : 1.22};
+  }
+  return {meander : 1.0, branchProb : 1.0, branchLen : 1.0, trunkWidth : 1.0};
+}
+
 function generateLightningLuminance(width, height, seed, profile)
 {
   const luminanceData = new Uint8Array(width * height);
   const rng = createRng(seed);
-
-  const stylePhase = profile.style == 'Chaotic Fractal' ? 1.42 : profile.style == 'Branch Spider' ? 1.26 : profile.style == 'Ribbon Arc' ? 0.86 : 1.0;
+  const style = getStyleTuning(profile);
   const trunkPoints = [];
 
-  let x = width * (0.5 + (rng() - 0.5) * 0.10);
+  let x = width * (0.5 + (rng() - 0.5) * 0.08);
   let y = 0;
-  let heading = (rng() - 0.5) * 0.20;
+  let heading = (rng() - 0.5) * 0.12;
 
-  const segments = Math.max(820, Math.floor(height * (1.3 + profile.complexity * 0.95)));
+  const segments = Math.max(960, Math.floor(height * (1.58 + profile.complexity * 1.05)));
   const baseStepY = height / segments;
 
   trunkPoints.push({x, y});
 
   for (let i = 0; i < segments && y < height - 1; i++) {
     const t = i / Math.max(segments - 1, 1);
-    const dx = Math.sin(heading) * (0.45 + baseStepY * 0.33);
-    const dy = Math.max(0.24, Math.cos(heading) * (baseStepY * 1.30));
+    const leaderPulse = 0.88 + Math.sin((t * 24.0 + rng() * 0.4) * Math.PI) * 0.16;
+    const dx = Math.sin(heading) * (0.30 + baseStepY * 0.22) * leaderPulse;
+    const dy = Math.max(0.22, Math.cos(heading) * (baseStepY * (1.42 + (1.0 - t) * 0.14)));
 
     const nx = x + dx;
     const ny = y + dy;
 
-    const trunkRadius = (1.50 + (1.0 - t) * 1.2) * (1.15 / stylePhase);
-    const trunkLum = Math.floor(198 + (1.0 - t) * 44);
+    const trunkRadius = (1.70 + (1.0 - t) * 1.35) * style.trunkWidth;
+    const trunkLum = Math.floor(214 + (1.0 - t) * 38);
     stampSegment(luminanceData, width, height, x, y, nx, ny, trunkRadius, trunkLum);
 
-    if (rng() < (0.0065 + (1.0 - t) * 0.012) * profile.branchScale * (0.88 + profile.complexity * 0.28)) {
-      const branchAngle = heading + (rng() < 0.5 ? -1 : 1) * (0.32 + rng() * 0.74) * stylePhase;
-      const branchLen = Math.floor((height * (0.075 + rng() * 0.18)) * (0.66 + (1.0 - t) * 0.70));
-      drawBranch(luminanceData, width, height, rng, nx, ny, branchAngle, branchLen, profile, stylePhase, 0);
+    const branchChance = (0.010 + (1.0 - t) * 0.016) * profile.branchScale * (0.78 + profile.complexity * 0.34) * style.branchProb;
+    if (rng() < branchChance) {
+      const branchCount = rng() < 0.16 * profile.branchScale ? 2 : 1;
+      for (let b = 0; b < branchCount; b++) {
+        const side = rng() < 0.5 ? -1 : 1;
+        const branchAngle = heading + side * (0.36 + rng() * 0.62);
+        const branchLen = Math.floor((height * (0.08 + rng() * 0.22)) * (0.55 + (1.0 - t) * 0.72) * style.branchLen);
+        drawBranch(luminanceData, width, height, rng, nx, ny, branchAngle, branchLen, profile, style, 0);
+      }
     }
 
     trunkPoints.push({x : nx, y : ny});
     x = nx;
     y = ny;
 
-    heading += (rng() - 0.5) * (0.36 * stylePhase + (1.0 - t) * 0.22 * profile.complexity);
-    heading *= 0.88;
+    const meander = (rng() - 0.5) * (0.28 + (1.0 - t) * 0.20 * profile.complexity) * style.meander;
+    const stratificationPull = (x / Math.max(width, 1) - 0.5) * -0.028;
+    heading = (heading + meander + stratificationPull) * 0.90;
   }
 
   bridgeSparseGaps(luminanceData, width, height);
@@ -89,38 +109,38 @@ function generateLightningLuminance(width, height, seed, profile)
   return {luminanceData};
 }
 
-function drawBranch(luminanceData, width, height, rng, sx, sy, heading, maxLenPx, profile, stylePhase, depth)
+function drawBranch(luminanceData, width, height, rng, sx, sy, heading, maxLenPx, profile, style, depth)
 {
-  if (depth > 5)
+  if (depth > 6)
     return;
 
   let x = sx;
   let y = sy;
   let traveled = 0;
 
-  const step = 1.25;
-  const recurseChance = clamp(0.042 * profile.branchScale * (0.95 + profile.complexity * 0.25), 0.01, 0.26);
+  const step = 1.15;
+  const recurseChance = clamp(0.048 * profile.branchScale * (0.90 + profile.complexity * 0.30) * style.branchProb, 0.01, 0.32);
 
-  while (traveled < maxLenPx && y >= 0 && y < height && x >= -2 && x <= width + 2) {
+  while (traveled < maxLenPx && y >= -2 && y < height + 2 && x >= -2 && x <= width + 2) {
     const nx = x + Math.sin(heading) * step;
     const ny = y + Math.cos(heading) * step;
 
     const life = 1.0 - traveled / Math.max(maxLenPx, 1);
-    const radius = (0.95 + life * 0.9) * (0.70 + profile.complexity * 0.22);
-    const lum = Math.floor(126 + life * 98);
+    const radius = (0.75 + life * 0.82) * (0.68 + profile.complexity * 0.24) * style.trunkWidth;
+    const lum = Math.floor(132 + life * 92);
     stampSegment(luminanceData, width, height, x, y, nx, ny, radius, lum);
 
-    if (rng() < recurseChance * life) {
-      const splitHeading = heading + (rng() < 0.5 ? -1 : 1) * (0.35 + rng() * 0.74) * stylePhase;
-      drawBranch(luminanceData, width, height, rng, nx, ny, splitHeading, maxLenPx * (0.40 + rng() * 0.38), profile, stylePhase, depth + 1);
+    if (life > 0.25 && rng() < recurseChance * life) {
+      const splitHeading = heading + (rng() < 0.5 ? -1 : 1) * (0.38 + rng() * 0.66) * style.meander;
+      drawBranch(luminanceData, width, height, rng, nx, ny, splitHeading, maxLenPx * (0.32 + rng() * 0.36), profile, style, depth + 1);
     }
 
     x = nx;
     y = ny;
     traveled += step;
 
-    heading += (rng() - 0.5) * 0.42 * stylePhase;
-    heading *= 0.985;
+    const gravityPull = y > sy ? -0.006 : 0.0;
+    heading = (heading + (rng() - 0.5) * 0.30 * style.meander + gravityPull) * 0.986;
   }
 }
 
@@ -129,7 +149,7 @@ function stampSegment(luminanceData, width, height, x0, y0, x1, y1, radius, lum)
   const dx = x1 - x0;
   const dy = y1 - y0;
   const dist = Math.max(Math.hypot(dx, dy), 0.001);
-  const steps = Math.ceil(dist * 1.2);
+  const steps = Math.ceil(dist * 1.25);
 
   for (let i = 0; i <= steps; i++) {
     const t = i / Math.max(steps, 1);
@@ -153,7 +173,7 @@ function stampDisc(luminanceData, width, height, cx, cy, radius, lum)
       const dist = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) * invR;
       if (dist > 1.45)
         continue;
-      const falloff = clamp(1.25 - dist, 0.0, 1.0);
+      const falloff = clamp(1.28 - dist, 0.0, 1.0);
       const value = Math.floor(lum * falloff);
       const idx = y * width + x;
       if (value > luminanceData[idx])
@@ -168,6 +188,7 @@ function reinforceTrunk(luminanceData, width, height, trunkPoints)
     return;
 
   for (let i = 1; i < trunkPoints.length; i++) {
+    const t = i / Math.max(trunkPoints.length - 1, 1);
     stampSegment(
       luminanceData,
       width,
@@ -176,8 +197,8 @@ function reinforceTrunk(luminanceData, width, height, trunkPoints)
       trunkPoints[i - 1].y,
       trunkPoints[i].x,
       trunkPoints[i].y,
-      1.15,
-      236
+      1.22 + (1.0 - t) * 0.28,
+      Math.floor(236 + (1.0 - t) * 12)
     );
   }
 }
@@ -225,7 +246,7 @@ function filterDisconnectedLightning(luminanceData, width, height, trunkPoints)
   const threshold = 24;
 
   if (trunkPoints && trunkPoints.length > 0) {
-    const seedCount = Math.min(6, trunkPoints.length);
+    const seedCount = Math.min(10, trunkPoints.length);
     for (let i = 0; i < seedCount; i++) {
       const x = Math.round(trunkPoints[i].x);
       const y = Math.round(trunkPoints[i].y);
