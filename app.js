@@ -4466,11 +4466,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     }
   }
 
+  var realisticDisplayProgram = null;
+
   function setGuiUniforms()
   { // set all uniforms to new values
-    if (!sunIsUp)
-      sunIntensity *= 0.04;
-
     if (!gl)
       return;
 
@@ -4804,13 +4803,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     fluidParams_folder.add(guiControls, 'vorticity', 0.0, 0.010, 0.001)
       .onChange(function() {
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vorticity'), guiControls.vorticity);
       })
       .name('Vorticity');
@@ -5183,37 +5176,19 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Lake / Sea Temperature (°C)');
 
     water_folder.add(guiControls, 'dynamicWaterTemperature').name('Dynamic Water Temperature').onChange(function() {
-      if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+      gl.useProgram(boundaryProgram);
       gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dynamicWaterTemperature'), guiControls.dynamicWaterTemperature ? 1.0 : 0.0);
     });
 
     water_folder.add(guiControls, 'landEvaporation', 0.0, 0.0002, 0.00001)
       .onChange(function() {
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'landEvaporation'), guiControls.landEvaporation);
       })
       .name('Land Evaporation');
     water_folder.add(guiControls, 'waterEvaporation', 0.0, 0.0004, 0.00001)
       .onChange(function() {
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterEvaporation'), guiControls.waterEvaporation);
       })
       .name('Lake / Sea Evaporation');
@@ -5223,13 +5198,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(advectionProgram, 'evapHeat'), guiControls.evapHeat);
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapHeat'), guiControls.evapHeat);
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'evapHeat'), guiControls.evapHeat);
       })
       .name('Evaporation Heat');
@@ -5250,104 +5219,56 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .name('Condensation Rate');
     water_folder.add(guiControls, 'waterWeight', 0.0, 2.0, 0.01)
       .onChange(function() {
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterWeight'), guiControls.waterWeight);
       })
       .name('Water Weight');
 
     water_folder.add(guiControls, 'precipitationRecycling', 0.2, 2.0, 0.01)
       .onChange(function() {
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
       })
       .name('Precip Recycling');
 
     water_folder.add(guiControls, 'surfaceRunoffRate', 0.2, 3.0, 0.01)
       .onChange(function() {
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'surfaceRunoffRate'), guiControls.surfaceRunoffRate);
       })
       .name('Surface Runoff');
 
     water_folder.add(guiControls, 'soilInfiltrationRate', 0.2, 3.0, 0.01)
       .onChange(function() {
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'soilInfiltrationRate'), guiControls.soilInfiltrationRate);
       })
       .name('Soil Infiltration');
 
     water_folder.add(guiControls, 'canopyInterception', 0.0, 2.0, 0.01)
       .onChange(function() {
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'canopyInterception'), guiControls.canopyInterception);
       })
       .name('Canopy Interception');
 
     water_folder.add(guiControls, 'urbanHeatIslandStrength', 0.0, 3.0, 0.01)
       .onChange(function() {
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'urbanHeatIslandStrength'), guiControls.urbanHeatIslandStrength);
       })
       .name('Urban Heat Island');
 
     water_folder.add(guiControls, 'coastalMixing', 0.2, 2.5, 0.01)
       .onChange(function() {
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'coastalMixing'), guiControls.coastalMixing);
       })
       .name('Coastal Mixing');
 
     water_folder.add(guiControls, 'waterAlbedoShift', -0.5, 0.5, 0.01)
       .onChange(function() {
-        if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+        gl.useProgram(boundaryProgram);
         gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterAlbedoShift'), guiControls.waterAlbedoShift);
       })
       .name('Water Albedo Shift');
@@ -5592,13 +5513,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Evaporation Rate');
     precipitation_folder.add(guiControls, 'cloudLifetimeBoost', 0.5, 2.5, 0.01).name('Cloud Lifetime Boost').onChange(function() {
-      if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+      gl.useProgram(boundaryProgram);
       gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudLifetimeBoost'), guiControls.cloudLifetimeBoost);
     });
     precipitation_folder.add(guiControls, 'entrainmentDilution', 0.4, 2.5, 0.01).name('Entrainment Dilution').onChange(function() {
@@ -6960,7 +6875,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   const precipDisplayProgram = createProgram(precipDisplayVertexShader, precipDisplayShader);
   const universalDisplayProgram = createProgram(dispVertexShader, universalDisplayShader);
   const skyBackgroundDisplayProgram = createProgram(realDispVertexShader, skyBackgroundDisplayShader);
-  const realisticDisplayProgram = createProgram(realDispVertexShader, realisticDisplayShader);
+  realisticDisplayProgram = createProgram(realDispVertexShader, realisticDisplayShader);
   const IRtempDisplayProgram = createProgram(dispVertexShader, IRtempDisplayShader);
 
   const postProcessingProgram = createProgram(postProcessingVertexShader, postProcessingShader);
@@ -8264,13 +8179,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
             // apply vorticity, boundary conditions and user input
-            if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
-
-    gl.useProgram(boundaryProgram);
+            gl.useProgram(boundaryProgram);
             gl.uniform1f(uniformLocation_boundaryProgram_iterNum, iterNum);
             gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, baseTexture_1);
@@ -8969,12 +8878,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     // minShadowLight = clamp(((90 + 10) - Math.abs(solarZenithAngleDeg)) * 0.006, 0.005, 0.040); // decrease until the sun goes 10 deg below the horizon
 
     minShadowLight = map_range_C(Math.abs(solarZenithAngleDeg), 100.0, 85.0, 0.005, 0.040); // decrease until the sun goes 10 deg below the horizon
-
-    if (!sunIsUp)
-      sunIntensity *= 0.04;
-
-    if (!gl)
-      return;
 
     gl.useProgram(boundaryProgram);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'sunAngle'), solarZenithAngle);
