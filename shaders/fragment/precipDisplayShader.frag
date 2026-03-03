@@ -44,16 +44,22 @@ void main()
   vec3 rainCol = mix(rainColA, rainColB, clamp(0.25 + waterFrac * 0.95, 0.0, 1.0));
 
   vec3 snowCol = vec3(0.96, 0.98, 1.00);
-  vec3 graupelCol = vec3(0.82, 0.92, 1.00);
+  vec3 graupelCol = vec3(0.86, 0.93, 1.00);
+  vec3 sleetCol = vec3(0.72, 0.86, 0.98);
   vec3 hailCol = vec3(0.99, 1.00, 1.00);
 
+  float graupelMask = smoothstep(0.55, 1.0, iceFrac) * (1.0 - smoothstep(1.0, 1.28, density_out));
+  float sleetMask = smoothstep(0.25, 0.75, waterFrac) * smoothstep(0.30, 0.90, iceFrac) * (1.0 - smoothstep(0.95, 1.30, density_out));
+
   vec3 iceCol = density_out >= 1.05 ? hailCol : mix(snowCol, graupelCol, smoothstep(0.20, 1.05, density_out));
-  vec3 phaseCol = mix(iceCol, rainCol, waterFrac);
+  vec3 mixedCol = mix(iceCol, sleetCol, sleetMask * 0.85);
+  vec3 phaseCol = mix(mixedCol, rainCol, waterFrac * (1.0 - graupelMask * 0.35));
 
   phaseCol += vec3(0.16, 0.24, 0.34) * streak * waterFrac;
   phaseCol += vec3(0.30, 0.36, 0.45) * mist * (0.3 + waterFrac * 0.7);
   phaseCol += vec3(0.84, 0.90, 1.0) * splashHalo * 0.45;
   phaseCol += vec3(0.86, 0.90, 0.98) * hailShard;
+  phaseCol += vec3(0.74, 0.84, 0.94) * graupelMask * 0.22;
 
   float body = clamp(core * (0.92 + 0.22 * iceFrac) + streak * 0.50 + mist * 0.38 + splashHalo * 0.25, 0.0, 1.9);
   float opacity = clamp(totalMass * (0.09 + density_out * 0.11) * body + hailShard * 0.18, 0.04, 1.0);

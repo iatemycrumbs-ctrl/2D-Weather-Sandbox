@@ -508,6 +508,8 @@ const guiControls_default = {
   lightningColorTempMult : 1.0,
   icLightningRatio : 0.62,
   ctgLightningRatio : 0.38,
+  crLightningRatio : 0.08,
+  gcLightningRatio : 0.06,
   lightningFlashRate : 1.35,
   lightningComplexity : 1.0,
   multiStrokeLightning : 1.0,
@@ -525,6 +527,7 @@ const guiControls_default = {
   pixelRatioScale : 0.1,
   dynamicSimulationResolution : true,
   useRealTimeDay : true,
+  antiAliasingMode : false,
   graphicsPreset : 'High',
   simulationProfile : 'Balanced',
   ambientScattering : 1.0,
@@ -602,6 +605,7 @@ var datGui;
 var runtimeDeviceInfo = null;
 var devicePerfHudEl = null;
 var deviceRendererName = 'GPU n/a';
+var batteryStatusText = 'Battery n/a';
 var simulationUiOverlayState = {open : false, pauseBeforeOpen : false};
 var autoIterUpperBound = guiControls_default.IterPerFrame;
 
@@ -700,7 +704,27 @@ function refreshDevicePerfHud(FPS = 0)
   const cpu = navigator.hardwareConcurrency ? `${navigator.hardwareConcurrency} threads` : 'CPU n/a';
   const mem = navigator.deviceMemory ? `${navigator.deviceMemory}GB` : 'RAM n/a';
   const fpsText = FPS > 0 ? `${Math.round(FPS)} FPS` : 'warming up';
-  devicePerfHudEl.innerHTML = `GPU: ${deviceRendererName}<br>CPU: ${cpu} • ${mem}<br>${fpsText}`;
+  devicePerfHudEl.innerHTML = `GPU: ${deviceRendererName}<br>CPU: ${cpu} • ${mem}<br>${batteryStatusText}<br>${fpsText}`;
+}
+
+function initBatteryMonitor()
+{
+  if (!navigator.getBattery)
+    return;
+
+  navigator.getBattery().then((battery) => {
+    const update = () => {
+      const pct = Math.round((battery.level || 0) * 100);
+      const state = battery.charging ? 'Charging' : 'Discharging';
+      batteryStatusText = `Battery: ${pct}% (${state})`;
+      refreshDevicePerfHud(FPS || 0);
+    };
+    update();
+    battery.addEventListener('levelchange', update);
+    battery.addEventListener('chargingchange', update);
+  }).catch(() => {
+    // ignore battery API failures
+  });
 }
 
 function getBrushResponseMult()
@@ -4389,7 +4413,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   var contextAttributes = {
     alpha : false,
     desynchronized : false,
-    antialias : true,
+    antialias : !!guiControls_default.antiAliasingMode,
     depth : false,
     failIfMajorPerformanceCaveat : false,
     powerPreference : 'high-performance',
@@ -4517,6 +4541,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningMinInterval'), guiControls.lightningMinInterval);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'icLightningRatio'), guiControls.icLightningRatio);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ctgLightningRatio'), guiControls.ctgLightningRatio);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'crLightningRatio'), guiControls.crLightningRatio);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'gcLightningRatio'), guiControls.gcLightningRatio);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), guiControls.lightningFlashRate);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningComplexity'), guiControls.lightningComplexity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'multiStrokeLightning'), guiControls.multiStrokeLightning);
@@ -4998,12 +5024,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     const toolDefinitions = [
       {key : 'flashlight', label : 'Flashlight', id : 'TOOL_NONE', hotkey : 'Escape', wholeWidth : false},
-      {key : 'temperature', label : 'Temperature', id : 'TOOL_TEMPERATURE', hotkey : 'KeyQ'},
-      {key : 'water', label : 'Water Vapor / Cloud', id : 'TOOL_WATER', hotkey : 'KeyW'},
+      {key : 'temperature', label : '🌡️ Temperature', id : 'TOOL_TEMPERATURE', hotkey : 'KeyQ'},
+      {key : 'water', label : '☁️ Water Vapor / Cloud', id : 'TOOL_WATER', hotkey : 'KeyW'},
       {key : 'land', label : 'Land', id : 'TOOL_WALL_LAND', hotkey : 'KeyE'},
       {key : 'sea', label : 'Lake / Sea', id : 'TOOL_WALL_SEA', hotkey : 'KeyR'},
       {key : 'fire', label : 'Fire', id : 'TOOL_WALL_FIRE', hotkey : 'KeyT'},
-      {key : 'smoke', label : 'Smoke / Dust', id : 'TOOL_SMOKE', hotkey : 'KeyY'},
+      {key : 'smoke', label : '🌫️ Smoke / Dust', id : 'TOOL_SMOKE', hotkey : 'KeyY'},
       {key : 'soilMoisture', label : 'Soil Moisture', id : 'TOOL_WALL_MOIST', hotkey : 'KeyU'},
       {key : 'vegetation', label : 'Vegetation', id : 'TOOL_VEGETATION', hotkey : 'KeyI'},
       {key : 'snow', label : 'Snow', id : 'TOOL_WALL_SNOW', hotkey : 'KeyO'},
@@ -5013,12 +5039,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       {key : 'industrial', label : 'Industrial', id : 'TOOL_WALL_INDUSTRIAL', hotkey : 'Backslash'},
       {key : 'sandTerrain', label : 'Sand Terrain', id : 'TOOL_SAND_TERRAIN', hotkey : 'KeyJ'},
       {key : 'localHeatDry', label : 'Local Heating + Drying', id : 'TOOL_LOCAL_HEAT_DRY', hotkey : 'Semicolon'},
-      {key : 'lightningGround', label : 'Lightning (Ground Strike)', id : 'TOOL_LIGHTNING_GROUND', hotkey : 'Quote'},
-      {key : 'lightningIC', label : 'Lightning (IC Strike)', id : 'TOOL_LIGHTNING_IC', hotkey : 'KeyL'},
+      {key : 'lightningGround', label : '⚡ Lightning (Ground Strike)', id : 'TOOL_LIGHTNING_GROUND', hotkey : 'Quote'},
+      {key : 'lightningIC', label : '🟣 Lightning (IC Strike)', id : 'TOOL_LIGHTNING_IC', hotkey : 'KeyL'},
       {key : 'skyscraper', label : 'Skyscraper', id : 'TOOL_SKYSCRAPER'},
       {key : 'lightningRod', label : 'Lightning Rod', id : 'TOOL_LIGHTNING_ROD'},
       {key : 'lightningGenerator', label : 'Artificial Lightning Generator', id : 'TOOL_ARTIFICIAL_LIGHTNING'},
-      {key : 'cloudSeederPlane', label : 'Artificial Cloud (Airplane)', id : 'TOOL_ARTIFICIAL_CLOUD_PLANE'},
+      {key : 'cloudSeederPlane', label : '✈️ Artificial Cloud (Airplane)', id : 'TOOL_ARTIFICIAL_CLOUD_PLANE'},
       {key : 'nuclearPowerplant', label : 'Nuclear Powerplant', id : 'TOOL_NUCLEAR_POWERPLANT'},
       {key : 'superIndustrial', label : 'Super Industrial', id : 'TOOL_SUPER_INDUSTRIAL'},
       {key : 'weatherStation', label : 'Weather Station', id : 'TOOL_STATION', hotkey : 'KeyM'},
@@ -5423,6 +5449,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ctgLightningRatio'), guiControls.ctgLightningRatio);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'crLightningRatio'), guiControls.crLightningRatio);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'gcLightningRatio'), guiControls.gcLightningRatio);
       })
       .name('CG Lightning Ratio');
 
@@ -5689,6 +5717,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       resizeCanvasAndPostFx();
     });
     graphicsQuality_folder.add(guiControls, 'dynamicSimulationResolution').name('Dynamic Simulation Resolution');
+    graphicsQuality_folder.add(guiControls, 'antiAliasingMode').name('Anti-Aliasing (Recreate Required)');
     graphicsQuality_folder.add(guiControls, 'simulationProfile', ['Calm', 'Balanced', 'Dynamic', 'Extreme']).name('Simulation Profile').onChange(function() {
       applySimulationProfile(guiControls.simulationProfile);
     });
@@ -5990,6 +6019,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     devicePerfHudEl = getEl('devicePerfHud');
     refreshDevicePerfHud();
+    initBatteryMonitor();
 
     if (!fpsCounterEl) {
       fpsCounterEl = document.createElement('div');

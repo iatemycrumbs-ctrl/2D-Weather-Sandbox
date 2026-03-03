@@ -142,6 +142,15 @@ void main()
   terrainHeightNorm = mix(terrainHeightNorm, smoothstep(0.0, 1.0, terrainHeightNorm), 0.28);
   terrainHeightNorm = mix(terrainHeightNorm, (terrainHeightNormL + terrainHeightNorm + terrainHeightNormR) / 3.0, 0.42);
 
+  // Terrain rework: broad valleys, river-carved channels and mesoscale roughness blend.
+  float valleyNoise = fbm(vec2(x * 0.42 + seedA * 0.37, seedB * 0.29), 2.0, 0.55, 5);
+  float valleyMask = smoothstep(0.42, 0.78, valleyNoise) * smoothstep(0.12, 0.58, continent);
+  float riverAxis = abs(sin((x + seedB * 0.13) * 14.0 + fbm(vec2(x * 1.9, seedA * 0.2), 2.0, 0.5, 4) * 2.4));
+  float riverCut = smoothstep(0.0, 0.20, 0.20 - riverAxis);
+  float roughness = fbm(vec2(x * 3.2 + seedB * 0.11, seedA * 0.17), 2.1, 0.58, 4) * 0.035;
+
+  terrainHeightNorm = max(terrainHeightNorm - valleyMask * 0.08 - riverCut * 0.06 + roughness, 0.0);
+
   float terrainHeightM = terrainHeightNorm * simHeight;
   float slopeProbe = abs(terrainHeightNormR - terrainHeightNormL) * resolution.x * 0.38;
 

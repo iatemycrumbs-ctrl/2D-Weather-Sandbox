@@ -47,6 +47,8 @@ uniform float lightningChanceMult;
 uniform float lightningMinInterval;
 uniform float icLightningRatio;
 uniform float ctgLightningRatio;
+uniform float crLightningRatio;
+uniform float gcLightningRatio;
 uniform float lightningFlashRate;
 uniform float lightningComplexity;
 uniform float multiStrokeLightning;
@@ -284,6 +286,22 @@ vec2 buildCGLightningSource(vec2 sourcePos, vec2 seed, float rodAttraction, floa
   return bestSource;
 }
 
+
+
+vec2 buildCRLightningTarget(vec2 sourcePos, vec2 seed)
+{
+  float spread = texelSize.x * (140.0 + lightningComplexity * 100.0);
+  float targetX = mod(sourcePos.x + (random2d(seed * 12.7) - 0.5) * spread + 1.0, 1.0);
+  float targetY = clamp(sourcePos.y + texelSize.y * (28.0 + random2d(seed * 13.9) * 36.0), 0.66, 0.98);
+  return vec2(targetX, targetY);
+}
+
+vec2 buildGCLightningSource(vec2 sourcePos, vec2 seed)
+{
+  float nearGroundY = clamp(0.28 + random2d(seed * 14.7) * 0.12, 0.24, 0.45);
+  float shiftX = (random2d(seed * 15.3) - 0.5) * texelSize.x * 24.0;
+  return vec2(mod(sourcePos.x + shiftX + 1.0, 1.0), nearGroundY);
+}
 
 void disableDroplet()
 {
@@ -538,10 +556,12 @@ void main()
 
           float icWeight = max(icLightningRatio, 0.0);
           float ctgWeight = max(ctgLightningRatio, 0.0);
-          float modeNorm = max(icWeight + ctgWeight, 0.001);
+          float crWeight = max(crLightningRatio, 0.0);
+          float gcWeight = max(gcLightningRatio, 0.0);
+          float modeNorm = max(icWeight + ctgWeight + crWeight + gcWeight, 0.001);
           float icProb = icWeight / modeNorm;
           float cloudBaseFactor = map_rangeC(texCoord.y, 0.10, 0.65, 1.30, 0.70);
-          float cgBoost = map_rangeC((ctgWeight / modeNorm) * lightningGroundBias * cloudBaseFactor, 0.0, 2.0, 1.0, 1.55);
+          float cgBoost = map_rangeC(((ctgWeight + gcWeight) / modeNorm) * lightningGroundBias * cloudBaseFactor, 0.0, 2.0, 1.0, 1.55);
           float organizationElectric = map_rangeC(stormOrganization, 0.2, 2.5, 0.65, 1.8);
           float aerosolElectric = map_rangeC(aerosolLoad, 0.2, 2.5, 0.7, 1.25);
           lightningSpawnChance *= cgBoost * organizationElectric * aerosolElectric;
@@ -593,12 +613,37 @@ void main()
             float chargeStratification = map_rangeC(water[CLOUD], threshold * 1.3, threshold * 4.8, 0.0, 1.0);
             bool canBeIC = texCoord.y > 0.26 && water[CLOUD] > threshold * 1.40 && chargeStratification > 0.18;
             float icModeBoost = map_rangeC(chargeStratification * max(base[VY], 0.0), 0.0, 0.04, 1.0, 1.35);
-            float icProbability = clamp(icProb * icModeBoost, 0.05, 0.95);
-            bool isIC = !forceCG && canBeIC && random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity)) < icProbability;
+            float modeRand = random2d(spawnSeed * 1.93 + vec2(iterNum * 0.0013, cloudPlusPrecipDensity));
 
-            feedback.xy = isIC
-              ? buildICLightningTarget(texCoord, spawnSeed)
-              : buildCGLightningSource(texCoord, spawnSeed, rodAttraction, airplaneAttraction, nearestRod, ctgWeight);
+            float pIC = icProb * icModeBoost;
+            float pCG = ctgWeight / modeNorm;
+            float pCR = crWeight / modeNorm;
+            float pGC = gcWeight / modeNorm;
+            float norm = max(pIC + pCG + pCR + pGC, 0.001);
+            pIC /= norm; pCG /= norm; pCR /= norm; pGC /= norm;
+
+            int strikeMode = 0; // 0 IC, 1 CG, 2 CR, 3 GC
+            if (forceCG) {
+              strikeMode = 1;
+            } else {
+              if (modeRand < pIC && canBeIC)
+                strikeMode = 0;
+              else if (modeRand < pIC + pCG)
+                strikeMode = 1;
+              else if (modeRand < pIC + pCG + pCR)
+                strikeMode = 2;
+              else
+                strikeMode = 3;
+            }
+
+            if (strikeMode == 0)
+              feedback.xy = buildICLightningTarget(texCoord, spawnSeed);
+            else if (strikeMode == 1)
+              feedback.xy = buildCGLightningSource(texCoord, spawnSeed, rodAttraction, airplaneAttraction, nearestRod, ctgWeight);
+            else if (strikeMode == 2)
+              feedback.xy = buildCRLightningTarget(texCoord, spawnSeed);
+            else
+              feedback.xy = buildGCLightningSource(texCoord, spawnSeed);
 
             feedback[START_ITERNUM] = iterNum;
 
@@ -706,6 +751,9 @@ void main()
       feedback[VAPOR] -= growth * 1.0; // takes water from the air
 
 
+      float nearFreezingMix = smoothstep(CtoK(-2.0), CtoK(2.0), realTemp);
+      float sleetFactor = smoothstep(CtoK(-0.8), CtoK(1.4), realTemp) * (1.0 - smoothstep(CtoK(1.4), CtoK(3.0), realTemp));
+
       if (realTemp < CtoK(0.0)) { // below freezing
 
         newMass[ICE] += growth;   // ice growth
@@ -716,6 +764,7 @@ void main()
         newMass[ICE] += freezing;
         feedback[HEAT] += freezing * meltingHeat;
 
+        // graupel growth and compaction
         if (newMass[ICE] > 0.08) {
           float hailGrowthFactor = map_rangeC(water[PRECIPITATION] + max(base[VY], 0.0) * 30.0, 0.0, 1.8, 0.0, 1.0);
           newDensity = min(max(newDensity, 1.0) + hailGrowthFactor * 0.24, 1.40);
@@ -731,6 +780,13 @@ void main()
 
         newDensity = min(newDensity + (melting / totalMass) * 1.00,
                          1.0); // density increases upto 1.0 as snow melts
+      }
+
+      if (sleetFactor > 0.0) {
+        float sleetExchange = min(newMass[ICE], newMass[WATER]) * 0.18 * sleetFactor;
+        newMass[ICE] -= sleetExchange * 0.45;
+        newMass[WATER] += sleetExchange * 0.45;
+        newDensity = mix(newDensity, 0.92, sleetFactor * 0.35);
       }
 
       float dropletTemp = potentialToRealT(base[TEMPERATURE]);
