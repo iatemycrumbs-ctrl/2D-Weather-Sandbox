@@ -9029,6 +9029,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     let lastError = null;
 
+    function looksLikeHtml(text)
+    {
+      if (!text)
+        return false;
+      const head = text.slice(0, 220).toLowerCase();
+      return head.includes('<!doctype html') || head.includes('<html') || head.includes('<head') || head.includes('<body');
+    }
+
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i];
       try {
@@ -9036,8 +9044,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         request.open('GET', candidate, false);
         request.send(null);
 
-        if (request.status === 200)
-          return request.responseText;
+        if (request.status === 200) {
+          const body = request.responseText || '';
+          // Some hosts rewrite unknown paths to index.html (HTTP 200). Guard against that.
+          if (!looksLikeHtml(body))
+            return body;
+          lastError = 'Resolved to HTML instead of shader at ' + candidate;
+          continue;
+        }
 
         if (request.status !== 404)
           lastError = 'File loading error ' + request.status + ' at ' + candidate;
