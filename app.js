@@ -7570,19 +7570,31 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   lightningGeneratorWorker.onmessage = (event) => {
     const payload = event.data || {};
-    const pending = pendingLightningTextureRequests.get(payload.id);
+    const requestId = (payload && payload.id != null)
+      ? payload.id
+      : pendingLightningTextureRequests.keys().next().value;
+    const pending = pendingLightningTextureRequests.get(requestId);
     if (!pending)
       return;
 
-    pendingLightningTextureRequests.delete(payload.id);
+    pendingLightningTextureRequests.delete(requestId);
     if (pending.timeoutId)
       clearTimeout(pending.timeoutId);
 
     const width = payload.width || pending.width;
     const height = payload.height || pending.height;
-    const lumData = (payload.luminanceData && payload.luminanceData.length == width * height)
-      ? payload.luminanceData
-      : createFallbackLightningData(width, height);
+
+    let lumData = null;
+    if (payload.luminanceData && payload.luminanceData.length == width * height) {
+      lumData = payload.luminanceData;
+    } else if (payload.data && payload.data.length == width * height * 4) {
+      lumData = new Uint8Array(width * height);
+      for (let i = 0, j = 0; i < payload.data.length; i += 4, j++) {
+        lumData[j] = Math.max(payload.data[i], payload.data[i + 1], payload.data[i + 2]);
+      }
+    } else {
+      lumData = createFallbackLightningData(width, height);
+    }
 
     generateLightningTexture(pending.textureIndex, width, height, lumData);
     pendingLightningBuildCount--;
@@ -8458,6 +8470,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
 
     guiControls.displayMode = sanitizeDisplayMode(guiControls.displayMode);
+
+    updateLightningShakePhysics();
+    const shakenViewX = cam.curXpos + lightningShakeOffsetX + lightningShakeHFOffsetX;
+    const shakenViewY = cam.curYpos + lightningShakeOffsetY + lightningShakeHFOffsetY;
+
     if (guiControls.displayMode == 'DISP_REAL') {
 
       { // Ambient light blur removed for performance.
@@ -8489,11 +8506,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.activeTexture(gl.TEXTURE7);
       gl.bindTexture(gl.TEXTURE_2D, precipitationFeedbackTexture);
 
-
-      updateLightningShakePhysics();
-
-      const shakenViewX = cam.curXpos + lightningShakeOffsetX + lightningShakeHFOffsetX;
-      const shakenViewY = cam.curYpos + lightningShakeOffsetY + lightningShakeHFOffsetY;
 
       // draw background
       gl.activeTexture(gl.TEXTURE8);
@@ -8874,6 +8886,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     let seasonalAttenuation = map_range_C(Math.cos((guiControls.month - 6.5) * 0.52), -1.0, 1.0, 0.90, 1.08);
     let sunIntensity = guiControls.sunIntensity * clearSkyAttenuation * seasonalAttenuation * 1250.0;
     // console.log('sunIntensity: ', sunIntensity);
+
+    if (!sunIsUp)
+      sunIntensity *= 0.04;
 
     // minShadowLight = clamp(((90 + 10) - Math.abs(solarZenithAngleDeg)) * 0.006, 0.005, 0.040); // decrease until the sun goes 10 deg below the horizon
 

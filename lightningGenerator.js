@@ -1,21 +1,10 @@
 onmessage = (event) => {
-  const msg = event.data || {};
-  const width = Math.max(32, Math.floor(msg.width || 1024));
-  const height = Math.max(64, Math.floor(msg.height || 2048));
-
-  const imgElement = generateLightningBolt(width, height);
-  const luminanceData = imageDataToLuminance(imgElement);
-
-  postMessage(
-    {
-      id: msg.id,
-      width,
-      height,
-      luminanceData,
-    },
-    [luminanceData.buffer]
-  );
+  const msg = event.data;
+  // console.log(msg);
+  let imgElement = generateLightningBolt(msg.width, msg.height);
+  postMessage(imgElement);
 };
+
 
 function generateLightningBolt(width, height)
 {
@@ -27,11 +16,11 @@ function generateLightningBolt(width, height)
 
   function genLightningColor(lineWidth)
   {
-    const colR = 235;
-    const colG = 240;
-    const colB = 255;
-    const brightness = Math.max(0.45, Math.min(1.0, Math.pow(Math.max(lineWidth, 0.2) / 9.0, 0.7)));
-    return `rgb(${Math.floor(colR * brightness)}, ${Math.floor(colG * brightness)}, ${Math.floor(colB * brightness)})`;
+    const colR = 12;
+    const colG = 12;
+    const colB = 12;
+    const brightness = Math.pow(lineWidth, 2.0);
+    return `rgb(${colR * brightness}, ${colG * brightness}, ${colB * brightness})`;
   }
 
 
@@ -46,8 +35,6 @@ function generateLightningBolt(width, height)
   ctx.moveTo(startX, startY);
 
   ctx.lineWidth = lineWidth;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
 
   while (startY < height) {
 
@@ -84,8 +71,6 @@ function generateLightningBolt(width, height)
   {
     let angle = targetAngle;
 
-    line_width = Math.max(0.7, line_width);
-
     ctx.beginPath();
     ctx.moveTo(startX, startY);
     ctx.lineWidth = line_width;
@@ -110,7 +95,7 @@ function generateLightningBolt(width, height)
         ctx.stroke();
         line_width -= 0.2;
 
-        if (line_width < 0.2)
+        if (line_width < 0.1)
           return;
 
         if (Math.random() < 0.1) { // branch 0.005
@@ -126,14 +111,4 @@ function generateLightningBolt(width, height)
     ctx.strokeStyle = genLightningColor(line_width);
     ctx.stroke();
   }
-}
-
-function imageDataToLuminance(imgData)
-{
-  const src = imgData.data;
-  const luminance = new Uint8Array(imgData.width * imgData.height);
-  for (let i = 0, j = 0; i < src.length; i += 4, j++) {
-    luminance[j] = Math.max(src[i], src[i + 1], src[i + 2]);
-  }
-  return luminance;
 }
