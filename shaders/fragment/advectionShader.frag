@@ -329,7 +329,8 @@ void main()
 
     } else if (userInputType == 34) { // lava tool: molten rock + erupting fiery ejecta
       float lava = max(userInputValues[BRUSH_INTENSITY], 0.0);
-      float eruptionNoise = random2d(vec2(texCoord.x * 213.7 + iterNum * 0.07, texCoord.y * 147.3 - iterNum * 0.11));
+      // Keep lava jitter deterministic per-cell without relying on non-existent uniforms.
+      float eruptionNoise = random2d(vec2(texCoord.x * 213.7 + userInputValues.x * 17.0, texCoord.y * 147.3 + userInputValues.y * 19.0));
       base[TEMPERATURE] += lava * 140.0;
       water[SMOKE] += lava * (0.20 + eruptionNoise * 0.35);
       water[TOTAL] = max(water[TOTAL] - lava * 0.30, 0.0);
