@@ -631,6 +631,9 @@ var lastAcceptedLightningVisualClock = -10000;
 var activeLightningTextureIndex = 0;
 var previousLightningTextureIndex = -1;
 var lightningTexturePhase = 0.0;
+var lightningTexturePhaseVelocity = 0.0;
+var lightningTextureMicroJitter = 0.0;
+var lastLightningSignedIntensity = 0.0;
 var adaptiveShaderPerfScale = 1.0;
 
 var lightningShakeOffsetX = 0.0;
@@ -4770,6 +4773,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       activeLightningTextureIndex = 0;
       previousLightningTextureIndex = -1;
       lightningTexturePhase = 0.0;
+      lightningTexturePhaseVelocity = 0.0;
+      lightningTextureMicroJitter = 0.0;
+      lastLightningSignedIntensity = 0.0;
       gl.bindTexture(gl.TEXTURE_2D, lightningRenderDataTexture);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 1, 1, gl.RGBA, gl.FLOAT, new Float32Array([ 0.0, 0.0, -10000.0, 0.0 ]));
       gl.bindTexture(gl.TEXTURE_2D, lightningDataTexture);
@@ -8396,6 +8402,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
                   activeLightningTextureIndex = chosenTextureIndex;
                   previousLightningTextureIndex = chosenTextureIndex;
                   lightningTexturePhase = ((strikeSeed >>> 8) & 1023) / 1024.0;
+                  lastLightningSignedIntensity = lightningSignedIntensity;
+                  const icLike = lightningSignedIntensity < 0.0;
+                  lightningTexturePhaseVelocity = map_range_C(lightningIntensity, 0.03, 1.1, icLike ? 0.004 : 0.007, icLike ? 0.011 : 0.022);
+                  lightningTextureMicroJitter = map_range_C(lightningIntensity, 0.03, 1.1, 0.0008, 0.0065);
 
                   triggerLightningEffects(lightningX, lightningY, lightningIntensity);
 
@@ -8586,6 +8596,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'Xmult'), horizontalDisplayMult);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'iterNum'), iterNum);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningAnimIter'), lightningAnimIter);
+      const strikeVisualAge = Math.max(0.0, lightningVisualClock - lastAcceptedLightningVisualClock);
+      const strikeAlive = strikeVisualAge < lightningMaxVisualLifetimeFrames;
+      if (strikeAlive) {
+        const icLike = lastLightningSignedIntensity < 0.0;
+        const ageDamp = icLike ? Math.exp(-strikeVisualAge * 0.045) : Math.exp(-strikeVisualAge * 0.060);
+        lightningTexturePhase += lightningTexturePhaseVelocity * ageDamp;
+        lightningTexturePhase += (Math.random() - 0.5) * lightningTextureMicroJitter * ageDamp;
+      }
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTexturePhase'), lightningTexturePhase);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'electricFieldVizStrength'), guiControls.electricFieldVizStrength);
@@ -8602,8 +8620,13 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       }
 
 
-      let lightningTexNum = activeLightningTextureIndex % Math.max(numLightningTextures, 1);
-      // console.log(lightningTexNum)
+      const lightningTextureCount = Math.max(numLightningTextures, 1);
+      let lightningTexNum = activeLightningTextureIndex % lightningTextureCount;
+      const strikeVisualAgeTex = Math.max(0.0, lightningVisualClock - lastAcceptedLightningVisualClock);
+      if (lightningTextureCount > 1 && strikeVisualAgeTex < lightningMaxVisualLifetimeFrames) {
+        const texSpin = Math.floor(strikeVisualAgeTex * (lastLightningSignedIntensity < 0.0 ? 0.08 : 0.12) + lightningTexturePhase * 4.0);
+        lightningTexNum = (lightningTexNum + texSpin) % lightningTextureCount;
+      }
 
       gl.activeTexture(gl.TEXTURE7);
       gl.bindTexture(gl.TEXTURE_2D, lightningTextures[lightningTexNum]);
