@@ -49,6 +49,7 @@ uniform float icLightningRatio;
 uniform float ctgLightningRatio;
 uniform float crLightningRatio;
 uniform float gcLightningRatio;
+uniform float caLightningRatio;
 uniform float lightningFlashRate;
 uniform float lightningComplexity;
 uniform float multiStrokeLightning;
@@ -294,6 +295,15 @@ vec2 buildCRLightningTarget(vec2 sourcePos, vec2 seed)
   float targetX = mod(sourcePos.x + (random2d(seed * 12.7) - 0.5) * spread + 1.0, 1.0);
   float targetY = clamp(sourcePos.y + texelSize.y * (28.0 + random2d(seed * 13.9) * 36.0), 0.66, 0.98);
   return vec2(targetX, targetY);
+}
+
+vec2 buildCALightningTarget(vec2 sourcePos, vec2 seed)
+{
+  float alongAnvil = (random2d(seed * 21.7) - 0.5) * texelSize.x * (220.0 + lightningComplexity * 160.0);
+  float targetX = mod(sourcePos.x + alongAnvil + 1.0, 1.0);
+  float targetY = clamp(sourcePos.y + texelSize.y * (16.0 + random2d(seed * 22.9) * 58.0), 0.70, 0.995);
+  vec2 target = vec2(targetX, targetY);
+  return snapToNearbyCloud(target, seed * 2.41 + vec2(0.13), texelSize.x * 64.0, texelSize.y * 22.0);
 }
 
 vec2 buildGCLightningSource(vec2 sourcePos, vec2 seed)
@@ -621,10 +631,11 @@ void main()
             float pCG = (ctgWeight / modeNorm) * branchGroundBoost;
             float pCR = (crWeight / modeNorm) * map_rangeC(lightningBranching, 0.5, 6.0, 1.0, 0.78);
             float pGC = gcWeight / modeNorm;
-            float norm = max(pIC + pCG + pCR + pGC, 0.001);
-            pIC /= norm; pCG /= norm; pCR /= norm; pGC /= norm;
+            float pCA = max(caLightningRatio, 0.0) * map_rangeC(stormOrganization, 0.2, 2.5, 0.7, 1.45) * map_rangeC(water[SMOKE], 0.0, 1.6, 0.8, 1.4);
+            float norm = max(pIC + pCG + pCR + pGC + pCA, 0.001);
+            pIC /= norm; pCG /= norm; pCR /= norm; pGC /= norm; pCA /= norm;
 
-            int strikeMode = 0; // 0 IC, 1 CG, 2 CR, 3 GC
+            int strikeMode = 0; // 0 IC, 1 CG, 2 CR, 3 GC, 4 CA
             if (forceCG) {
               strikeMode = 1;
             } else {
@@ -634,8 +645,10 @@ void main()
                 strikeMode = 1;
               else if (modeRand < pIC + pCG + pCR)
                 strikeMode = 2;
-              else
+              else if (modeRand < pIC + pCG + pCR + pGC)
                 strikeMode = 3;
+              else
+                strikeMode = 4;
             }
 
             if (strikeMode == 0)
@@ -644,8 +657,10 @@ void main()
               feedback.xy = buildCGLightningSource(texCoord, spawnSeed, rodAttraction, airplaneAttraction, nearestRod, ctgWeight);
             else if (strikeMode == 2)
               feedback.xy = buildCRLightningTarget(texCoord, spawnSeed);
-            else
+            else if (strikeMode == 3)
               feedback.xy = buildGCLightningSource(texCoord, spawnSeed);
+            else
+              feedback.xy = buildCALightningTarget(texCoord, spawnSeed);
 
             feedback[START_ITERNUM] = iterNum;
 
@@ -656,7 +671,7 @@ void main()
             flashIntensity *= mix(1.0, 1.30, rodAttraction);
             float cgGroundBoost = map_rangeC(1.0 - texCoord.y, 0.0, 1.0, 0.9, 1.3);
             float elevatedChannelBoost = map_rangeC(texCoord.y, 0.22, 0.95, 0.95, 1.25);
-            bool elevatedStrike = (strikeMode == 0 || strikeMode == 2); // IC + CR are cloud/elevated channels
+            bool elevatedStrike = (strikeMode == 0 || strikeMode == 2 || strikeMode == 4); // IC + CR + CA are cloud/elevated channels
             flashIntensity *= elevatedStrike ? elevatedChannelBoost : cgGroundBoost;
             flashIntensity *= mix(1.0, 1.55, clamp(lightningComplexity - 1.0, 0.0, 1.0));
             flashIntensity = clamp(flashIntensity, 0.08, 8.0);

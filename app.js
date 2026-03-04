@@ -510,6 +510,7 @@ const guiControls_default = {
   ctgLightningRatio : 0.38,
   crLightningRatio : 0.08,
   gcLightningRatio : 0.06,
+  caLightningRatio : 0.10,
   lightningFlashRate : 1.35,
   lightningComplexity : 1.0,
   multiStrokeLightning : 1.0,
@@ -794,7 +795,13 @@ function getLightningGenerationProfile()
   return {
     style : shape,
     branchScale : branching,
-    complexity
+    complexity,
+    ratios : {
+      ic : clamp(guiControls?.icLightningRatio ?? 0.62, 0.0, 1.0),
+      cg : clamp(guiControls?.ctgLightningRatio ?? 0.38, 0.0, 1.0),
+      gc : clamp(guiControls?.gcLightningRatio ?? 0.06, 0.0, 1.0),
+      ca : clamp(guiControls?.caLightningRatio ?? 0.10, 0.0, 1.0)
+    }
   };
 }
 
@@ -4542,6 +4549,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ctgLightningRatio'), guiControls.ctgLightningRatio);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'crLightningRatio'), guiControls.crLightningRatio);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'gcLightningRatio'), guiControls.gcLightningRatio);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'caLightningRatio'), guiControls.caLightningRatio);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), guiControls.lightningFlashRate);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningComplexity'), guiControls.lightningComplexity);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'multiStrokeLightning'), guiControls.multiStrokeLightning);
@@ -5382,17 +5390,34 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ctgLightningRatio'), guiControls.ctgLightningRatio);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'crLightningRatio'), guiControls.crLightningRatio);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'gcLightningRatio'), guiControls.gcLightningRatio);
       })
       .name('CG Lightning Ratio');
+
+    precipitation_folder.add(guiControls, 'gcLightningRatio', 0.0, 1.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'gcLightningRatio'), guiControls.gcLightningRatio);
+      })
+      .name('GC Lightning Ratio');
+
+    precipitation_folder.add(guiControls, 'crLightningRatio', 0.0, 1.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'crLightningRatio'), guiControls.crLightningRatio);
+      })
+      .name('CR Lightning Ratio');
+
+    precipitation_folder.add(guiControls, 'caLightningRatio', 0.0, 1.0, 0.01)
+      .onChange(function() {
+        gl.useProgram(precipitationProgram);
+        gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'caLightningRatio'), guiControls.caLightningRatio);
+      })
+      .name('CA Lightning Ratio');
 
     precipitation_folder.add(guiControls, 'lightningFlashRate', 0.3, 3.0, 0.01)
       .onChange(function() {
         gl.useProgram(precipitationProgram);
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), guiControls.lightningFlashRate);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningComplexity'), guiControls.lightningComplexity);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'multiStrokeLightning'), guiControls.multiStrokeLightning);
       })
       .name('Flash Rate');
 
