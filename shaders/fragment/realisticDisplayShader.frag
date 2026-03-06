@@ -252,35 +252,74 @@ float dynamicLightningChannel(vec2 uv, float T, vec2 seed, float strikeTypeSign)
 {
   float axis = strikeTypeSign < 0.0 ? uv.x : uv.y;
   float side = strikeTypeSign < 0.0 ? uv.y : uv.x;
+  float axisClamped = clamp(axis, 0.0, 1.0);
 
   float shapeWarp = 1.0;
   if (lightningShapeMode == 1)
-    shapeWarp = 0.78;
+    shapeWarp = 0.82;
   else if (lightningShapeMode == 2)
-    shapeWarp = 1.22;
+    shapeWarp = 1.28;
   else if (lightningShapeMode == 3)
-    shapeWarp = 1.52;
+    shapeWarp = 1.62;
 
-  float mainPath = sin(axis * 30.0 + T * 3.5 + random2d(seed * 4.9) * 6.2831) * 0.026 * shapeWarp;
-  mainPath += sin(axis * 74.0 + T * 6.4 + random2d(seed * 9.1) * 6.2831) * 0.011 * shapeWarp;
-  mainPath += sin(axis * 140.0 + T * 11.0 + random2d(seed * 2.3) * 6.2831) * 0.0045 * shapeWarp;
+  const int SEGMENT_COUNT = 16;
+  float segmentLength = 1.0 / float(SEGMENT_COUNT);
 
-  float trunkWidth = strikeTypeSign < 0.0 ? 0.014 : 0.010;
-  float trunk = exp(-pow((side - mainPath) / trunkWidth, 2.0));
+  float leaderProgress = smoothstep(0.0, 0.23, T) * (0.92 + 0.08 * sin(T * 7.0 + random2d(seed * 8.4) * 6.2831));
+  leaderProgress = clamp(leaderProgress, 0.0, 1.0);
 
-  float branchSeed = random2d(seed * 6.7 + vec2(floor(axis * 18.0), floor(axis * 9.0)));
-  float branchGate = smoothstep(0.62, 0.96, branchSeed);
-  float branchDir = branchSeed < 0.79 ? -1.0 : 1.0;
-  float branchReach = (0.010 + fract(axis * 11.0 + branchSeed) * 0.030) * smoothstep(0.0, 0.75, axis);
-  float branchCenter = mainPath + branchDir * branchReach;
-  float branchWidth = mix(0.0035, 0.010, fract(axis * 7.0 + branchSeed * 3.0));
-  float branchTaper = 1.0 - smoothstep(0.55, 1.0, axis);
-  float branch = exp(-pow((side - branchCenter) / branchWidth, 2.0)) * branchGate * branchTaper;
+  float channel = 0.0;
+  for (int i = 0; i < SEGMENT_COUNT; i++) {
+    float fi = float(i);
+    float y0 = fi * segmentLength;
+    float y1 = (fi + 1.0) * segmentLength;
+    float segCenter = (y0 + y1) * 0.5;
 
-  float micro = sin((axis * 270.0 + side * 48.0) + T * 15.0 + random2d(seed * 11.7) * 6.2831);
-  float plasmaNoise = 0.84 + 0.16 * micro;
+    float jitterA = (random2d(seed * 3.9 + vec2(fi * 0.77, fi * 1.31)) - 0.5) * 0.070 * shapeWarp;
+    float jitterB = (random2d(seed * 5.6 + vec2(fi * 1.13, fi * 0.59)) - 0.5) * 0.065 * shapeWarp;
 
-  float channel = max(trunk, branch * (strikeTypeSign < 0.0 ? 0.42 : 0.52));
+    float x0 = jitterA + sin((fi + T * 1.8) * 1.9 + random2d(seed * 2.8) * 6.2831) * 0.009 * shapeWarp;
+    float x1 = jitterB + sin((fi + 1.0 + T * 1.8) * 1.9 + random2d(seed * 4.7) * 6.2831) * 0.009 * shapeWarp;
+
+    float segT = clamp((axisClamped - y0) / max(y1 - y0, 0.0001), 0.0, 1.0);
+    float trunkCenter = mix(x0, x1, segT);
+
+    float trunkWidth = mix(strikeTypeSign < 0.0 ? 0.0145 : 0.0110, strikeTypeSign < 0.0 ? 0.0100 : 0.0060, y0);
+    trunkWidth *= mix(1.0, 0.75, smoothstep(0.0, 1.0, leaderProgress));
+
+    float segGate = smoothstep(y0 - segmentLength * 0.25, y0 + segmentLength * 0.20, axisClamped);
+    segGate *= 1.0 - smoothstep(y1 + segmentLength * 0.10, y1 + segmentLength * 0.40, axisClamped);
+
+    float activeGate = smoothstep(segCenter - segmentLength * 0.65, segCenter + segmentLength * 0.35, leaderProgress);
+    float trunk = exp(-pow((side - trunkCenter) / max(trunkWidth, 0.0015), 2.0)) * segGate * activeGate;
+    channel = max(channel, trunk);
+
+    float branchSeed = random2d(seed * 7.2 + vec2(fi * 0.43, fi * 1.87));
+    float branchGate = smoothstep(0.55, 0.97, branchSeed) * smoothstep(0.08, 0.86, y0);
+    float branchDir = branchSeed < 0.77 ? -1.0 : 1.0;
+    float branchLen = (0.015 + fract(branchSeed * 9.17 + fi * 0.31) * 0.062) * (1.0 - y0 * 0.38) * shapeWarp;
+    float branchLean = mix(0.15, 0.82, fract(branchSeed * 4.9 + fi * 0.17));
+    float branchCenter = trunkCenter + branchDir * branchLen * segT * branchLean;
+
+    float branchWidth = mix(0.0044, 0.0017, segT) * (0.92 - y0 * 0.35);
+    float branchFade = 1.0 - smoothstep(0.62, 1.0, segT);
+    float branch = exp(-pow((side - branchCenter) / max(branchWidth, 0.0012), 2.0));
+    branch *= branchGate * segGate * activeGate * branchFade;
+
+    // Secondary twig branch for realistic stepped-leader breakup.
+    float twigSeed = random2d(seed * 12.3 + vec2(fi * 0.91, fi * 0.27));
+    float twigGate = smoothstep(0.71, 0.985, twigSeed) * branchGate;
+    float twigDir = twigSeed < 0.5 ? -branchDir : branchDir;
+    float twigCenter = branchCenter + twigDir * (0.007 + 0.014 * segT) * (0.5 + 0.5 * sin(fi * 2.1 + T * 5.2));
+    float twigWidth = mix(0.0020, 0.0010, segT);
+    float twig = exp(-pow((side - twigCenter) / max(twigWidth, 0.0008), 2.0)) * twigGate * segGate * activeGate * (1.0 - smoothstep(0.45, 1.0, segT));
+
+    channel = max(channel, branch * (strikeTypeSign < 0.0 ? 0.48 : 0.58));
+    channel = max(channel, twig * (strikeTypeSign < 0.0 ? 0.28 : 0.34));
+  }
+
+  float filament = sin((axis * 290.0 + side * 53.0) + T * 16.5 + random2d(seed * 11.7) * 6.2831);
+  float plasmaNoise = 0.83 + 0.17 * filament;
   return channel * plasmaNoise;
 }
 
