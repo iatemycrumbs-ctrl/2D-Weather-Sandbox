@@ -114,6 +114,7 @@ vec4 surfaceTexture(int index, vec2 pos)
 
 vec3 getWallColor(float depth)
 {
+  float realTemp = potentialToRealT(base[TEMPERATURE]);
   vec3 vegetationCol = mix(greenGrassCol, dryGrassCol, max(1.0 - water[SOIL_MOISTURE] * (1. / fullGreenSoilMoisture), 0.0));
   vec3 bareSoilCol = mix(bareDrySoilCol, bareWetSoilCol, map_rangeC(water[SOIL_MOISTURE], 0.0, 20.0, 0.0, 1.0));
 

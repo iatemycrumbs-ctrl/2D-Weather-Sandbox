@@ -1975,7 +1975,8 @@ function applyIntroShaderSettings()
 async function loadData()
 {
   applyIntroShaderSettings();
-  let file = document.getElementById('fileInput').files[0];
+  const fileInputEl = getEl('fileInput');
+  let file = fileInputEl && fileInputEl.files ? fileInputEl.files[0] : null;
 
   // ensure stale objects/settings from previous attempts do not leak into a new load
   resetTransientSimulationObjects();
@@ -2114,7 +2115,8 @@ async function loadData()
     } else {
       // wrong id
       alert('Incompatible file!');
-      document.getElementById('fileInput').value = ''; // clear file
+      if (fileInputEl)
+        fileInputEl.value = ''; // clear file
     }
   } else {
     // no file, so create new simulation
@@ -2131,7 +2133,8 @@ async function loadData()
   } catch (err) {
     console.error('Failed to load simulation:', err);
     alert('Failed to load this simulation file. It may be corrupted or incompatible.');
-    document.getElementById('fileInput').value = '';
+    if (fileInputEl)
+      fileInputEl.value = '';
   }
 }
 
