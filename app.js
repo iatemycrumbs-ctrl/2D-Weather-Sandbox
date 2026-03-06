@@ -520,7 +520,7 @@ const guiControls_default = {
   precipitationMistStrength : 0.9,
   precipitationSparkle : 0.75,
   enablePrecipitationShaft : true,
-  birdFlockAmount : 0.65,
+  birdFlockAmount : 1.0,
   lightningThunderBoost : 2.5,
   enableUpdateLogs : true,
   renderScale : 1.0,
@@ -565,7 +565,7 @@ const guiControls_default = {
   balloonRiseRate : 0.22,
   balloonDriftMult : 1.0,
   paused : false,
-  IterPerFrame : 10,
+  IterPerFrame : 6,
   auto_IterPerFrame : true,
   sound : true,
   uiSounds : true,
@@ -5919,7 +5919,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     installSimulationControlFx();
 
     datGui.width = 400;
-    autoIterUpperBound = Math.max(8, Math.round(guiControls.IterPerFrame));
+    autoIterUpperBound = Math.max(7, Math.round(guiControls.IterPerFrame));
   }
 
   // guiControls.paused = true; // pause before first iteration for debugging
@@ -9165,13 +9165,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       }
 
       if (!guiControls.paused) {
-        console.log(FPS + ' FPS   ' + guiControls.IterPerFrame + ' Iterations / frame      ' + FPS * guiControls.IterPerFrame + ' Iterations / second');
+        if (guiControls.enableUpdateLogs)
+          console.log(FPS + ' FPS   ' + guiControls.IterPerFrame + ' Iterations / frame      ' + FPS * guiControls.IterPerFrame + ' Iterations / second');
 
         if (guiControls.auto_IterPerFrame && !airplaneMode) {
           const fpsTarget = 60;
-          const stablePhysicsFloor = Math.max(4, Math.floor((guiControls_default?.IterPerFrame ?? 10) * 0.6));
+          const stablePhysicsFloor = Math.max(3, Math.floor((guiControls_default?.IterPerFrame ?? 6) * 0.65));
           const iterPerSecond = FPS * guiControls.IterPerFrame;
-          const targetIterPerSecond = fpsTarget * Math.max(stablePhysicsFloor, 8);
+          const targetIterPerSecond = fpsTarget * Math.max(stablePhysicsFloor, 6);
 
           // Keep simulation physics from crawling when rendering shaders get heavy.
           // We still auto-tune for smoothness, but never below a floor that preserves evaporation/cloud evolution speed.
@@ -9188,15 +9189,15 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           if (FPS == fpsTarget)
             adjIterPerFrame(1, stablePhysicsFloor);
 
-          if (iterPerSecond < targetIterPerSecond * 0.68)
+          if (iterPerSecond < targetIterPerSecond * 0.62)
             guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame + 1, stablePhysicsFloor, autoIterUpperBound));
 
           if (guiControls.dynamicSimulationResolution) {
             const prevScale = guiControls.renderScale;
-            if (FPS < 45)
-              guiControls.renderScale = clamp(guiControls.renderScale - 0.03, 0.62, 1.2);
+            if (FPS < 47)
+              guiControls.renderScale = clamp(guiControls.renderScale - 0.035, 0.58, 1.2);
             else if (FPS > 58)
-              guiControls.renderScale = clamp(guiControls.renderScale + 0.02, 0.62, 1.2);
+              guiControls.renderScale = clamp(guiControls.renderScale + 0.018, 0.58, 1.2);
             if (Math.abs(guiControls.renderScale - prevScale) > 0.0001)
               resizeCanvasAndPostFx();
           }

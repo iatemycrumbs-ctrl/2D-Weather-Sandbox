@@ -43,27 +43,35 @@ const float dryLapse = 0.; // definition needed for common.glsl
 
 float birdWingShape(vec2 p)
 {
-  float wingL = smoothstep(0.045, 0.0, length(p - vec2(-0.03, 0.0)));
-  float wingR = smoothstep(0.045, 0.0, length(p - vec2(0.03, 0.0)));
-  return max(wingL, wingR);
+  float body = smoothstep(0.020, 0.0, length(p * vec2(1.0, 1.6)));
+  float wingL = smoothstep(0.040, 0.0, length((p - vec2(-0.040, 0.0)) * vec2(1.0, 2.4)));
+  float wingR = smoothstep(0.040, 0.0, length((p - vec2(0.040, 0.0)) * vec2(1.0, 2.4)));
+  return max(body, max(wingL, wingR));
 }
 
 float birdFlockField(vec2 uv, float t)
 {
   float flock = 0.0;
   float activity = clamp(birdFlockAmount, 0.0, 1.8);
-  for (int i = 0; i < 6; i++) {
+  const int BIRD_COUNT = 14;
+  for (int i = 0; i < BIRD_COUNT; i++) {
     float fi = float(i);
-    float phase = t * (0.30 + fi * 0.07) + fi * 1.7;
-    vec2 center = vec2(mod(0.12 + fi * 0.14 + t * (0.010 + fi * 0.002), 1.2) - 0.1,
-                      0.74 + sin(phase) * (0.015 + fi * 0.004));
-    vec2 p = uv - center;
+    float lane = fract(fi * 0.17 + 0.19);
+    float speed = 0.020 + lane * 0.015;
+    float x = mod(0.08 + fi * 0.077 + t * speed, 1.35) - 0.17;
+    float yBase = 0.66 + lane * 0.22;
+    float y = yBase + sin(t * (0.95 + lane * 0.7) + fi * 1.31) * (0.010 + lane * 0.018);
+
+    vec2 p = uv - vec2(x, y);
     p.x *= aspectRatios.x;
-    p *= 1.0 + fi * 0.10;
-    p.y += sin(t * 12.0 + fi * 2.2) * 0.004;
-    flock += birdWingShape(p) * (0.8 - fi * 0.10);
+    float wingFlap = sin(t * (16.0 + lane * 7.0) + fi * 2.5) * (0.010 + lane * 0.010);
+    p.y += wingFlap;
+    p *= 1.0 + lane * 0.35;
+
+    float bird = birdWingShape(p) * (1.0 - lane * 0.42);
+    flock += bird;
   }
-  return flock * activity;
+  return flock * activity * 0.75;
 }
 
 vec4 displayA380(vec2 pos, float angle, out vec3 emittedLight, out vec3 onLight)
@@ -108,8 +116,8 @@ vec4 displayA380(vec2 pos, float angle, out vec3 emittedLight, out vec3 onLight)
 
   float T = mod(iterNum, 60.) / 60.;
 
-  emittedLight += (planeDir ? vec3(1., 0., 0.) : vec3(0., 1., 0.)) * 5. * max(3. - length(planeFragCoord - vec2(planeDir ? 611. : 391., 287.)), 0.);      // wing red/green continuous light
-  emittedLight += vec3(1., 1., 1.) * 5. * max(3. - length(planeFragCoord - vec2(planeDir ? 861. : 138., 286.)), 0.);                                      // Tail white continuous light
+  emittedLight += (planeDir ? vec3(1., 0.18, 0.10) : vec3(0.10, 0.95, 0.30)) * 7. * max(3.5 - length(planeFragCoord - vec2(planeDir ? 611. : 391., 287.)), 0.);      // wing red/green continuous light
+  emittedLight += vec3(0.88, 0.93, 1.0) * 7. * max(3.4 - length(planeFragCoord - vec2(planeDir ? 861. : 138., 286.)), 0.);                                      // Tail white continuous light
 
   emittedLight += vec3(1., 0., 0.) * 20. * max(7. - length(planeFragCoord - vec2(planeDir ? 341. : 659., 256.)), 0.) * ((T > 0.5 && T < 0.55) ? 1. : 0.); // red beacon light top
 
@@ -187,19 +195,31 @@ void main()
 
   finalColor += airplaneLights;
 
-  // Sun & moon discs in sky background.
+  // Reworked sun + moon with coronas and phase shading.
   vec2 skyCenterSun = vec2(0.5 - sin(sunAngle) * 0.42, 0.58 + cos(sunAngle) * 0.20);
   vec2 skyCenterMoon = vec2(0.5 + sin(sunAngle) * 0.42, 0.58 - cos(sunAngle) * 0.20);
   vec2 dSun = vec2((texCoord.x - skyCenterSun.x) * aspectRatios.x, texCoord.y - skyCenterSun.y);
   vec2 dMoon = vec2((texCoord.x - skyCenterMoon.x) * aspectRatios.x, texCoord.y - skyCenterMoon.y);
-  float sunDisc = exp(-pow(length(dSun) / 0.045, 2.0));
-  float moonDisc = exp(-pow(length(dMoon) / 0.030, 2.0));
-  float nightFactor = clamp(map_range(abs(sunAngle), 70.0 * deg2rad, 96.0 * deg2rad, 0.0, 1.0), 0.0, 1.0);
-  finalColor += vec3(1.00, 0.90, 0.72) * sunDisc * (0.35 + light);
-  finalColor += vec3(0.78, 0.84, 1.00) * moonDisc * nightFactor * 0.55;
+  float sunDist = length(dSun);
+  float moonDist = length(dMoon);
 
-  float flockMask = birdFlockField(texCoord, iterNum * 0.015);
-  finalColor = mix(finalColor, finalColor * 0.45, clamp(flockMask, 0.0, 0.7));
+  float sunDisc = exp(-pow(sunDist / 0.043, 2.0));
+  float sunCorona = exp(-pow(sunDist / 0.14, 2.0)) * 0.55;
+  float nightFactor = clamp(map_range(abs(sunAngle), 70.0 * deg2rad, 96.0 * deg2rad, 0.0, 1.0), 0.0, 1.0);
+  finalColor += vec3(1.00, 0.88, 0.66) * sunDisc * (0.45 + light * 0.8);
+  finalColor += vec3(1.00, 0.62, 0.24) * sunCorona * (0.20 + light * 0.35);
+
+  float moonDisc = exp(-pow(moonDist / 0.030, 2.0));
+  float moonGlow = exp(-pow(moonDist / 0.11, 2.0)) * 0.34;
+  float moonPhase = 0.5 + 0.5 * sin(iterNum * 0.0009 + 1.4);
+  vec2 phaseOffset = vec2(0.016 * (moonPhase - 0.5), 0.0);
+  float moonShadow = exp(-pow(length(dMoon + phaseOffset) / 0.031, 2.0));
+  float moonLit = clamp(moonDisc - moonShadow * 0.75 + 0.12, 0.0, 1.0);
+  finalColor += vec3(0.74, 0.82, 1.00) * moonLit * nightFactor * 0.64;
+  finalColor += vec3(0.54, 0.64, 0.94) * moonGlow * nightFactor * 0.32;
+
+  float flockMask = birdFlockField(texCoord, iterNum * 0.014);
+  finalColor = mix(finalColor, finalColor * 0.38, clamp(flockMask, 0.0, 0.72));
 
   fragmentColor = vec4(finalColor, 1.0);
 }

@@ -149,11 +149,15 @@ vec3 getWallColor(float depth)
       color = mix(steel, rust, metalPanel * 0.16 + depth * 0.06);
     }
   } else if (wall[TYPE] == WALLTYPE_FIRE) {
-    float flame = clamp(water[SMOKE] * 1.8 + finePatch * 0.25, 0.0, 1.0);
-    vec3 charCol = vec3(0.09, 0.06, 0.05);
-    vec3 emberCol = vec3(1.00, 0.46, 0.10);
-    vec3 coreCol = vec3(1.0, 0.88, 0.64);
-    color = mix(charCol, mix(emberCol, coreCol, broadPatch), flame);
+    float lavaHeat = clamp(map_rangeC(realTemp, CtoK(320.0), CtoK(1280.0), 0.0, 1.0), 0.0, 1.0);
+    float convectPulse = 0.55 + 0.45 * sin((texCoord.x * 34.0 + texCoord.y * 17.0) + lightningAnimIter * 0.045);
+    float crustNoise = texture(noiseTex, vec2(texCoord.x * resolution.x * 0.24 + 91.0, texCoord.y * resolution.y * 0.19 - 41.0)).r;
+    float moltenMask = clamp(lavaHeat * 0.75 + water[SMOKE] * 0.22 + convectPulse * 0.18 - crustNoise * 0.15, 0.0, 1.0);
+
+    vec3 basalt = vec3(0.08, 0.06, 0.06);
+    vec3 magma = mix(vec3(0.75, 0.16, 0.03), vec3(1.0, 0.74, 0.24), smoothstep(0.35, 1.0, moltenMask));
+    vec3 hotCore = vec3(1.0, 0.95, 0.82);
+    color = mix(basalt, mix(magma, hotCore, smoothstep(0.72, 1.0, moltenMask)), moltenMask);
   } else {
     vec3 rockCol = mix(vec3(0.42, 0.44, 0.46), vec3(0.66, 0.62, 0.58), clamp(reliefPatch * 1.15, 0.0, 1.0));
     float terrainSlopeTint = smoothstep(0.15, 0.88, depth + (reliefPatch - 0.5) * 0.35);
@@ -252,35 +256,74 @@ float dynamicLightningChannel(vec2 uv, float T, vec2 seed, float strikeTypeSign)
 {
   float axis = strikeTypeSign < 0.0 ? uv.x : uv.y;
   float side = strikeTypeSign < 0.0 ? uv.y : uv.x;
+  float axisClamped = clamp(axis, 0.0, 1.0);
 
   float shapeWarp = 1.0;
   if (lightningShapeMode == 1)
-    shapeWarp = 0.78;
+    shapeWarp = 0.80;
   else if (lightningShapeMode == 2)
-    shapeWarp = 1.22;
+    shapeWarp = 1.32;
   else if (lightningShapeMode == 3)
-    shapeWarp = 1.52;
+    shapeWarp = 1.70;
 
-  float mainPath = sin(axis * 30.0 + T * 3.5 + random2d(seed * 4.9) * 6.2831) * 0.026 * shapeWarp;
-  mainPath += sin(axis * 74.0 + T * 6.4 + random2d(seed * 9.1) * 6.2831) * 0.011 * shapeWarp;
-  mainPath += sin(axis * 140.0 + T * 11.0 + random2d(seed * 2.3) * 6.2831) * 0.0045 * shapeWarp;
+  const int SEGMENT_COUNT = 22;
+  float segmentLength = 1.0 / float(SEGMENT_COUNT);
 
-  float trunkWidth = strikeTypeSign < 0.0 ? 0.014 : 0.010;
-  float trunk = exp(-pow((side - mainPath) / trunkWidth, 2.0));
+  float leaderProgress = clamp(smoothstep(0.0, 0.19, T) + sin(T * 18.0 + random2d(seed * 2.8) * 6.2831) * 0.02, 0.0, 1.0);
+  float channel = 0.0;
 
-  float branchSeed = random2d(seed * 6.7 + vec2(floor(axis * 18.0), floor(axis * 9.0)));
-  float branchGate = smoothstep(0.62, 0.96, branchSeed);
-  float branchDir = branchSeed < 0.79 ? -1.0 : 1.0;
-  float branchReach = (0.010 + fract(axis * 11.0 + branchSeed) * 0.030) * smoothstep(0.0, 0.75, axis);
-  float branchCenter = mainPath + branchDir * branchReach;
-  float branchWidth = mix(0.0035, 0.010, fract(axis * 7.0 + branchSeed * 3.0));
-  float branchTaper = 1.0 - smoothstep(0.55, 1.0, axis);
-  float branch = exp(-pow((side - branchCenter) / branchWidth, 2.0)) * branchGate * branchTaper;
+  float trunkPrevX = (random2d(seed * 9.7) - 0.5) * 0.03;
+  for (int i = 0; i < SEGMENT_COUNT; i++) {
+    float fi = float(i);
+    float y0 = fi * segmentLength;
+    float y1 = (fi + 1.0) * segmentLength;
+    float segCenter = (y0 + y1) * 0.5;
 
-  float micro = sin((axis * 270.0 + side * 48.0) + T * 15.0 + random2d(seed * 11.7) * 6.2831);
-  float plasmaNoise = 0.84 + 0.16 * micro;
+    float segNoiseA = random2d(seed * 3.1 + vec2(fi * 0.71, fi * 1.23));
+    float segNoiseB = random2d(seed * 4.3 + vec2(fi * 1.11, fi * 0.39));
 
-  float channel = max(trunk, branch * (strikeTypeSign < 0.0 ? 0.42 : 0.52));
+    float steppedKick = (segNoiseA - 0.5) * (0.050 + 0.020 * (1.0 - y0));
+    float nextX = trunkPrevX + steppedKick * shapeWarp;
+    nextX += sin(fi * 1.8 + T * 3.2 + segNoiseB * 6.2831) * 0.006 * shapeWarp;
+
+    float segT = clamp((axisClamped - y0) / max(y1 - y0, 0.0001), 0.0, 1.0);
+    float trunkCenter = mix(trunkPrevX, nextX, segT);
+    trunkPrevX = nextX;
+
+    float segGate = smoothstep(y0 - segmentLength * 0.30, y0 + segmentLength * 0.16, axisClamped);
+    segGate *= 1.0 - smoothstep(y1 + segmentLength * 0.08, y1 + segmentLength * 0.38, axisClamped);
+
+    float activeGate = smoothstep(segCenter - segmentLength * 0.72, segCenter + segmentLength * 0.26, leaderProgress);
+    float trunkWidth = mix(strikeTypeSign < 0.0 ? 0.016 : 0.012, strikeTypeSign < 0.0 ? 0.009 : 0.0056, y0);
+    float trunk = exp(-pow((side - trunkCenter) / max(trunkWidth, 0.0012), 2.0)) * segGate * activeGate;
+    channel = max(channel, trunk);
+
+    float branchSeed = random2d(seed * 7.9 + vec2(fi * 0.54, fi * 1.66));
+    float branchGate = smoothstep(0.48, 0.98, branchSeed) * smoothstep(0.05, 0.90, y0);
+    float branchDir = branchSeed < 0.5 ? -1.0 : 1.0;
+
+    float branchLen = (0.020 + fract(branchSeed * 11.7 + fi * 0.43) * 0.080) * (1.0 - y0 * 0.45) * shapeWarp;
+    float branchSpline = segT * (1.0 - segT * 0.35);
+    float branchCenter = trunkCenter + branchDir * branchLen * branchSpline;
+
+    float branchWidth = mix(0.0048, 0.0012, segT) * (1.0 - y0 * 0.38);
+    float branch = exp(-pow((side - branchCenter) / max(branchWidth, 0.0008), 2.0));
+    branch *= branchGate * segGate * activeGate * (1.0 - smoothstep(0.62, 1.0, segT));
+
+    float twigSeed = random2d(seed * 13.9 + vec2(fi * 0.83, fi * 0.21));
+    float twigGate = smoothstep(0.66, 0.995, twigSeed) * branchGate;
+    float twigDir = twigSeed < 0.45 ? -branchDir : branchDir;
+    float twigCenter = branchCenter + twigDir * (0.006 + 0.018 * segT) * (0.4 + 0.6 * sin(fi * 2.7 + T * 8.4));
+    float twig = exp(-pow((side - twigCenter) / max(mix(0.0018, 0.0007, segT), 0.0005), 2.0));
+    twig *= twigGate * segGate * activeGate * (1.0 - smoothstep(0.42, 1.0, segT));
+
+    channel = max(channel, branch * (strikeTypeSign < 0.0 ? 0.56 : 0.66));
+    channel = max(channel, twig * (strikeTypeSign < 0.0 ? 0.34 : 0.40));
+  }
+
+  float filament = sin((axis * 315.0 + side * 71.0) + T * 19.0 + random2d(seed * 11.7) * 6.2831);
+  float crackle = sin((axis * 118.0 - side * 220.0) + T * 11.5 + random2d(seed * 15.2) * 6.2831);
+  float plasmaNoise = 0.78 + 0.15 * filament + 0.07 * crackle;
   return channel * plasmaNoise;
 }
 
@@ -345,6 +388,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     return vec3(0.0);
 
   vec2 seed = vec2(pos.x + lightningTexturePhase, pos.y + fract(lightningTexturePhase * 1.73));
+  lightningCoord += lightningWarpOffset(lightningCoord, lightningTime, seed, strikeTypeSign);
   float channel = dynamicLightningChannel(lightningCoord, lightningTime, seed, strikeTypeSign);
 
   if (strikeTypeSign < 0.0) {
@@ -787,8 +831,12 @@ void main()
         if (texCol.a > 0.5) { // if not transparent
 
           if (nightTime) {
-            shadowLight = 1.0;                 // city lights
-            texCol.rgb *= vec3(1.0, 0.8, 0.5); // yellowish windows
+            float cityPulse = 0.85 + 0.15 * sin(iterNum * 0.017 + fragCoord.x * 0.11 + fragCoord.y * 0.07);
+            float warmCoolMix = fract(fragCoord.x * 0.083 + fragCoord.y * 0.049);
+            vec3 windowTone = mix(vec3(1.0, 0.76, 0.46), vec3(0.62, 0.78, 1.0), smoothstep(0.36, 0.88, warmCoolMix));
+            shadowLight = 1.2;
+            texCol.rgb *= windowTone * cityPulse;
+            emittedLight += windowTone * texCol.a * (0.018 + cityPulse * 0.028);
           } else {                             // day time
             texCol.rgb *= vec3(0.8, 0.9, 1.0); // Blueish windows
 
@@ -815,8 +863,12 @@ void main()
         if (texCol.a > 0.5) { // if not transparent
 
           if (nightTime) {
-            shadowLight = 1.0;                 // city lights
-            texCol.rgb *= vec3(1.0, 0.8, 0.5); // yellowish windows
+            float cityPulse = 0.85 + 0.15 * sin(iterNum * 0.017 + fragCoord.x * 0.11 + fragCoord.y * 0.07);
+            float warmCoolMix = fract(fragCoord.x * 0.083 + fragCoord.y * 0.049);
+            vec3 windowTone = mix(vec3(1.0, 0.76, 0.46), vec3(0.62, 0.78, 1.0), smoothstep(0.36, 0.88, warmCoolMix));
+            shadowLight = 1.2;
+            texCol.rgb *= windowTone * cityPulse;
+            emittedLight += windowTone * texCol.a * (0.018 + cityPulse * 0.028);
           } else {                             // day time
             texCol.rgb *= vec3(0.8, 0.9, 1.0); // Blueish windows
 

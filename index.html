@@ -22,14 +22,14 @@
             --transition-speed: 0.3s;
             --shadow: 0 12px 30px rgba(0, 18, 36, 0.45);
             --soft-gradient: linear-gradient(135deg, rgba(51, 214, 255, 0.12), rgba(99, 92, 255, 0.10));
-            --panel-bg: rgba(8, 16, 34, 0.62);
-            --panel-border: rgba(80, 218, 255, 0.30);
+            --panel-bg: rgba(7, 14, 30, 0.72);
+            --panel-border: rgba(111, 227, 255, 0.40);
             --grid-glow: rgba(71, 195, 255, 0.20);
         }
 
         body {
             margin: 0;
-            font-family: 'Edo', 'Orbitron', 'Rajdhani', 'Segoe UI', 'Inter', 'Arial', sans-serif;
+            font-family: 'Orbitron', 'Rajdhani', 'Segoe UI', 'Inter', 'Arial', sans-serif;
             background:
                 radial-gradient(circle at 12% 15%, rgba(58, 221, 255, 0.22), transparent 40%),
                 radial-gradient(circle at 88% 8%, rgba(123, 102, 255, 0.18), transparent 35%),
@@ -75,10 +75,14 @@
         }
 
         .dg {
-            font-family: 'Edo', 'Orbitron', 'Rajdhani', monospace !important;
+            font-family: 'Orbitron', 'Rajdhani', monospace !important;
             text-transform: uppercase;
-            letter-spacing: 0.4px;
+            letter-spacing: 0.45px;
             text-shadow: 0 0 6px rgba(90, 235, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(101, 230, 255, 0.16);
         }
 
         .dg.main .close-button {
@@ -96,7 +100,7 @@
         .dg .cr.boolean,
         .dg .cr.number,
         .dg .cr.string {
-            background: linear-gradient(105deg, rgba(7, 20, 46, 0.88), rgba(10, 28, 58, 0.92)) !important;
+            background: linear-gradient(110deg, rgba(7, 20, 46, 0.92), rgba(11, 31, 65, 0.96)) !important;
             background-size: 200% 100% !important;
             border-left: 2px solid rgba(83, 220, 255, 0.22);
             border-bottom: 1px solid rgba(49, 153, 203, 0.28) !important;
@@ -180,7 +184,7 @@
             justify-content: space-between;
             align-items: center;
             padding: 0rem 2rem 0rem 2rem;
-            background: rgba(6, 18, 36, 0.66);
+            background: linear-gradient(135deg, rgba(6, 18, 36, 0.78), rgba(14, 30, 58, 0.72));
             z-index: 0;
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35), inset 0 -1px 0 rgba(88, 220, 255, 0.25);
         }
@@ -231,11 +235,13 @@
         }
 
         #IntroScreen {
-            padding: 20px;
+            padding: 24px;
             max-width: 1200px;
             margin: 20px;
-            border-radius: var(--border-radius);
+            border-radius: 18px;
             border: 1px solid var(--panel-border);
+            background: linear-gradient(145deg, rgba(8, 18, 38, 0.76), rgba(6, 14, 32, 0.86));
+            box-shadow: 0 16px 38px rgba(0, 0, 0, 0.36), inset 0 0 0 1px rgba(122, 229, 255, 0.10);
             animation: fadeIn 1s ease-in-out;
         }
 
