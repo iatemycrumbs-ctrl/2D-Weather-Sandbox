@@ -798,6 +798,15 @@ function getLightningGenerationProfile()
   };
 }
 
+function logStartupUpdateSummary()
+{
+  const now = new Date();
+  const stamp = now.toISOString();
+  const dynamicEvap = getDynamicSurfaceEvaporation();
+  const lightningProfile = getLightningGenerationProfile();
+  console.log('[update][startup]', stamp, 'build=v2026.03-live', 'profile=' + guiControls.simulationProfile, 'graphics=' + guiControls.graphicsPreset, 'iterPerFrame=' + guiControls.IterPerFrame, 'renderScale=' + guiControls.renderScale.toFixed(2), 'lightningStyle=' + lightningProfile.style, 'lightningComplexity=' + lightningProfile.complexity.toFixed(2), 'evap=' + dynamicEvap.water.toFixed(5));
+}
+
 function initializeStartupUpdateLogUI()
 {
   const modal = getEl('startupUpdateLogModal');
@@ -4668,6 +4677,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     }
 
     guiControls = Object.assign({}, guiControls_default, sanitizedGuiControls); // backfill missing/invalid keys from older or corrupted savefiles
+    guiControls.enableUpdateLogs = true; // always enable update logs on startup
 
     function applyGraphicsPresetSettings(preset)
     {
@@ -6047,6 +6057,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     } else {
       updateSunlight('MANUAL_ANGLE'); // set angle from savefile
     }
+    logStartupUpdateSummary();
   }
 
   var soundingGraph = {

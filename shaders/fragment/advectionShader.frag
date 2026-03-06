@@ -322,14 +322,14 @@ void main()
 
     } else if (userInputType == 33 && wall[DISTANCE] != 0) { // reworked artificial cloud seeding airplane trail
       float trail = max(userInputValues[BRUSH_INTENSITY], 0.0);
-      float trailNoise = texture(noiseTex, texCoord * resolution * 0.09 + vec2(iterNum * 0.0008, -iterNum * 0.0005)).r;
+      float trailNoise = random2d(vec2(texCoord.x * resolution.x * 0.09 + userInputValues.x * 97.0, texCoord.y * resolution.y * 0.09 + userInputValues.y * 83.0));
       float plume = trail * (0.65 + 0.70 * trailNoise);
       float supersat = smoothstep(CtoK(-55.0), CtoK(-22.0), base[TEMPERATURE]);
       water[TOTAL] += plume * (0.58 + supersat * 0.32);
       water[CLOUD] += plume * (0.95 + supersat * 0.50);
       water[SMOKE] = max(water[SMOKE] - plume * 0.05, 0.0);
       base[VY] += plume * 0.0019;
-      base[VX] += sin((texCoord.x * 23.0 + texCoord.y * 17.0) + iterNum * 0.002) * plume * 0.0009;
+      base[VX] += sin((texCoord.x * 23.0 + texCoord.y * 17.0) + trailNoise * 6.2831) * plume * 0.0009;
 
     } else if (userInputType == 27) { // local heating + drying
       float heating = userInputValues[BRUSH_INTENSITY] * 55.0;

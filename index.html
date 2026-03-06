@@ -12,6 +12,7 @@
     <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Rajdhani:wght@400;500;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.cdnfonts.com/css/edo" rel="stylesheet">
     <style>
         :root {
@@ -175,8 +176,7 @@
         }
 
 
-        .main-nav {
-            position: fixed;
+        .main-nav {            position: fixed;
             top: 0;
             left: 0;
             right: 0;
@@ -481,6 +481,23 @@
         }
     
         /* Intro redesign */
+
+        h1, h2, h3 {
+            font-family: 'Orbitron', 'Rajdhani', sans-serif;
+            letter-spacing: 0.6px;
+        }
+
+        p, li, td, label, input, button, select {
+            font-family: 'Inter', 'Rajdhani', 'Segoe UI', sans-serif;
+            letter-spacing: 0.2px;
+        }
+
+        .control-label, .intro-kpi b {
+            font-family: 'Rajdhani', 'Orbitron', sans-serif;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
         .main-nav {
             z-index: 5;
             border-bottom: 1px solid rgba(255, 255, 255, 0.12);
