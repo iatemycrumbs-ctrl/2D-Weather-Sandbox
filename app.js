@@ -456,7 +456,7 @@ const guiControls_default = {
   subZeroThreshold : 0.005, // 0.01
   spawnChance : 0.00005,
   lightningChanceMult : 0.002,
-  lightningMinInterval : 1,// 30. 10 to 50
+  lightningMinInterval : 0,// no strike interval cooldown
   snowDensity : 0.2,        // 0.3
   fallSpeed : 0.0003,
   growthRate0C : 0.0001,    // 0.0005
@@ -602,7 +602,7 @@ var iterNum = 0;
 var lightningVisualClock = 0;
 var lightningStartupWarmupIterations = 180;
 var lightningStartupWarmupVisualFrames = 45;
-var lightningRenderCooldownFrames = 70;
+var lightningRenderCooldownFrames = 0;
 var lightningMaxVisualLifetimeFrames = 90;
 var lastAcceptedLightningStartIter = -1;
 var lastAcceptedLightningVisualClock = -10000;
@@ -8058,7 +8058,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
                   && lightningX >= 0.0 && lightningX <= 1.0 && lightningY >= 0.0 && lightningY <= 1.0;
                 const warmupDone = iterNum > lightningStartupWarmupIterations && lightningVisualClock > lightningStartupWarmupVisualFrames;
                 const newStrikeIter = lightningStartIter > lastAcceptedLightningStartIter;
-                const cooldownDone = (lightningVisualClock - lastAcceptedLightningVisualClock) > lightningRenderCooldownFrames;
+                const cooldownDone = lightningRenderCooldownFrames <= 0 || (lightningVisualClock - lastAcceptedLightningVisualClock) > lightningRenderCooldownFrames;
 
                 if (validStrike && warmupDone && newStrikeIter && cooldownDone) {
                   lastAcceptedLightningStartIter = lightningStartIter;

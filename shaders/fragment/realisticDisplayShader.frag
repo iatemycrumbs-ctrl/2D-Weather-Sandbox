@@ -220,20 +220,20 @@ vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float wrappedDx = mod((texCoord.x - pos.x) + 1.5, 1.0) - 0.5;
   vec2 rel = vec2(wrappedDx, texCoord.y - pos.y);
 
-  float branchAngle = (random2d(pos * 27.9) - 0.5) * 0.80;
-  float driftAngle = (random2d(pos * 41.7 + vec2(1.0)) - 0.5) * 0.40;
-  float angle = branchAngle + driftAngle;
-
-  vec2 dir = normalize(vec2(cos(angle), sin(angle) * 0.32));
+  float branchAngle = (random2d(pos * 27.9) - 0.5) * 0.44;
+  vec2 dir = normalize(vec2(cos(branchAngle), sin(branchAngle) * 0.24));
   vec2 perp = vec2(-dir.y, dir.x);
 
   float along = dot(rel, dir);
   float across = dot(rel, perp);
-  float cloudDrift = sin((texCoord.y - pos.y) * 18.0 + random2d(pos * 21.7) * 6.2831) * 0.08;
-  float anvilShear = (texCoord.y - pos.y) * 0.20;
 
-  uv.x = 0.5 + (along + cloudDrift + anvilShear) * scaleMult * aspectRatios[0] * 2.12;
-  uv.y = 0.5 + across * scaleMult * 1.18;
+  // Keep IC geometry segmented but avoid broad snake-like lateral swings.
+  float seg = floor((along + 0.50) * 28.0) / 28.0;
+  float stepOffset = (random2d(vec2(seg * 23.0 + pos.x * 15.0, pos.y * 9.0)) - 0.5) * 0.045;
+  float micro = sin((along + 0.5) * 62.0 + random2d(pos * 21.7) * 6.2831) * 0.008;
+
+  uv.x = 0.5 + (along + stepOffset + micro) * scaleMult * aspectRatios[0] * 2.00;
+  uv.y = 0.5 + across * scaleMult * 1.10;
   return uv;
 }
 
@@ -247,15 +247,79 @@ vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float sourceToGround = max(pos.y, 0.08);
   float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
 
-  float branchCurve = sin(verticalTravel * 8.0 + random2d(pos * 19.3) * 6.2831) * (0.022 + (1.0 - verticalTravel) * 0.016);
-  float leaderSeg = floor(verticalTravel * 32.0) / 32.0;
-  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.034 + (1.0 - verticalTravel) * 0.020);
-  float bow = sin(verticalTravel * 3.14159 * (1.7 + random2d(pos * 43.1))) * (0.014 + (1.0 - verticalTravel) * 0.022);
-  float microZag = sin(verticalTravel * 78.0 + random2d(pos * 53.2) * 6.2831) * 0.006;
-  float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.10;
-  uv.x = 0.5 + (wrappedDx + branchCurve + leaderJitter + bow + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.74;
-  uv.y = verticalTravel * 1.26;
+  // Cleaner stepped-leader path: segment offsets + subtle micro jitter (no wide sinusoidal snake).
+  float leaderSeg = floor(verticalTravel * 36.0) / 36.0;
+  float segmentOffset = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.026 + (1.0 - verticalTravel) * 0.010);
+  float branchCurve = (random2d(pos * 19.3) - 0.5) * (0.020 + (1.0 - verticalTravel) * 0.014);
+  float microZag = sin(verticalTravel * 92.0 + random2d(pos * 53.2) * 6.2831) * 0.0048;
+  float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.07;
+
+  uv.x = 0.5 + (wrappedDx + segmentOffset + branchCurve + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.72;
+  uv.y = verticalTravel * 1.24;
   return uv;
+}
+
+float lightningShapeWarpMultiplier()
+{
+  if (lightningShapeMode == 1)
+    return 0.80; // Ribbon Arc
+  if (lightningShapeMode == 2)
+    return 1.24; // Branch Spider
+  if (lightningShapeMode == 3)
+    return 1.62; // Chaotic Fractal
+  return 1.0; // Forked Classic
+}
+
+vec2 lightningAxes(vec2 uv, bool isIC)
+{
+  // x: progression along channel, y: lateral displacement from trunk center.
+  return isIC ? vec2(uv.x, uv.y - 0.5) : vec2(uv.y, uv.x - 0.5);
+}
+
+float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool isIC)
+{
+  vec2 axis = lightningAxes(uv, isIC);
+  float along = clamp(axis.x, 0.0, 1.20);
+  float across = axis.y;
+  float shapeWarp = lightningShapeWarpMultiplier();
+
+  float segCount = (isIC ? 18.0 : 28.0) * mix(0.94, 1.20, shapeWarp - 0.8);
+  float segId = floor(along * segCount);
+  float segT = fract(along * segCount);
+  float segSeed = random2d(pos * vec2(27.1, 41.9) + vec2(segId * 0.077, segId * 0.191));
+
+  float steppedBias = (segSeed - 0.5) * (isIC ? 0.018 : 0.024) * shapeWarp;
+  float steppedKink = (random2d(vec2(segId * 4.1 + pos.x * 12.0, pos.y * 17.0)) - 0.5) * (isIC ? 0.010 : 0.013) * shapeWarp;
+  float steppedZig = sin(along * (isIC ? 56.0 : 44.0) + segSeed * 6.2831 + lightningTime * 2.8) * (isIC ? 0.0055 : 0.0042) * shapeWarp;
+  float trunkCenter = steppedBias + steppedKink + steppedZig;
+
+  float coreWidth = mix(0.013, 0.0075, smoothstep(0.0, 1.0, along));
+  coreWidth *= mix(1.18, 0.92, shapeWarp - 0.8);
+  float trunk = exp(-pow(abs(across - trunkCenter) / max(coreWidth, 0.0025), 1.22));
+
+  float branchField = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float fi = float(i);
+    float spawn = mix(0.10, 0.78, random2d(pos * (7.9 + fi * 1.7) + vec2(1.4 + fi, 9.8 + fi * 2.3)));
+    float branchLen = mix(0.12, 0.42, random2d(pos * (18.3 + fi * 0.9) + vec2(3.1 + fi * 0.7, 6.2)));
+    float branchMask = smoothstep(spawn, spawn + 0.02, along) * (1.0 - smoothstep(spawn + branchLen - 0.03, spawn + branchLen + 0.03, along));
+
+    float dirSign = random2d(pos * (31.4 + fi * 0.8) + vec2(8.2 + fi * 0.4, 4.5)) > 0.5 ? 1.0 : -1.0;
+    float localT = clamp((along - spawn) / max(branchLen, 0.001), 0.0, 1.0);
+    float branchSpread = dirSign * localT * (isIC ? 0.11 : 0.14) * shapeWarp;
+    float branchJitter = sin(localT * (17.0 + fi * 3.5) + segSeed * 11.0 + lightningTime * 5.2) * 0.0065 * shapeWarp;
+    float branchCenter = trunkCenter + branchSpread + branchJitter;
+    float branchWidth = mix(0.007, 0.0035, localT) * mix(1.0, 0.84, shapeWarp - 0.8);
+
+    float branch = exp(-pow(abs(across - branchCenter) / max(branchWidth, 0.002), 1.34));
+    branchField = max(branchField, branch * branchMask);
+  }
+
+  float segmentPulse = smoothstep(0.06, 0.40, segT) * (1.0 - smoothstep(0.80, 0.98, segT));
+  float leaderPulse = 0.90 + 0.10 * sin(along * 23.0 - lightningTime * 8.0 + random2d(pos * 13.5) * 6.2831);
+
+  float skeleton = max(trunk, branchField * 0.95);
+  return skeleton * segmentPulse * leaderPulse;
 }
 
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
@@ -306,34 +370,22 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   if (lightningTexCoord.x < -0.40 || lightningTexCoord.x > 1.40 || lightningTexCoord.y < -0.35 || lightningTexCoord.y > 1.40)
     return vec3(0.0);
 
-  // Lightweight channel sampling to avoid perf spikes and overbright blocks.
+  // Hybrid channel reconstruction: sampled texture + procedural segmented leader/branches.
   vec2 px = vec2(1.0 / lightningTexRes.x, 1.0 / lightningTexRes.y);
   float trunk = texture(lightningTex, lightningTexCoord).r;
-  float side = max(texture(lightningTex, lightningTexCoord + vec2(px.x, 0.0)).r,
-                   texture(lightningTex, lightningTexCoord - vec2(px.x, 0.0)).r);
-  float upDown = max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y)).r,
-                     texture(lightningTex, lightningTexCoord - vec2(0.0, px.y)).r);
+  float side = max(texture(lightningTex, lightningTexCoord + vec2(px.x * 1.2, 0.0)).r,
+                   texture(lightningTex, lightningTexCoord - vec2(px.x * 1.2, 0.0)).r);
+  float vertical = max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y * 1.4)).r,
+                       texture(lightningTex, lightningTexCoord - vec2(0.0, px.y * 1.4)).r);
+  float diag = max(max(texture(lightningTex, lightningTexCoord + vec2(px.x, px.y)).r,
+                       texture(lightningTex, lightningTexCoord + vec2(-px.x, px.y)).r),
+                   max(texture(lightningTex, lightningTexCoord + vec2(px.x, -px.y)).r,
+                       texture(lightningTex, lightningTexCoord + vec2(-px.x, -px.y)).r));
+  float sampledLightning = max(trunk, max(side, vertical) * 0.72);
+  sampledLightning = max(sampledLightning, diag * 0.58);
 
-  float pixVal = max(trunk, max(side, upDown) * 0.55);
-  // Only CG requires diagonal bridge sampling; skipping this for IC reduces texture fetch cost.
-  if (strikeTypeSign > 0.0) {
-    float diag = max(max(texture(lightningTex, lightningTexCoord + vec2(px.x, px.y)).r,
-                         texture(lightningTex, lightningTexCoord + vec2(-px.x, px.y)).r),
-                     max(texture(lightningTex, lightningTexCoord + vec2(px.x, -px.y)).r,
-                         texture(lightningTex, lightningTexCoord + vec2(-px.x, -px.y)).r));
-    pixVal = max(pixVal, diag * 0.62);
-
-    // Continuity bridge: sample a short vertical segment in texture space so missing
-    // staircase pixels cannot split the CG trunk into disconnected chunks.
-    float segBridge = max(
-      texture(lightningTex, lightningTexCoord + vec2(0.0, px.y * 1.5)).r,
-      texture(lightningTex, lightningTexCoord - vec2(0.0, px.y * 1.5)).r
-    );
-    segBridge = max(segBridge,
-                    max(texture(lightningTex, lightningTexCoord + vec2(px.x * 0.75, px.y * 1.2)).r,
-                        texture(lightningTex, lightningTexCoord + vec2(-px.x * 0.75, -px.y * 1.2)).r));
-    pixVal = max(pixVal, segBridge * 0.58);
-  }
+  float proceduralSkeleton = proceduralLightningSkeleton(lightningTexCoord, pos, lightningTime, strikeTypeSign < 0.0);
+  float pixVal = max(sampledLightning * 0.78, proceduralSkeleton);
 
   // Keep IC in cloud and CG mostly below source cloud.
   if (strikeTypeSign < 0.0) {
@@ -353,11 +405,13 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.0 : 0.9, strikeTypeSign > 0.0 ? 2.2 : 2.0, lightningTime);
   pixVal *= channelFade * max(tailFade, 0.0);
 
-  vec3 channelCoreCol = strikeTypeSign < 0.0 ? vec3(0.58, 0.44, 0.96) : vec3(0.52, 0.74, 1.0);
-  vec3 channelRimCol = strikeTypeSign < 0.0 ? vec3(0.92, 0.82, 1.0) : vec3(0.86, 0.95, 1.0);
-  vec3 lightningCol = mix(channelCoreCol, channelRimCol, 0.55);
+  float ionizedEdge = smoothstep(0.18, 0.95, pixVal);
+  vec3 channelCoreCol = strikeTypeSign < 0.0 ? vec3(0.56, 0.46, 0.98) : vec3(0.48, 0.72, 1.0);
+  vec3 channelRimCol = strikeTypeSign < 0.0 ? vec3(0.95, 0.84, 1.0) : vec3(0.93, 0.98, 1.0);
+  vec3 lightningCol = mix(channelCoreCol, channelRimCol, ionizedEdge * 0.72 + 0.18);
 
-  vec3 rebuiltLightning = pixVal * lightningCol * 1100.0;
+  float filamentGlow = pow(pixVal, 1.38);
+  vec3 rebuiltLightning = (pixVal * 0.76 + filamentGlow * 0.68) * lightningCol * 1320.0;
   return min(max(rebuiltLightning, vec3(0.0)), vec3(5000.0));
 }
 
