@@ -2928,6 +2928,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     update(N1, dist, horizontalAngle)
     {
+      if (!this.mix || !this.pan || !this.lowWhine || !this.highWhine || !this.lowNoiseFilter || !this.lowNoiseGain || !this.lowWhineGain || !this.highWhineGain)
+        return;
+
       const rpm = N1 * 7000;
       const whineFreq = 100 + rpm * 1.0; // 300 + rpm * 0.8;
       const noiseFreq = N1 * 600;        // 200 + N1 * 300;
@@ -2949,14 +2952,22 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       this.mix.gain.value = 170.0 / dist;
     }
 
-    mute() { this.mix.gain.value = 0.; }
+    mute()
+    {
+      if (this.mix)
+        this.mix.gain.value = 0.;
+    }
 
     stop()
     {
-      this.mix.gain.value = 0;
-      this.lowWhine.stop();
-      this.highWhine.stop();
-      this.lowNoiseSource.stop();
+      if (this.mix)
+        this.mix.gain.value = 0;
+      if (this.lowWhine)
+        this.lowWhine.stop();
+      if (this.highWhine)
+        this.highWhine.stop();
+      if (this.lowNoiseSource)
+        this.lowNoiseSource.stop();
     }
   }
 
@@ -3226,7 +3237,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       this.setSoundGainAndPan(this.urban_sound, 0);
       this.setSoundGainAndPan(this.rain_sound, 0);
       this.setSoundGainAndPan(this.wind_sound, 0);
-      this.jetEngineSound.mute();
+      this.jetEngineSound?.mute();
     }
   }
 
