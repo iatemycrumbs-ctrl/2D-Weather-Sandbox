@@ -226,6 +226,30 @@
             opacity: 1;
         }
 
+
+        .intro-quick-presets {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .intro-quick-presets button {
+            border: 1px solid rgba(118, 224, 255, 0.42);
+            background: linear-gradient(130deg, rgba(12, 28, 54, 0.86), rgba(18, 48, 82, 0.78));
+            color: #d8f4ff;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 180ms ease, filter 180ms ease;
+        }
+
+        .intro-quick-presets button:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.13);
+        }
+
         .resolution-warning {
             margin-top: 4rem;
             max-width: 1200px;
@@ -1162,6 +1186,11 @@
                     </table>
                     <input type="button" value="Create New Simulation" onclick="loadData ()" />
                     <i class="launch-note">Move the mouse until you see a terrain you like, then click to start.</i>
+                    <div class="intro-quick-presets">
+                        <button type="button" onclick="applyIntroQuickPreset('mobile')">📱 Mobile Smooth</button>
+                        <button type="button" onclick="applyIntroQuickPreset('cinematic')">🎬 Cinematic Sky</button>
+                        <button type="button" onclick="applyIntroQuickPreset('stormlab')">🌩️ Storm Lab</button>
+                    </div>
                 </form>
 
                 <div class="control-card">
@@ -1374,6 +1403,8 @@
     <div id="simControlsLauncher" class="sim-controls-launcher">
         <button id="simControlsOpen" type="button" title="Open Fullscreen Controls">🎛️</button>
         <button id="simControlsPause" type="button" title="Pause / Resume">⏯️</button>
+        <button id="simControlsGraphics" type="button" title="Cycle Graphics Tier">🎚️ BAL</button>
+        <button id="simControlsCenter" type="button" title="Center Camera">🎯</button>
     </div>
 
     <div id="devicePerfHud">GPU: detecting...</div>

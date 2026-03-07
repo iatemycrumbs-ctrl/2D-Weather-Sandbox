@@ -927,11 +927,34 @@ function installSimulationControlFx()
   const launcher = getEl('simControlsLauncher');
   const openBtn = getEl('simControlsOpen');
   const pauseBtn = getEl('simControlsPause');
+  const graphicsBtn = getEl('simControlsGraphics');
+  const centerBtn = getEl('simControlsCenter');
   if (launcher) {
     launcher.style.display = 'flex';
     launcher.style.opacity = '1';
     launcher.style.pointerEvents = 'auto';
   }
+
+  const quickGraphicsTiers = [
+    {name : 'LOW', renderScale : 0.72, haze : 0.70, bloom : 0.78, precip : 0.82},
+    {name : 'BAL', renderScale : 0.88, haze : 1.00, bloom : 1.00, precip : 1.00},
+    {name : 'HIGH', renderScale : 1.05, haze : 1.18, bloom : 1.16, precip : 1.12}
+  ];
+  let quickGraphicsIndex = 1;
+  const applyQuickGraphicsTier = (idx) => {
+    quickGraphicsIndex = (idx + quickGraphicsTiers.length) % quickGraphicsTiers.length;
+    const tier = quickGraphicsTiers[quickGraphicsIndex];
+    guiControls.renderScale = tier.renderScale;
+    guiControls.radiationHaze = tier.haze;
+    guiControls.lightningBloomStrength = tier.bloom;
+    guiControls.precipitationShaftStrength = tier.precip;
+    guiControls.precipitationMistStrength = clamp(tier.precip * 0.90, 0.20, 2.20);
+    guiControls.precipitationSparkle = clamp(0.55 + tier.precip * 0.25, 0.1, 2.0);
+    graphicsBtn && (graphicsBtn.textContent = '🎚️ ' + tier.name);
+    window.dispatchEvent(new Event('resize'));
+    console.log('[graphics]', 'tier=' + tier.name, 'renderScale=' + tier.renderScale.toFixed(2));
+    playUiBeep(0.64 + quickGraphicsIndex * 0.09);
+  };
 
   const setOverlay = (open) => {
     simulationUiOverlayState.open = open;
@@ -976,6 +999,20 @@ function installSimulationControlFx()
     guiControls.paused = !guiControls.paused;
     handlePause();
     playUiBeep(guiControls.paused ? 0.8 : 0.45);
+  });
+  openBtn?.addEventListener('click', () => {
+    datGui?.show && datGui.show();
+    datGui?.open && datGui.open();
+    if (root) {
+      root.style.display = 'block';
+      root.style.zIndex = simulationUiOverlayState.open ? '59' : '58';
+    }
+  });
+  graphicsBtn?.addEventListener('click', () => applyQuickGraphicsTier(quickGraphicsIndex + 1));
+  centerBtn?.addEventListener('click', () => {
+    if (cam && cam.center)
+      cam.center();
+    playUiBeep(0.52);
   });
 
   document.addEventListener('keydown', (event) => {
@@ -1978,6 +2015,47 @@ function applyIntroShaderSettings()
     guiControls_default.cloudLayerComplexity = parseFloat(introCloudLayerSel.value);
 }
 
+
+function applyIntroQuickPreset(mode)
+{
+  const setVal = (id, value) => {
+    const el = getEl(id);
+    if (el)
+      el.value = value;
+  };
+
+  if (mode == 'mobile') {
+    setVal('introGraphicsPreset', 'Low');
+    setVal('introSimulationProfile', 'Balanced');
+    setVal('simResSelX', 1800);
+    setVal('simResSelY', 240);
+    setVal('introShaderQualitySel', 0.80);
+    setVal('introLightningFxSel', 0.85);
+    setVal('introPrecipFxSel', 0.85);
+    setVal('introCloudLayerSel', 0.75);
+  } else if (mode == 'cinematic') {
+    setVal('introGraphicsPreset', 'Ultra');
+    setVal('introSimulationProfile', 'Dynamic');
+    setVal('simResSelX', 3600);
+    setVal('simResSelY', 300);
+    setVal('introShaderQualitySel', 1.40);
+    setVal('introLightningFxSel', 1.35);
+    setVal('introPrecipFxSel', 1.25);
+    setVal('introCloudLayerSel', 1.35);
+  } else if (mode == 'stormlab') {
+    setVal('introGraphicsPreset', 'High');
+    setVal('introSimulationProfile', 'Extreme');
+    setVal('simResSelX', 3000);
+    setVal('simResSelY', 320);
+    setVal('introShaderQualitySel', 1.05);
+    setVal('introLightningFxSel', 1.40);
+    setVal('introPrecipFxSel', 1.20);
+    setVal('introCloudLayerSel', 1.15);
+  }
+
+  updateSetupSliders();
+  applyIntroShaderSettings();
+}
 
 async function loadData()
 {
