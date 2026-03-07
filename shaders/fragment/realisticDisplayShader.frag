@@ -302,7 +302,7 @@ float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool i
     float fi = float(i);
     float spawn = mix(0.10, 0.78, random2d(pos * (7.9 + fi * 1.7) + vec2(1.4 + fi, 9.8 + fi * 2.3)));
     float branchLen = mix(0.18, 0.62, random2d(pos * (18.3 + fi * 0.9) + vec2(3.1 + fi * 0.7, 6.2)));
-    float branchMask = smoothstep(spawn, spawn + 0.02, along) * (1.0 - smoothstep(spawn + branchLen - 0.03, spawn + branchLen + 0.03, along));
+    float branchMask = smoothstep(spawn, spawn + 0.015, along) * (1.0 - smoothstep(spawn + branchLen - 0.02, spawn + branchLen + 0.08, along));
 
     float dirSign = random2d(pos * (31.4 + fi * 0.8) + vec2(8.2 + fi * 0.4, 4.5)) > 0.5 ? 1.0 : -1.0;
     float localT = clamp((along - spawn) / max(branchLen, 0.001), 0.0, 1.0);
@@ -315,11 +315,11 @@ float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool i
     branchField = max(branchField, branch * branchMask);
   }
 
-  float segmentPulse = smoothstep(0.02, 0.28, segT) * (1.0 - smoothstep(0.92, 1.00, segT));
+  float segmentPulse = 0.62 + 0.38 * (smoothstep(0.01, 0.24, segT) * (1.0 - smoothstep(0.95, 1.00, segT)));
   float leaderPulse = 0.90 + 0.10 * sin(along * 23.0 - lightningTime * 8.0 + random2d(pos * 13.5) * 6.2831);
 
   float skeleton = max(trunk, branchField * 0.95);
-  return skeleton * segmentPulse * leaderPulse;
+  return skeleton * segmentPulse * max(leaderPulse, 0.86);
 }
 
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
@@ -329,7 +329,7 @@ float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
   bool isIC = intensity < 0.0;
   float absIntensity = abs(intensity);
   float T = max(T0, 0.0);
-  if (T > 3.2)
+  if (T > 3.9)
     return 0.0;
 
   float channelEnvelope = lightningChannelEnvelope(T, isIC);
@@ -367,7 +367,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     lightningTexCoord = remapCGLightningUV(lightningTexCoord, pos, scaleMult);
   }
 
-  if (lightningTexCoord.x < -0.50 || lightningTexCoord.x > 1.50 || lightningTexCoord.y < -0.50 || lightningTexCoord.y > 1.62)
+  if (lightningTexCoord.x < -0.58 || lightningTexCoord.x > 1.58 || lightningTexCoord.y < -0.62 || lightningTexCoord.y > 1.78)
     return vec3(0.0);
 
   // Hybrid channel reconstruction: sampled texture + procedural segmented leader/branches.
@@ -402,7 +402,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   }
 
   float channelFade = clamp(absIntensity * (strikeTypeSign > 0.0 ? 0.10 : 0.08), 0.0, 1.0);
-  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.0 : 0.9, strikeTypeSign > 0.0 ? 2.2 : 2.0, lightningTime);
+  float tailFade = 1.0 - smoothstep(strikeTypeSign > 0.0 ? 1.15 : 1.05, strikeTypeSign > 0.0 ? 3.10 : 2.80, lightningTime);
   pixVal *= channelFade * max(tailFade, 0.0);
 
   float ionizedEdge = smoothstep(0.18, 0.95, pixVal);
@@ -566,7 +566,7 @@ vec4 getAirColor(vec2 fragCoordIn)
   float lightningSign = lightningData[INTENSITY] < 0.0 ? -1.0 : 1.0;
   float currentLightningIntensity = lightningIntensityOverTime(lightningTime, lightningPos, lightningData[INTENSITY]) * lightningSign;
 
-  if (lightningStartIterNum <= 0.0 || lightningTime > 3.2)
+  if (lightningStartIterNum <= 0.0 || lightningTime > 3.9)
     currentLightningIntensity = 0.0;
 
 
