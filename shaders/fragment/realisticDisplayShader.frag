@@ -222,17 +222,18 @@ vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float wrappedDx = mod((texCoord.x - pos.x) + 1.5, 1.0) - 0.5;
   vec2 rel = vec2(wrappedDx, texCoord.y - pos.y);
 
-  // Reworked IC mapping: near-straight cloud channel with minimal curvature.
-  float tilt = (random2d(pos * 31.9) - 0.5) * 0.12;
-  vec2 dir = normalize(vec2(cos(tilt), sin(tilt) * 0.08));
+  // Reworked IC mapping: visible curved in-cloud channel.
+  float tilt = (random2d(pos * 31.9) - 0.5) * 0.82;
+  vec2 dir = normalize(vec2(cos(tilt), sin(tilt) * 0.34));
   vec2 perp = vec2(-dir.y, dir.x);
 
   float along = dot(rel, dir);
   float across = dot(rel, perp);
+  float shear = sin((texCoord.y - pos.y) * 22.0 + random2d(pos * 23.1) * 6.2831) * 0.08;
 
   vec2 uv;
-  uv.x = along * scaleMult * 2.35;
-  uv.y = across * scaleMult * 1.22;
+  uv.x = along * scaleMult * 2.25 + shear;
+  uv.y = across * scaleMult * 1.35;
   return uv;
 }
 
@@ -389,8 +390,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     return vec3(0.0);
 
   vec2 seed = vec2(pos.x + lightningTexturePhase, pos.y + fract(lightningTexturePhase * 1.73));
-  if (strikeTypeSign > 0.0)
-    lightningCoord += lightningWarpOffset(lightningCoord, lightningTime, seed, strikeTypeSign);
+  lightningCoord += lightningWarpOffset(lightningCoord, lightningTime, seed, strikeTypeSign);
   float channel = dynamicLightningChannel(lightningCoord, lightningTime, seed, strikeTypeSign);
 
   if (strikeTypeSign < 0.0) {

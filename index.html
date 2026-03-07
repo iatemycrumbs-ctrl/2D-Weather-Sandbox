@@ -912,8 +912,8 @@
         .sim-controls-launcher {
             position: fixed;
             right: 14px;
-            top: 74px;
-            z-index: 60;
+            top: calc(86px + env(safe-area-inset-top));
+            z-index: 90;
             display: none;
             gap: 8px;
             flex-direction: column;
@@ -924,12 +924,29 @@
             background: rgba(9, 22, 38, 0.84);
             color: #d8f0ff;
             border-radius: 12px;
-            width: 48px;
-            height: 48px;
+            min-width: 56px;
+            height: 56px;
+            padding: 0 12px;
             font-size: 20px;
             cursor: pointer;
             transition: transform 180ms ease, box-shadow 180ms ease;
             animation: rgbUiPulse 3.0s linear infinite;
+        }
+
+        .sim-controls-launcher #simControlsOpen {
+            min-width: 124px;
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            background: linear-gradient(120deg, rgba(16, 56, 98, 0.92), rgba(22, 110, 172, 0.90));
+        }
+
+        @media (max-width: 920px) {
+            .sim-controls-launcher {
+                top: auto;
+                bottom: calc(22px + env(safe-area-inset-bottom));
+                right: 10px;
+            }
         }
 
         .sim-controls-launcher button:hover {
@@ -1401,7 +1418,7 @@
 
 
     <div id="simControlsLauncher" class="sim-controls-launcher">
-        <button id="simControlsOpen" type="button" title="Open Fullscreen Controls">🎛️</button>
+        <button id="simControlsOpen" type="button" title="Open Fullscreen Controls">🎛️ OPEN</button>
         <button id="simControlsPause" type="button" title="Pause / Resume">⏯️</button>
         <button id="simControlsGraphics" type="button" title="Cycle Graphics Tier">🎚️ BAL</button>
         <button id="simControlsCenter" type="button" title="Center Camera">🎯</button>

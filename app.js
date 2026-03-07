@@ -1008,6 +1008,7 @@ function installSimulationControlFx()
       root.style.zIndex = simulationUiOverlayState.open ? '59' : '58';
     }
   });
+  applyQuickGraphicsTier(quickGraphicsIndex);
   graphicsBtn?.addEventListener('click', () => applyQuickGraphicsTier(quickGraphicsIndex + 1));
   centerBtn?.addEventListener('click', () => {
     if (cam && cam.center)
