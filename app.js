@@ -1015,14 +1015,20 @@ function installSimulationControlFx()
     simulationUiOverlayState.open = open;
     root.classList.toggle('fullscreen-controls', open);
 
-    // Force controls panel visible/in-front when opened so Open button doesn't look like pause-only.
+    // Force controls panel fully visible/in-front when opened.
     if (open) {
       datGui?.show && datGui.show();
+      datGui.closed = false;
       datGui?.open && datGui.open();
       root.style.display = 'block';
       root.style.visibility = 'visible';
       root.style.opacity = '1';
       root.style.pointerEvents = 'auto';
+      root.style.position = 'fixed';
+      root.style.inset = '0';
+      root.style.width = '100vw';
+      root.style.height = '100vh';
+      root.style.overflow = 'auto';
       root.style.zIndex = '999';
 
       simulationUiOverlayState.pauseBeforeOpen = guiControls.paused;
@@ -1030,6 +1036,11 @@ function installSimulationControlFx()
       playUiBeep(0.85);
     } else {
       root.style.zIndex = '58';
+      root.style.position = '';
+      root.style.inset = '';
+      root.style.width = '';
+      root.style.height = '';
+      root.style.overflow = '';
       guiControls.paused = simulationUiOverlayState.pauseBeforeOpen;
       playUiBeep(0.50);
     }
@@ -1061,7 +1072,7 @@ function installSimulationControlFx()
   root.addEventListener('change', onChange, true);
 
   openBtn?.addEventListener('click', () => {
-    setOverlay(!simulationUiOverlayState.open);
+    setOverlay(true);
   });
   pauseBtn?.addEventListener('click', () => {
     guiControls.paused = !guiControls.paused;
