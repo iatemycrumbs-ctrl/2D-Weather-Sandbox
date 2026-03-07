@@ -132,18 +132,27 @@ void main()
 
     float overSaturation = excessWater - water[CLOUD]; // amount of water vapor that should condence, but hasn't yet
 
+    // Microphysics rework: smooth phase exchange to reduce abrupt cloud breakup and
+    // better couple precipitation loading + ventilation with condensation/evaporation.
+    float precipitationLoading = clamp(water[PRECIPITATION], 0.0, 2.2);
+    float turbulenceVentilation = map_rangeC(length(base.xy) + abs(base[VY]) * 0.8, 0.0, 0.09, 0.85, 1.38);
+    float supersatBuffered = overSaturation + min(precipitationLoading * 0.12, max(water[CLOUD], 0.0) * 0.18);
+
     float condensation;
 
-    if (overSaturation < 0.) {                          // evaporation
+    if (supersatBuffered < 0.) {                          // evaporation
       float erosionResistance = cloudErosionResistance(water[CLOUD], water[PRECIPITATION], base[VY]);
-      float subSatMagnitude = abs(overSaturation);
-      float slowEvap = map_rangeC(subSatMagnitude, 0.0, 1.8, 0.10, 0.22);
-      condensation = -subSatMagnitude * slowEvap * erosionResistance;
-    } else {                                            // condensation
-      float growthPotential = cloudGrowthPotential(overSaturation, water[CLOUD], base[VY]);
-      condensation = overSaturation * condensationRate * growthPotential;
+      float subSatMagnitude = abs(supersatBuffered);
+      float slowEvap = map_rangeC(subSatMagnitude, 0.0, 1.8, 0.085, 0.205);
+      float precipSuppression = map_rangeC(precipitationLoading, 0.0, 1.8, 1.0, 0.76);
+      condensation = -subSatMagnitude * slowEvap * erosionResistance * precipSuppression;
+    } else {                                              // condensation
+      float growthPotential = cloudGrowthPotential(supersatBuffered, water[CLOUD], base[VY]);
+      float seededCondense = map_rangeC(precipitationLoading, 0.0, 1.8, 0.92, 1.18);
+      condensation = supersatBuffered * condensationRate * growthPotential * turbulenceVentilation * seededCondense;
     }
-    condensation = max(condensation, -water[CLOUD]);    // Prevent cloudwater from going negative
+    condensation = max(condensation, -water[CLOUD]);      // Prevent cloudwater from going negative
+    condensation = min(condensation, max(water[TOTAL], 0.0) * 0.36);
 
     float dT = condensation * evapHeat * 1.0;           // how much that water phase change would change the temperature
     base[TEMPERATURE] += dT;

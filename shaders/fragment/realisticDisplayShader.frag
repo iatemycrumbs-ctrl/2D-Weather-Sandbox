@@ -416,7 +416,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     pixVal *= belowSource * cgLateralConfine;
 
     float cgContinuity = smoothstep(0.00, 0.07, lightningTexCoord.y) * (1.0 - smoothstep(1.46, 1.66, lightningTexCoord.y));
-    pixVal = max(pixVal, trunk * 0.64 * cgContinuity);
+    float cgCoreBridge = max(trunk, vertical * 0.86);
+    pixVal = max(pixVal, cgCoreBridge * 0.68 * cgContinuity);
   }
 
   float channelFade = clamp(absIntensity * (strikeTypeSign > 0.0 ? 0.10 : 0.08), 0.0, 1.0);
@@ -504,19 +505,19 @@ vec4 getAirColor(vec2 fragCoordIn)
   float cloudTurret = smoothstep(0.24, 0.84, texCoord.y) * smoothstep(0.64, 0.98, cloudNoiseBroad + cloudNoiseFine * 0.7);
   float entrainment = smoothstep(0.08, 0.42, texCoord.y) * smoothstep(0.45, 0.95, cloudNoiseWarp + cloudNoiseDetail * 0.6);
 
-  float cloudDensity = cloudBody * (7.9 + cloudLayerComplexity * 7.2);
+  float cloudDensity = cloudBody * (8.6 + cloudLayerComplexity * 8.0);
   cloudDensity *= (0.68 + cloudLayerA * 0.36 + cloudLayerB * 0.34 + cloudLayerC * 0.31);
   cloudDensity *= mix(0.62, 1.44, billow);
-  cloudDensity *= (1.0 + anvilShear * 0.32 + cauliflowerRidge * 0.30 + cloudTower * 0.28);
-  cloudDensity *= (1.0 + cloudTurret * 0.16 + entrainment * 0.14);
+  cloudDensity *= (1.0 + anvilShear * 0.38 + cauliflowerRidge * 0.34 + cloudTower * 0.32);
+  cloudDensity *= (1.0 + cloudTurret * 0.22 + entrainment * 0.18);
   cloudDensity *= mix(0.88, 1.10, cloudCavity);
 
   float cloudVisualLimiter = 1.0 / (1.0 + max(cloudDensity - 3.8, 0.0) * 0.20);
   cloudDensity *= cloudVisualLimiter;
 
   float precipMass = max(water[PRECIPITATION], 0.0);
-  float precipShaft = clamp(precipMass * (2.35 * precipitationShaftStrength), 0.0, 1.0);
-  float precipMist = clamp(precipMass * (1.75 * precipitationMistStrength) + cloudBody * 0.26, 0.0, 1.0);
+  float precipShaft = clamp(precipMass * (2.55 * precipitationShaftStrength), 0.0, 1.0);
+  float precipMist = clamp(precipMass * (1.95 * precipitationMistStrength) + cloudBody * 0.30, 0.0, 1.0);
 
   vec2 precipNoiseUv = vec2(texCoord.x * resolution.x * 0.040 + iterNum * 0.010,
                             texCoord.y * resolution.y * 0.098 - iterNum * 0.064);
@@ -524,7 +525,8 @@ vec4 getAirColor(vec2 fragCoordIn)
   float streakMask = smoothstep(0.54, 1.00, streakNoise + precipShaft * 0.40);
   float shaftEnvelope = smoothstep(0.05, 0.95, texCoord.y) * (1.0 - smoothstep(0.94, 1.0, texCoord.y));
   float verticalCurtain = smoothstep(0.20, 0.92, texCoord.y);
-  float precipShaftOpacity = precipShaft * streakMask * shaftEnvelope * verticalCurtain;
+  float virgaFade = smoothstep(0.02, 0.12, texCoord.y);
+  float precipShaftOpacity = precipShaft * streakMask * shaftEnvelope * verticalCurtain * virgaFade;
 
   float sparkleNoise = texture(noiseTex, vec2(texCoord.x * resolution.x * 0.125 - iterNum * 0.025,
                                               texCoord.y * resolution.y * 0.185 + iterNum * 0.017)).r;
@@ -544,10 +546,10 @@ vec4 getAirColor(vec2 fragCoordIn)
   cloudCol += vec3(0.07, 0.09, 0.12) * cauliflowerRidge;
   cloudCol = mix(cloudCol, cloudShadowCol * 0.85, cloudCavity * 0.22);
   cloudCol = mix(cloudCol, cloudShadowCol * 0.80, entrainment * 0.18);
-  cloudCol = mix(cloudCol, precipMistCol, precipMist * 0.52);
+  cloudCol = mix(cloudCol, precipMistCol, precipMist * 0.58);
   cloudCol += precipShaftCol * (precipShaftOpacity * 0.88 + precipSparkleGlow * 0.24);
 
-  float precipDensity = precipMass * (1.05 * precipitationShaftStrength + 0.76 * precipitationMistStrength);
+  float precipDensity = precipMass * (1.18 * precipitationShaftStrength + 0.88 * precipitationMistStrength);
   float totalDensity = cloudDensity + precipDensity;
 
   float cloudOpacity = clamp((1.0 - (1.0 / (1.0 + totalDensity))) * (0.95 + 0.24 * precipitationMistStrength), 0.0, 0.98);

@@ -80,7 +80,10 @@ void exchangeWith(vec2 texCoord) // exchange temperature and water
 
 float calcEvaporation(float T, float W, float V, float M)                                             // temperature, total water, vegetation, soil moisture
 {
-  return max((maxWater(T) - W) * landEvaporation * (V / 127. + 0.1) * min(M + 1.0, 50.0) * 0.05, 0.); // landEvaporation should be adjusted to remove * 0.05 factor
+  float vaporDeficit = max(maxWater(T) - W, 0.0);
+  float canopyVent = map_rangeC(V, 0.0, 127.0, 0.82, 1.18);
+  float moistureAccess = map_rangeC(M, 0.0, 55.0, 0.30, 1.25);
+  return vaporDeficit * landEvaporation * canopyVent * moistureAccess * 0.045;
 }
 
 float calcFireIntensity(int veg, float moist, float precip) { return max(float(veg) * 0.00025 - moist * 0.00020 - precip * 0.05, 0.); }
@@ -406,7 +409,9 @@ void main()
         if (wall[VERT_DISTANCE] <= wallVerticalInfluence) {
 
           float dryStressFactor = map_rangeC(waterInSurface[SOIL_MOISTURE], 0.0, 25.0, 0.35, 1.0);
-          float evaporation = calcEvaporation(realTemp, water[TOTAL], float(wall[VEGETATION]), waterInSurface[SOIL_MOISTURE]) * dryStressFactor / influenceDevider;
+          float canopyShield = map_rangeC(canopyInterception, 0.0, 2.0, 1.16, 0.84);
+          float infiltrationHold = map_rangeC(soilInfiltrationRate, 0.2, 3.0, 1.10, 0.78);
+          float evaporation = calcEvaporation(realTemp, water[TOTAL], float(wall[VEGETATION]), waterInSurface[SOIL_MOISTURE]) * dryStressFactor * canopyShield * infiltrationHold / influenceDevider;
 
           water[TOTAL] += evaporation;
           base[TEMPERATURE] -= evaporation * evapHeat * 0.5;                                // evaporative cooling (half the real value, to prevent boring non convective conditions)
@@ -498,10 +503,15 @@ void main()
 
         float realTempAboveSurface = potentialToRealT(baseAboveSurface[TEMPERATURE], texCoordX0Yp.y);
 
-        float evaporation = calcEvaporation(realTempAboveSurface, waterAboveSurface[TOTAL], float(wall[VEGETATION]), water[SOIL_MOISTURE]) * 0.08;
+        float evaporation = calcEvaporation(realTempAboveSurface, waterAboveSurface[TOTAL], float(wall[VEGETATION]), water[SOIL_MOISTURE]) *
+                            0.08 * map_rangeC(canopyInterception, 0.0, 2.0, 1.12, 0.86);
+
+        float infiltration = precipDeposition[RAIN_DEPOSITION] * 0.03 * soilInfiltrationRate;
+        float canopyStorage = waterAboveSurface[CLOUD] * 0.002 * canopyInterception;
+        float runoffLoss = precipDeposition[RAIN_DEPOSITION] * 0.01 * surfaceRunoffRate;
 
         water[SOIL_MOISTURE] -= evaporation;
-        water[SOIL_MOISTURE] += precipDeposition[RAIN_DEPOSITION] * 0.03 + waterAboveSurface[CLOUD] * 0.002;
+        water[SOIL_MOISTURE] += infiltration + canopyStorage - runoffLoss;
 
 
         if (int(iterNum) % 100 == 0) { // snow and soil moisture smoothing
