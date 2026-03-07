@@ -384,8 +384,18 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   float sampledLightning = max(trunk, max(side, vertical) * 0.72);
   sampledLightning = max(sampledLightning, diag * 0.58);
 
+  if (strikeTypeSign > 0.0) {
+    // Continuity bridge for CG channels so stepped segments remain connected.
+    float segBridge = max(texture(lightningTex, lightningTexCoord + vec2(0.0, px.y * 2.0)).r,
+                          texture(lightningTex, lightningTexCoord - vec2(0.0, px.y * 2.0)).r);
+    segBridge = max(segBridge,
+                    max(texture(lightningTex, lightningTexCoord + vec2(px.x * 0.9, px.y * 1.4)).r,
+                        texture(lightningTex, lightningTexCoord + vec2(-px.x * 0.9, -px.y * 1.4)).r));
+    sampledLightning = max(sampledLightning, segBridge * 0.76);
+  }
+
   float proceduralSkeleton = proceduralLightningSkeleton(lightningTexCoord, pos, lightningTime, strikeTypeSign < 0.0);
-  float pixVal = max(sampledLightning * 0.78, proceduralSkeleton);
+  float pixVal = max(sampledLightning * 0.82, proceduralSkeleton);
 
   // Keep IC in cloud and CG mostly below source cloud.
   if (strikeTypeSign < 0.0) {

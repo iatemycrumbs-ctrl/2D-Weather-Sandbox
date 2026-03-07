@@ -47,6 +47,9 @@ uniform float coastalMixing;
 uniform float waterAlbedoShift;
 uniform float cloudAutoconversionRate;
 uniform float cloudLifetimeBoost;
+uniform float vegetationGrowthBoost;
+uniform float vegetationResilience;
+uniform float vegetationSpreadRate;
 uniform float lightningTempMinK;
 uniform float lightningTempMaxK;
 
@@ -535,10 +538,10 @@ void main()
           float tempSuitability = map_rangeC(realTempAboveSurface, CtoK(-5.0), CtoK(28.0), 0.0, 1.0);
           float moistureSuitability = map_rangeC(water[SOIL_MOISTURE], 3.0, 40.0, 0.0, 1.0);
           float snowSuppression = map_rangeC(water[SNOW], 0.0, 120.0, 1.0, 0.25);
-          float climateCapacity = clamp(tempSuitability * moistureSuitability * snowSuppression, 0.0, 1.0) * 127.0;
+          float climateCapacity = clamp(tempSuitability * moistureSuitability * snowSuppression * vegetationGrowthBoost, 0.0, 1.0) * 127.0;
           float treeMassFactor = map_rangeC(float(wall[VEGETATION]), 0.0, 127.0, 0.65, 1.55);
 
-          int vegetationGrowthRate = int(climateCapacity * 0.045 / treeMassFactor + sqrt(max(lightAboveSurface[SUNLIGHT], 0.0)) * 2.2);
+          int vegetationGrowthRate = int((climateCapacity * 0.045 / treeMassFactor + sqrt(max(lightAboveSurface[SUNLIGHT], 0.0)) * 2.2) * vegetationSpreadRate);
 
           if (vegetationGrowthRate > 0 && int(iterNum) % ((100 / max(vegetationGrowthRate, 1)) * 100) == 0) {      // growth interval
             if (int(climateCapacity) > wall[VEGETATION])
@@ -546,7 +549,7 @@ void main()
           }
 
           // gradual dieback under persistent drought/heat stress
-          float droughtStress = max(8.0 - water[SOIL_MOISTURE], 0.0) * map_rangeC(realTempAboveSurface, CtoK(16.0), CtoK(38.0), 0.0, 1.0);
+          float droughtStress = max(8.0 - water[SOIL_MOISTURE], 0.0) * map_rangeC(realTempAboveSurface, CtoK(16.0), CtoK(38.0), 0.0, 1.0) * map_rangeC(vegetationResilience, 0.5, 2.0, 1.45, 0.62);
           if (droughtStress > 0.0 && int(iterNum) % (80 + int(220.0 / (droughtStress + 1.0))) == 0)
             wall[VEGETATION] = max(wall[VEGETATION] - 1, 0);
 
@@ -556,9 +559,9 @@ void main()
 
           // Trees lose biomass in severe wind, especially when dry and unfrozen.
           if (wall[TYPE] == WALLTYPE_LAND && wall[VEGETATION] > 20 && gustStress > 0.0) {
-            float treeRootStrength = map_rangeC(water[SOIL_MOISTURE], 2.0, 45.0, 0.65, 1.20);
+            float treeRootStrength = map_rangeC(water[SOIL_MOISTURE], 2.0, 45.0, 0.65, 1.20) * map_rangeC(vegetationResilience, 0.5, 2.0, 0.75, 1.35);
             float snowLoadPenalty = map_rangeC(water[SNOW], 0.0, 120.0, 1.0, 0.65);
-            float treeDamageChance = clamp(gustStress * 9.0 * (1.0 / treeRootStrength) * (1.0 / snowLoadPenalty), 0.0, 0.55);
+            float treeDamageChance = clamp(gustStress * 9.0 * (1.0 / treeRootStrength) * (1.0 / snowLoadPenalty), 0.0, 0.55) * map_rangeC(vegetationResilience, 0.5, 2.0, 1.25, 0.70);
             if (random2d(vec2(iterNum * 0.17, fragCoord.x * 0.11 + fragCoord.y * 0.07)) < treeDamageChance) {
               wall[VEGETATION] -= int(clamp(1.0 + gustStress * 30.0, 1.0, 8.0));
               wall[VEGETATION] = max(wall[VEGETATION], 0);

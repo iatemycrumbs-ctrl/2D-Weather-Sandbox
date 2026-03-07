@@ -516,6 +516,8 @@ const guiControls_default = {
   pixelRatioScale : 0.1,
   graphicsPreset : 'High',
   simulationProfile : 'Balanced',
+  powerSavingMode : false,
+  gpuAccelerationMode : true,
   ambientScattering : 1.0,
   cloudLayerComplexity : 1.0,
   precipitationEffectMult : 1.0,
@@ -540,6 +542,9 @@ const guiControls_default = {
   surfaceRunoffRate : 1.0,
   soilInfiltrationRate : 1.0,
   canopyInterception : 1.0,
+  vegetationGrowthBoost : 1.0,
+  vegetationResilience : 1.0,
+  vegetationSpreadRate : 1.0,
   urbanHeatIslandStrength : 1.0,
   coastalMixing : 1.0,
   waterAlbedoShift : 0.0,
@@ -583,6 +588,9 @@ var minShadowLight = 0.02;
 var saveFileName = '';
 var fpsCounterEl;
 var tornadoLabelEl;
+
+var inactiveDropletSampleInterval = 600;
+
 
 var guiControlsFromSaveFile = null;
 var datGui;
@@ -4233,6 +4241,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'surfaceRunoffRate'), guiControls.surfaceRunoffRate);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'soilInfiltrationRate'), guiControls.soilInfiltrationRate);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'canopyInterception'), guiControls.canopyInterception);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vegetationGrowthBoost'), guiControls.vegetationGrowthBoost);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vegetationResilience'), guiControls.vegetationResilience);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vegetationSpreadRate'), guiControls.vegetationSpreadRate);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'urbanHeatIslandStrength'), guiControls.urbanHeatIslandStrength);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'coastalMixing'), guiControls.coastalMixing);
     gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterAlbedoShift'), guiControls.waterAlbedoShift);
@@ -5024,6 +5035,34 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       })
       .name('Canopy Interception');
 
+
+    water_folder.add(guiControls, 'vegetationGrowthBoost', 0.5, 2.5, 0.01)
+      .onChange(function() {
+        if (!gl)
+          return;
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vegetationGrowthBoost'), guiControls.vegetationGrowthBoost);
+      })
+      .name('Vegetation Growth Boost');
+
+    water_folder.add(guiControls, 'vegetationResilience', 0.5, 2.0, 0.01)
+      .onChange(function() {
+        if (!gl)
+          return;
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vegetationResilience'), guiControls.vegetationResilience);
+      })
+      .name('Vegetation Resilience');
+
+    water_folder.add(guiControls, 'vegetationSpreadRate', 0.5, 2.0, 0.01)
+      .onChange(function() {
+        if (!gl)
+          return;
+        gl.useProgram(boundaryProgram);
+        gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vegetationSpreadRate'), guiControls.vegetationSpreadRate);
+      })
+      .name('Vegetation Spread Rate');
+
     water_folder.add(guiControls, 'urbanHeatIslandStrength', 0.0, 3.0, 0.01)
       .onChange(function() {
         if (!sunIsUp)
@@ -5578,6 +5617,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     advanced_folder.add(guiControls, 'auto_IterPerFrame').name('Auto Adjust').listen();
 
+    advanced_folder.add(guiControls, 'powerSavingMode').name('Power Saving Mode').onChange(function() {
+      applyRuntimePerformanceModes(true);
+    });
+
+    advanced_folder.add(guiControls, 'gpuAccelerationMode').name('GPU Acceleration Mode').onChange(function() {
+      applyRuntimePerformanceModes(true);
+    });
+
 
     advanced_folder.add(guiControls, 'sound').name('Enable Sound').onChange(function() {
       if (guiControls.sound) {
@@ -5602,6 +5649,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     display_folder.open();
 
     installSimulationControlFx();
+    applyRuntimePerformanceModes(true);
 
     datGui.width = 400;
   }
@@ -7519,6 +7567,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
                CtoK(guiControls.waterTemperature)); // can be changed by GUI input
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'dryLapse'), dryLapse);
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'precipitationRecycling'), guiControls.precipitationRecycling);
+  gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vegetationGrowthBoost'), guiControls.vegetationGrowthBoost);
+  gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vegetationResilience'), guiControls.vegetationResilience);
+  gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'vegetationSpreadRate'), guiControls.vegetationSpreadRate);
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'coastalMixing'), guiControls.coastalMixing);
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'waterAlbedoShift'), guiControls.waterAlbedoShift);
   gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'cloudLifetimeBoost'), guiControls.cloudLifetimeBoost);
@@ -8022,7 +8073,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
               gl.endTransformFeedback();
 
               // sample to count number of inactive droplets
-              if (iterNum % 600 == 0) {
+              if (iterNum % inactiveDropletSampleInterval == 0) {
                 gl.readBuffer(gl.COLOR_ATTACHMENT0);
                 var sampleValues = new Float32Array(4);
                 // console.time('cnt');
@@ -8358,66 +8409,56 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.bindVertexArray(postProcessingVao);
 
 
-      gl.useProgram(isolateBrightPartsProgram);
-
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, hdrFBO.texture);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBOs[0].frameBuffer); // brightPartsFrameBuffer
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.clearColor(0.0, 0.0, 0.0, 1.0);                            // background color
-      gl.clear(gl.COLOR_BUFFER_BIT);
-
-      gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // render bright parts to seperate texture
-
-
-      // BLOOM
-
-      let prevFBO = bloomFBOs[0]; // the previous FBO
-
-      gl.useProgram(bloomBlurProgram);
-      gl.uniform1i(gl.getUniformLocation(bloomBlurProgram, 'bloomTexture'), 0);
-
-
-      // downsample
-      for (let i = 1; i < bloomFBOs.length; i++) {
-        let destFBO = bloomFBOs[i];
-        gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
-
-        gl.viewport(0, 0, destFBO.width, destFBO.height);
-
-        // bind texture
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, prevFBO.texture);
-
-        gl.bindFramebuffer(gl.FRAMEBUFFER, destFBO.frameBuffer);
-        // gl.drawBuffers([ gl.BACK ]);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // draw to destFBO
-
-        prevFBO = destFBO;
-      }
-
-      // upsample and add
-      gl.blendFunc(gl.ONE, gl.ONE); // add to the existing texture in the framebuffer
-      gl.enable(gl.BLEND);
-
-      for (let i = bloomFBOs.length - 2; i >= 0; i--) {
-        let destFBO = bloomFBOs[i];
-
-        gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
+      if (guiControls.powerSavingMode) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBOs[0].frameBuffer);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+      } else {
+        gl.useProgram(isolateBrightPartsProgram);
 
         gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, prevFBO.texture);
+        gl.bindTexture(gl.TEXTURE_2D, hdrFBO.texture);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFBOs[0].frameBuffer); // brightPartsFrameBuffer
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
 
-        gl.viewport(0, 0, destFBO.width, destFBO.height);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, destFBO.frameBuffer);
-        // gl.drawBuffers([ gl.BACK ]);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); // draw to destFBO
+        gl.drawBuffers([ gl.COLOR_ATTACHMENT0 ]);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-        prevFBO = destFBO;
+        let prevFBO = bloomFBOs[0];
+
+        gl.useProgram(bloomBlurProgram);
+        gl.uniform1i(gl.getUniformLocation(bloomBlurProgram, 'bloomTexture'), 0);
+
+        for (let i = 1; i < bloomFBOs.length; i++) {
+          let destFBO = bloomFBOs[i];
+          gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
+          gl.viewport(0, 0, destFBO.width, destFBO.height);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, prevFBO.texture);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, destFBO.frameBuffer);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          prevFBO = destFBO;
+        }
+
+        gl.blendFunc(gl.ONE, gl.ONE);
+        gl.enable(gl.BLEND);
+
+        for (let i = bloomFBOs.length - 2; i >= 0; i--) {
+          let destFBO = bloomFBOs[i];
+          gl.uniform2f(gl.getUniformLocation(bloomBlurProgram, 'texelSize'), prevFBO.texelSizeX, prevFBO.texelSizeY);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, prevFBO.texture);
+          gl.viewport(0, 0, destFBO.width, destFBO.height);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, destFBO.frameBuffer);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          prevFBO = destFBO;
+        }
+
+        gl.disable(gl.BLEND);
       }
-
-      gl.disable(gl.BLEND);
 
       gl.useProgram(postProcessingProgram);
       gl.activeTexture(gl.TEXTURE0);
@@ -8877,6 +8918,20 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   function isPageHidden() { return document.hidden || document.msHidden || document.webkitHidden || document.mozHidden; }
 
+
+  function applyRuntimePerformanceModes(force = false)
+  {
+    // Power saving mode: reduce expensive post effects and keep physics budget modest.
+    if (guiControls.powerSavingMode) {
+      if (force || guiControls.IterPerFrame > 6)
+        guiControls.IterPerFrame = Math.min(guiControls.IterPerFrame, 6);
+      guiControls.auto_IterPerFrame = true;
+    }
+
+    // GPU acceleration mode: reduce CPU-side stalls (readbacks/log overhead) and allow richer GPU post.
+    inactiveDropletSampleInterval = guiControls.gpuAccelerationMode ? 2400 : 600;
+  }
+
   function calcFps()
   {
     if (!isPageHidden()) {
@@ -8901,6 +8956,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           fpsCounterEl.style.display = 'none';
         }
       }
+
+      applyRuntimePerformanceModes();
 
       if (!guiControls.paused) {
         console.log(FPS + ' FPS   ' + guiControls.IterPerFrame + ' Iterations / frame      ' + FPS * guiControls.IterPerFrame + ' Iterations / second');
