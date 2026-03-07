@@ -248,8 +248,13 @@ vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
 
   // Cleaner stepped-leader path: segment offsets + subtle micro jitter (no wide sinusoidal snake).
-  float leaderSeg = floor(verticalTravel * 36.0) / 36.0;
-  float segmentOffset = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.026 + (1.0 - verticalTravel) * 0.010);
+  float segPos = verticalTravel * 36.0;
+  float segId = floor(segPos);
+  float segFrac = fract(segPos);
+  float segAmp = 0.026 + (1.0 - verticalTravel) * 0.010;
+  float segOffsetA = (random2d(vec2(segId * 0.031 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * segAmp;
+  float segOffsetB = (random2d(vec2((segId + 1.0) * 0.031 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * segAmp;
+  float segmentOffset = mix(segOffsetA, segOffsetB, smoothstep(0.0, 1.0, segFrac));
   float branchCurve = (random2d(pos * 19.3) - 0.5) * (0.020 + (1.0 - verticalTravel) * 0.014);
   float microZag = sin(verticalTravel * 92.0 + random2d(pos * 53.2) * 6.2831) * 0.0048;
   float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.07;
@@ -315,7 +320,7 @@ float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool i
     branchField = max(branchField, branch * branchMask);
   }
 
-  float segmentPulse = 0.62 + 0.38 * (smoothstep(0.01, 0.24, segT) * (1.0 - smoothstep(0.95, 1.00, segT)));
+  float segmentPulse = 0.84 + 0.16 * (smoothstep(0.00, 0.20, segT) * (1.0 - smoothstep(0.97, 1.00, segT)));
   float leaderPulse = 0.90 + 0.10 * sin(along * 23.0 - lightningTime * 8.0 + random2d(pos * 13.5) * 6.2831);
 
   float skeleton = max(trunk, branchField * 0.95);
@@ -409,6 +414,9 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     float cgLateralConfine = 1.0 - smoothstep(corridorWidth, corridorWidth + 0.30, abs(lightningTexCoord.x - 0.5));
     cgLateralConfine = max(cgLateralConfine, 0.16);
     pixVal *= belowSource * cgLateralConfine;
+
+    float cgContinuity = smoothstep(0.00, 0.07, lightningTexCoord.y) * (1.0 - smoothstep(1.46, 1.66, lightningTexCoord.y));
+    pixVal = max(pixVal, trunk * 0.64 * cgContinuity);
   }
 
   float channelFade = clamp(absIntensity * (strikeTypeSign > 0.0 ? 0.10 : 0.08), 0.0, 1.0);
