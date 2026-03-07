@@ -75,6 +75,14 @@
             100% { box-shadow: 0 0 8px rgba(63, 227, 255, 0.24), 0 0 14px rgba(71, 123, 255, 0.20); }
         }
 
+
+        @keyframes rgbUiPulse {
+            0% { box-shadow: 0 0 10px rgba(255, 72, 72, 0.32), 0 0 16px rgba(74, 146, 255, 0.26); border-color: rgba(255, 114, 114, 0.56); }
+            33% { box-shadow: 0 0 10px rgba(92, 255, 153, 0.34), 0 0 16px rgba(74, 255, 233, 0.28); border-color: rgba(117, 255, 181, 0.62); }
+            66% { box-shadow: 0 0 10px rgba(118, 98, 255, 0.35), 0 0 16px rgba(255, 92, 241, 0.25); border-color: rgba(154, 138, 255, 0.62); }
+            100% { box-shadow: 0 0 10px rgba(255, 72, 72, 0.32), 0 0 16px rgba(74, 146, 255, 0.26); border-color: rgba(255, 114, 114, 0.56); }
+        }
+
         .dg {
             font-family: 'Orbitron', 'Rajdhani', monospace !important;
             text-transform: uppercase;
@@ -87,6 +95,7 @@
         }
 
         .dg.main .close-button {
+            animation: rgbUiPulse 4.0s linear infinite;
             background: linear-gradient(120deg, rgba(15, 44, 86, 0.9), rgba(28, 105, 168, 0.9)) !important;
             border: 1px solid rgba(84, 214, 255, 0.5);
             color: #c8f6ff !important;
@@ -356,13 +365,13 @@
             top: 0;
             left: 0;
             z-index: 0;
-            display: none;
+            display: flex;
         }
 
         #graphCanvas {
             position: fixed;
             z-index: 1;
-            display: none;
+            display: flex;
         }
 
         .autopilotNumberInput {
@@ -479,7 +488,7 @@
             fill: #ffffff;
             text-anchor: middle
         }
-    
+
         /* Intro redesign */
 
         h1, h2, h3 {
@@ -684,7 +693,7 @@
             border-bottom-color: rgba(255, 255, 255, 0.9);
         }
 
-        
+
         .sounding-row {
             display: flex;
             flex-wrap: wrap;
@@ -896,6 +905,7 @@
             font-size: 20px;
             cursor: pointer;
             transition: transform 180ms ease, box-shadow 180ms ease;
+            animation: rgbUiPulse 3.0s linear infinite;
         }
 
         .sim-controls-launcher button:hover {

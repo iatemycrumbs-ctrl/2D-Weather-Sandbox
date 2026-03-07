@@ -927,8 +927,11 @@ function installSimulationControlFx()
   const launcher = getEl('simControlsLauncher');
   const openBtn = getEl('simControlsOpen');
   const pauseBtn = getEl('simControlsPause');
-  if (launcher)
+  if (launcher) {
     launcher.style.display = 'flex';
+    launcher.style.opacity = '1';
+    launcher.style.pointerEvents = 'auto';
+  }
 
   const setOverlay = (open) => {
     simulationUiOverlayState.open = open;
@@ -978,6 +981,10 @@ function installSimulationControlFx()
   document.addEventListener('keydown', (event) => {
     if (event.code == 'Escape' && simulationUiOverlayState.open)
       setOverlay(false);
+    if (event.code == 'F8') {
+      event.preventDefault();
+      setOverlay(!simulationUiOverlayState.open);
+    }
   });
 }
 

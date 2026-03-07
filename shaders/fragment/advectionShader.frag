@@ -317,8 +317,8 @@ void main()
       // }
 
     } else if (userInputType == 3 && wall[DISTANCE] != 0) { // smoke, only apply if not wall
-      water[SMOKE] += userInputValues[BRUSH_INTENSITY];
-      water[SMOKE] = min(max(water[SMOKE], 0.0), 2.0);
+      water[SMOKE] += userInputValues[BRUSH_INTENSITY] * 0.72;
+      water[SMOKE] = min(max(water[SMOKE], 0.0), 1.4);
 
     } else if (userInputType == 33 && wall[DISTANCE] != 0) { // reworked artificial cloud seeding airplane trail
       float trail = max(userInputValues[BRUSH_INTENSITY], 0.0);
@@ -327,7 +327,7 @@ void main()
       float supersat = smoothstep(CtoK(-55.0), CtoK(-22.0), base[TEMPERATURE]);
       water[TOTAL] += plume * (0.58 + supersat * 0.32);
       water[CLOUD] += plume * (0.95 + supersat * 0.50);
-      water[SMOKE] = max(water[SMOKE] - plume * 0.05, 0.0);
+      water[SMOKE] = max(water[SMOKE] - plume * 0.10, 0.0);
       base[VY] += plume * 0.0019;
       base[VX] += sin((texCoord.x * 23.0 + texCoord.y * 17.0) + trailNoise * 6.2831) * plume * 0.0009;
 

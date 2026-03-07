@@ -222,17 +222,17 @@ vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float wrappedDx = mod((texCoord.x - pos.x) + 1.5, 1.0) - 0.5;
   vec2 rel = vec2(wrappedDx, texCoord.y - pos.y);
 
-  float tilt = (random2d(pos * 31.9) - 0.5) * 0.85;
-  vec2 dir = normalize(vec2(cos(tilt), sin(tilt) * 0.34));
+  // Reworked IC mapping: near-straight cloud channel with minimal curvature.
+  float tilt = (random2d(pos * 31.9) - 0.5) * 0.12;
+  vec2 dir = normalize(vec2(cos(tilt), sin(tilt) * 0.08));
   vec2 perp = vec2(-dir.y, dir.x);
 
   float along = dot(rel, dir);
   float across = dot(rel, perp);
-  float shear = sin((texCoord.y - pos.y) * 22.0 + random2d(pos * 23.1) * 6.2831) * 0.08;
 
   vec2 uv;
-  uv.x = along * scaleMult * 2.25 + shear;
-  uv.y = across * scaleMult * 1.35;
+  uv.x = along * scaleMult * 2.35;
+  uv.y = across * scaleMult * 1.22;
   return uv;
 }
 
@@ -318,8 +318,8 @@ float dynamicLightningChannel(vec2 uv, float T, vec2 seed, float strikeTypeSign)
     float twig = exp(-pow((side - twigCenter) / max(mix(0.0018, 0.0007, segT), 0.0005), 2.0));
     twig *= twigGate * segGate * activeGate * (1.0 - smoothstep(0.42, 1.0, segT));
 
-    channel = max(channel, branch * (strikeTypeSign < 0.0 ? 0.56 : 0.66));
-    channel = max(channel, twig * (strikeTypeSign < 0.0 ? 0.34 : 0.40));
+    channel = max(channel, branch * (strikeTypeSign < 0.0 ? 0.72 : 0.78));
+    channel = max(channel, twig * (strikeTypeSign < 0.0 ? 0.42 : 0.48));
   }
 
   float filament = sin((axis * 315.0 + side * 71.0) + T * 19.0 + random2d(seed * 11.7) * 6.2831);
@@ -389,7 +389,8 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     return vec3(0.0);
 
   vec2 seed = vec2(pos.x + lightningTexturePhase, pos.y + fract(lightningTexturePhase * 1.73));
-  lightningCoord += lightningWarpOffset(lightningCoord, lightningTime, seed, strikeTypeSign);
+  if (strikeTypeSign > 0.0)
+    lightningCoord += lightningWarpOffset(lightningCoord, lightningTime, seed, strikeTypeSign);
   float channel = dynamicLightningChannel(lightningCoord, lightningTime, seed, strikeTypeSign);
 
   if (strikeTypeSign < 0.0) {
@@ -544,7 +545,7 @@ vec4 getAirColor(vec2 fragCoordIn)
   const vec3 smokeThickCol = vec3(0., 0., 0.);
 
 
-  float smokeOpacity = clamp(1. - (1. / (water[SMOKE] + 1.)), 0.0, 1.0);
+  float smokeOpacity = clamp(1. - (1. / (water[SMOKE] * 0.65 + 1.0)), 0.0, 1.0);
   float fireCore = clamp((smokeOpacity - 0.76) * 18., 0.0, 1.0);
   float emberBand = clamp((smokeOpacity - 0.58) * 4.2, 0.0, 1.0) * (1.0 - fireCore * 0.75);
   float fireIntensity = clamp(fireCore + emberBand * 0.55, 0.0, 1.0);
