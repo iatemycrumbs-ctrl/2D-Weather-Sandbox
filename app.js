@@ -607,6 +607,16 @@ var devicePerfHudEl = null;
 var deviceRendererName = 'GPU n/a';
 var batteryStatusText = 'Battery n/a';
 var simulationUiOverlayState = {open : false, pauseBeforeOpen : false};
+
+function syncPauseState()
+{
+  if (!guiControls)
+    return;
+  if (guiControls.paused) {
+    if (soundSystem && soundSystem.mute)
+      soundSystem.mute();
+  }
+}
 var autoIterUpperBound = guiControls_default.IterPerFrame;
 
 var sim_res_x;
@@ -959,15 +969,26 @@ function installSimulationControlFx()
   const setOverlay = (open) => {
     simulationUiOverlayState.open = open;
     root.classList.toggle('fullscreen-controls', open);
+
+    // Force controls panel visible/in-front when opened so Open button doesn't look like pause-only.
     if (open) {
+      datGui?.show && datGui.show();
+      datGui?.open && datGui.open();
+      root.style.display = 'block';
+      root.style.visibility = 'visible';
+      root.style.opacity = '1';
+      root.style.pointerEvents = 'auto';
+      root.style.zIndex = '999';
+
       simulationUiOverlayState.pauseBeforeOpen = guiControls.paused;
       guiControls.paused = true;
       playUiBeep(0.85);
     } else {
+      root.style.zIndex = '58';
       guiControls.paused = simulationUiOverlayState.pauseBeforeOpen;
       playUiBeep(0.50);
     }
-    handlePause();
+    syncPauseState();
   };
 
   const pulseRow = (target) => {
@@ -994,19 +1015,13 @@ function installSimulationControlFx()
   root.addEventListener('input', onInput, true);
   root.addEventListener('change', onChange, true);
 
-  openBtn?.addEventListener('click', () => setOverlay(!simulationUiOverlayState.open));
+  openBtn?.addEventListener('click', () => {
+    setOverlay(!simulationUiOverlayState.open);
+  });
   pauseBtn?.addEventListener('click', () => {
     guiControls.paused = !guiControls.paused;
-    handlePause();
+    syncPauseState();
     playUiBeep(guiControls.paused ? 0.8 : 0.45);
-  });
-  openBtn?.addEventListener('click', () => {
-    datGui?.show && datGui.show();
-    datGui?.open && datGui.open();
-    if (root) {
-      root.style.display = 'block';
-      root.style.zIndex = simulationUiOverlayState.open ? '59' : '58';
-    }
   });
   applyQuickGraphicsTier(quickGraphicsIndex);
   graphicsBtn?.addEventListener('click', () => applyQuickGraphicsTier(quickGraphicsIndex + 1));
@@ -5904,7 +5919,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     advanced_folder.add(guiControls, 'resetAtmosphere').name('Reset Atmosphere');
     advanced_folder.add(guiControls, 'resetSettings').name('Reset all settings');
 
-    datGui.add(guiControls, 'paused').onChange(handlePause).name('Paused').listen();
+    datGui.add(guiControls, 'paused').onChange(syncPauseState).name('Paused').listen();
     datGui.add(guiControls, 'recreateSimulation').name('Recreate Simulation');
     datGui.add(guiControls, 'download').name('Save Simulation to File');
 
@@ -6704,9 +6719,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   function handlePause()
   {
-    if (guiControls.paused) {
-      soundSystem.mute();
-    }
+    syncPauseState();
   }
 
   document.addEventListener('keydown', (event) => {
@@ -6719,7 +6732,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     } else if (event.code == 'Space') {
       // space bar
       guiControls.paused = !guiControls.paused;
-      handlePause();
+      syncPauseState();
     } else if (event.code == 'KeyD') {
       // D
       guiControls.showDrops = !guiControls.showDrops;
