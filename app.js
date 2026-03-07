@@ -2207,7 +2207,7 @@ function triggerLightningEffects(lightningX, lightningY, intensity)
   let simTimeMult = timePerIteration * guiControls.IterPerFrame * FPS * 3600.0;
   let delayFrames = Math.max(Math.floor((delaySec / simTimeMult) * FPS), 0);
 
-  let lightningTemperature = map_range_C(intensity, 0.05, 4.5, 9000.0, 32000.0);
+  let lightningTemperature = map_range_C(intensity, 0.05, 4.5, guiControls.lightningTempMinK, guiControls.lightningTempMaxK);
 
   pendingLightningShakeEvents.push({
     delayFrames : delayFrames,
@@ -2240,8 +2240,8 @@ function updateLightningShakePhysics()
 
     if (event.delayFrames <= 0) {
       let distanceMult = map_range_C(event.distance, 500.0, 30000.0, 1.0, 0.0);
-      let thermalBoost = map_range_C(event.temperature, 9000.0, 32000.0, 0.85, 1.45) * guiControls.lightningTempShakeMult;
-      let impulse = clamp(Math.pow(event.intensity, 0.58) * 0.020 * distanceMult * thermalBoost, 0.0, 0.018);
+      let thermalBoost = map_range_C(event.temperature, guiControls.lightningTempMinK, guiControls.lightningTempMaxK, 0.75, 1.85) * guiControls.lightningTempShakeMult;
+      let impulse = clamp(Math.pow(event.intensity, 0.58) * 0.022 * distanceMult * thermalBoost, 0.0, 0.026);
 
       // apply shock mostly horizontal with slight random vertical jitter
       lightningShakeVelocityX += event.horizontalSign * impulse;
@@ -4332,6 +4332,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningShapeMode'), getLightningShapeMode());
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);
@@ -5371,10 +5373,14 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     lightning_folder.add(guiControls, 'lightningTempMinK', 5000, 18000, 100).name('Min Temp (K)').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
+      gl.useProgram(boundaryProgram);
+      gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     });
     lightning_folder.add(guiControls, 'lightningTempMaxK', 20000, 50000, 100).name('Max Temp (K)').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
+      gl.useProgram(boundaryProgram);
+      gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     });
     lightning_folder.add(guiControls, 'electricFieldVizStrength', 0.0, 3.0, 0.01).name('Electric Field Viz').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
@@ -5664,6 +5670,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningFlashPersistence'), guiControls.lightningFlashPersistence);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'lightningTempMinK'), guiControls.lightningTempMinK);
+    gl.uniform1f(gl.getUniformLocation(boundaryProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningShapeMode'), getLightningShapeMode());
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);

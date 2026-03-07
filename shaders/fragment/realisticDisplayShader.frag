@@ -232,7 +232,7 @@ vec2 remapICLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float stepOffset = (random2d(vec2(seg * 23.0 + pos.x * 15.0, pos.y * 9.0)) - 0.5) * 0.045;
   float micro = sin((along + 0.5) * 62.0 + random2d(pos * 21.7) * 6.2831) * 0.008;
 
-  uv.x = 0.5 + (along + stepOffset + micro) * scaleMult * aspectRatios[0] * 2.00;
+  uv.x = 0.5 + (along + stepOffset + micro) * scaleMult * aspectRatios[0] * 2.14;
   uv.y = 0.5 + across * scaleMult * 1.10;
   return uv;
 }
@@ -254,8 +254,8 @@ vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float microZag = sin(verticalTravel * 92.0 + random2d(pos * 53.2) * 6.2831) * 0.0048;
   float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.07;
 
-  uv.x = 0.5 + (wrappedDx + segmentOffset + branchCurve + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.72;
-  uv.y = verticalTravel * 1.24;
+  uv.x = 0.5 + (wrappedDx + segmentOffset + branchCurve + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.74;
+  uv.y = verticalTravel * 1.36;
   return uv;
 }
 
@@ -279,7 +279,7 @@ vec2 lightningAxes(vec2 uv, bool isIC)
 float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool isIC)
 {
   vec2 axis = lightningAxes(uv, isIC);
-  float along = clamp(axis.x, 0.0, 1.20);
+  float along = clamp(axis.x, 0.0, 1.48);
   float across = axis.y;
   float shapeWarp = lightningShapeWarpMultiplier();
 
@@ -301,7 +301,7 @@ float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool i
   for (int i = 0; i < 4; i++) {
     float fi = float(i);
     float spawn = mix(0.10, 0.78, random2d(pos * (7.9 + fi * 1.7) + vec2(1.4 + fi, 9.8 + fi * 2.3)));
-    float branchLen = mix(0.12, 0.42, random2d(pos * (18.3 + fi * 0.9) + vec2(3.1 + fi * 0.7, 6.2)));
+    float branchLen = mix(0.18, 0.62, random2d(pos * (18.3 + fi * 0.9) + vec2(3.1 + fi * 0.7, 6.2)));
     float branchMask = smoothstep(spawn, spawn + 0.02, along) * (1.0 - smoothstep(spawn + branchLen - 0.03, spawn + branchLen + 0.03, along));
 
     float dirSign = random2d(pos * (31.4 + fi * 0.8) + vec2(8.2 + fi * 0.4, 4.5)) > 0.5 ? 1.0 : -1.0;
@@ -315,7 +315,7 @@ float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool i
     branchField = max(branchField, branch * branchMask);
   }
 
-  float segmentPulse = smoothstep(0.06, 0.40, segT) * (1.0 - smoothstep(0.80, 0.98, segT));
+  float segmentPulse = smoothstep(0.02, 0.28, segT) * (1.0 - smoothstep(0.92, 1.00, segT));
   float leaderPulse = 0.90 + 0.10 * sin(along * 23.0 - lightningTime * 8.0 + random2d(pos * 13.5) * 6.2831);
 
   float skeleton = max(trunk, branchField * 0.95);
@@ -367,7 +367,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
     lightningTexCoord = remapCGLightningUV(lightningTexCoord, pos, scaleMult);
   }
 
-  if (lightningTexCoord.x < -0.40 || lightningTexCoord.x > 1.40 || lightningTexCoord.y < -0.35 || lightningTexCoord.y > 1.40)
+  if (lightningTexCoord.x < -0.50 || lightningTexCoord.x > 1.50 || lightningTexCoord.y < -0.50 || lightningTexCoord.y > 1.62)
     return vec3(0.0);
 
   // Hybrid channel reconstruction: sampled texture + procedural segmented leader/branches.
