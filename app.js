@@ -607,6 +607,21 @@ var devicePerfHudEl = null;
 var deviceRendererName = 'GPU n/a';
 var batteryStatusText = 'Battery n/a';
 var simulationUiOverlayState = {open : false, pauseBeforeOpen : false};
+var simControlsCompact = false;
+var simControlsPinnedLeft = false;
+var launcherUiScale = 1.0;
+
+
+function ensureSimControlsLauncherVisible()
+{
+  const launcher = getEl('simControlsLauncher');
+  if (!launcher)
+    return;
+  launcher.style.display = 'flex';
+  launcher.style.visibility = 'visible';
+  launcher.style.opacity = '1';
+  launcher.style.pointerEvents = 'auto';
+}
 
 function syncPauseState()
 {
@@ -939,10 +954,20 @@ function installSimulationControlFx()
   const pauseBtn = getEl('simControlsPause');
   const graphicsBtn = getEl('simControlsGraphics');
   const centerBtn = getEl('simControlsCenter');
+  const compactBtn = getEl('simControlsCompact');
+  const pinBtn = getEl('simControlsPin');
+  const dayNightBtn = getEl('simControlsDayNight');
+  const lightningBtn = getEl('simControlsLightning');
+  const birdsBtn = getEl('simControlsBirds');
+  const hudBtn = getEl('simControlsHud');
   if (launcher) {
     launcher.style.display = 'flex';
     launcher.style.opacity = '1';
     launcher.style.pointerEvents = 'auto';
+    launcher.classList.toggle('compact', simControlsCompact);
+    launcher.classList.toggle('pinned-left', simControlsPinnedLeft);
+    launcher.style.transform = 'scale(' + launcherUiScale.toFixed(2) + ')';
+    launcher.style.transformOrigin = simControlsPinnedLeft ? 'left top' : 'right top';
   }
 
   const quickGraphicsTiers = [
@@ -951,8 +976,24 @@ function installSimulationControlFx()
     {name : 'HIGH', renderScale : 1.05, haze : 1.18, bloom : 1.16, precip : 1.12}
   ];
   let quickGraphicsIndex = 1;
-  const applyQuickGraphicsTier = (idx) => {
-    quickGraphicsIndex = (idx + quickGraphicsTiers.length) % quickGraphicsTiers.length;
+  const lightningLevels = [0.8, 1.0, 1.35, 1.75];
+  let lightningLevelIndex = 1;
+  const birdLevels = [0.5, 1.0, 1.35, 1.7];
+  let birdLevelIndex = 1;
+
+  const syncLauncherClasses = () => {
+    if (!launcher)
+      return;
+    launcher.classList.toggle('compact', simControlsCompact);
+    launcher.classList.toggle('pinned-left', simControlsPinnedLeft);
+    launcher.style.transform = 'scale(' + launcherUiScale.toFixed(2) + ')';
+    launcher.style.transformOrigin = simControlsPinnedLeft ? 'left top' : 'right top';
+    compactBtn && compactBtn.classList.toggle('state-on', simControlsCompact);
+    pinBtn && pinBtn.classList.toggle('state-on', simControlsPinnedLeft);
+    hudBtn && hudBtn.classList.toggle('state-on', guiControls.showFPS);
+  };
+
+  const applyQuickGraphicsTier = (idx) => {    quickGraphicsIndex = (idx + quickGraphicsTiers.length) % quickGraphicsTiers.length;
     const tier = quickGraphicsTiers[quickGraphicsIndex];
     guiControls.renderScale = tier.renderScale;
     guiControls.radiationHaze = tier.haze;
@@ -1030,6 +1071,50 @@ function installSimulationControlFx()
       cam.center();
     playUiBeep(0.52);
   });
+  compactBtn?.addEventListener('click', () => {
+    simControlsCompact = !simControlsCompact;
+    syncLauncherClasses();
+    playUiBeep(simControlsCompact ? 0.77 : 0.42);
+  });
+
+  pinBtn?.addEventListener('click', () => {
+    simControlsPinnedLeft = !simControlsPinnedLeft;
+    syncLauncherClasses();
+    playUiBeep(simControlsPinnedLeft ? 0.70 : 0.48);
+  });
+
+  dayNightBtn?.addEventListener('click', () => {
+    guiControls.dayNightCycle = false;
+    guiControls.timeOfDay = guiControls.timeOfDay < 12 ? 21 : 9;
+    updateSunlight('MANUAL_ANGLE');
+    playUiBeep(0.66);
+  });
+
+  lightningBtn?.addEventListener('click', () => {
+    lightningLevelIndex = (lightningLevelIndex + 1) % lightningLevels.length;
+    guiControls.lightningChanceMult = guiControls_default.lightningChanceMult * lightningLevels[lightningLevelIndex];
+    lightningBtn.textContent = '⚡ x' + lightningLevels[lightningLevelIndex].toFixed(2).replace('.00', '');
+    gl.useProgram(precipitationProgram);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.lightningChanceMult);
+    playUiBeep(0.74);
+  });
+
+  birdsBtn?.addEventListener('click', () => {
+    birdLevelIndex = (birdLevelIndex + 1) % birdLevels.length;
+    guiControls.birdFlockAmount = birdLevels[birdLevelIndex];
+    birdsBtn.textContent = '🕊️ x' + birdLevels[birdLevelIndex].toFixed(2).replace('.00', '');
+    gl.useProgram(skyBackgroundDisplayProgram);
+    gl.uniform1f(gl.getUniformLocation(skyBackgroundDisplayProgram, 'birdFlockAmount'), guiControls.birdFlockAmount);
+    playUiBeep(0.58);
+  });
+
+  hudBtn?.addEventListener('click', () => {
+    guiControls.showFPS = !guiControls.showFPS;
+    syncLauncherClasses();
+    playUiBeep(guiControls.showFPS ? 0.62 : 0.35);
+  });
+
+  syncLauncherClasses();
 
   document.addEventListener('keydown', (event) => {
     if (event.code == 'Escape' && simulationUiOverlayState.open)
@@ -1037,6 +1122,19 @@ function installSimulationControlFx()
     if (event.code == 'F8') {
       event.preventDefault();
       setOverlay(!simulationUiOverlayState.open);
+    }
+    if (event.code == 'F7') {
+      ensureSimControlsLauncherVisible();
+      if (launcher)
+        launcher.classList.remove('compact');
+      simControlsCompact = false;
+      syncLauncherClasses();
+      playUiBeep(0.57);
+    }
+    if (event.code == 'F6') {
+      launcherUiScale = launcherUiScale >= 1.20 ? 0.90 : (launcherUiScale + 0.10);
+      syncLauncherClasses();
+      playUiBeep(0.49 + launcherUiScale * 0.1);
     }
   });
 }
@@ -5982,6 +6080,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   function startSimulation()
   {
     SETUP_MODE = false;
+    ensureSimControlsLauncherVisible();
 
     pendingLightningShakeEvents.length = 0;
     lightningShakeOffsetX = lightningShakeOffsetY = 0.0;

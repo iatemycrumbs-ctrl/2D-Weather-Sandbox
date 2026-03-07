@@ -860,7 +860,7 @@
         .startup-log-modal {
             position: fixed;
             inset: 0;
-            display: none;
+            display: flex;
             align-items: center;
             justify-content: center;
             background: rgba(0, 0, 0, 0.68);
@@ -917,6 +917,20 @@
             display: none;
             gap: 8px;
             flex-direction: column;
+        }
+
+        .sim-controls-launcher.compact button:not(#simControlsOpen) {
+            display: none;
+        }
+
+        .sim-controls-launcher.pinned-left {
+            left: 10px;
+            right: auto;
+        }
+
+        .sim-controls-launcher button.state-on {
+            filter: brightness(1.20);
+            box-shadow: 0 0 18px rgba(120, 238, 255, 0.42);
         }
 
         .sim-controls-launcher button {
@@ -1422,6 +1436,12 @@
         <button id="simControlsPause" type="button" title="Pause / Resume">⏯️</button>
         <button id="simControlsGraphics" type="button" title="Cycle Graphics Tier">🎚️ BAL</button>
         <button id="simControlsCenter" type="button" title="Center Camera">🎯</button>
+        <button id="simControlsCompact" type="button" title="Compact / Expand">🧩</button>
+        <button id="simControlsPin" type="button" title="Pin Left / Right">📌</button>
+        <button id="simControlsDayNight" type="button" title="Toggle Day/Night">🌗</button>
+        <button id="simControlsLightning" type="button" title="Cycle Lightning Boost">⚡ x1</button>
+        <button id="simControlsBirds" type="button" title="Cycle Bird Flocks">🕊️ x1</button>
+        <button id="simControlsHud" type="button" title="Toggle HUD">📊</button>
     </div>
 
     <div id="devicePerfHud">GPU: detecting...</div>
