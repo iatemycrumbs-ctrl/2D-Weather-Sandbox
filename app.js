@@ -615,12 +615,15 @@ var launcherUiScale = 1.0;
 function ensureSimControlsLauncherVisible()
 {
   const launcher = getEl('simControlsLauncher');
-  if (!launcher)
-    return;
-  launcher.style.display = 'flex';
-  launcher.style.visibility = 'visible';
-  launcher.style.opacity = '1';
-  launcher.style.pointerEvents = 'auto';
+  if (launcher) {
+    launcher.style.display = 'flex';
+    launcher.style.visibility = 'visible';
+    launcher.style.opacity = '1';
+    launcher.style.pointerEvents = 'auto';
+  }
+  const fab = getEl('simControlsFab');
+  if (fab)
+    fab.style.display = 'block';
 }
 
 function syncPauseState()
@@ -960,6 +963,7 @@ function installSimulationControlFx()
   const lightningBtn = getEl('simControlsLightning');
   const birdsBtn = getEl('simControlsBirds');
   const hudBtn = getEl('simControlsHud');
+  const fabBtn = getEl('simControlsFab');
   if (launcher) {
     launcher.style.display = 'flex';
     launcher.style.opacity = '1';
@@ -1115,6 +1119,13 @@ function installSimulationControlFx()
   });
 
   syncLauncherClasses();
+
+  if (fabBtn)
+    fabBtn.style.display = 'block';
+  fabBtn?.addEventListener('click', () => {
+    setOverlay(true);
+    playUiBeep(0.82);
+  });
 
   document.addEventListener('keydown', (event) => {
     if (event.code == 'Escape' && simulationUiOverlayState.open)

@@ -914,7 +914,7 @@
             right: 14px;
             top: calc(86px + env(safe-area-inset-top));
             z-index: 90;
-            display: none;
+            display: flex;
             gap: 8px;
             flex-direction: column;
         }
@@ -961,6 +961,23 @@
                 bottom: calc(22px + env(safe-area-inset-bottom));
                 right: 10px;
             }
+        }
+
+        #simControlsFab {
+            position: fixed;
+            right: 10px;
+            bottom: calc(14px + env(safe-area-inset-bottom));
+            z-index: 120;
+            border: 1px solid rgba(123, 228, 255, 0.68);
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            color: #dff7ff;
+            background: linear-gradient(125deg, rgba(16, 62, 104, 0.95), rgba(22, 129, 196, 0.88));
+            box-shadow: 0 0 18px rgba(72, 202, 255, 0.44);
+            animation: rgbUiPulse 3.4s linear infinite;
         }
 
         .sim-controls-launcher button:hover {
@@ -1443,6 +1460,8 @@
         <button id="simControlsBirds" type="button" title="Cycle Bird Flocks">🕊️ x1</button>
         <button id="simControlsHud" type="button" title="Toggle HUD">📊</button>
     </div>
+
+    <button id="simControlsFab" type="button" title="Open Controls">🎛️ OPEN CONTROLS</button>
 
     <div id="devicePerfHud">GPU: detecting...</div>
 
