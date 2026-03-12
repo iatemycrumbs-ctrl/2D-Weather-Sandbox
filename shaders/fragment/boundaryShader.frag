@@ -472,11 +472,11 @@ void main()
         float effectiveRain = precipDeposition[RAIN_DEPOSITION] * max(1.0 - canopyBlock, 0.35);
         float infiltration = effectiveRain * 0.1 * soilInfiltrationRate;
         float runoff = max(effectiveRain - infiltration, 0.0) * 0.04 * surfaceRunoffRate;
-        water[SOIL_MOISTURE] = clamp(water[SOIL_MOISTURE] + infiltrationAmount - runoff, 0.0, 1000.0); // rain accumulation
+        water[SOIL_MOISTURE] = clamp(water[SOIL_MOISTURE] + infiltration - runoff, 0.0, 1000.0); // rain accumulation
         water[SNOW] = clamp(water[SNOW] + precipDeposition[SNOW_DEPOSITION] * snowMassToHeight, 0.0, 4000.0);      // snow accumulation in cm
 
         // Flooding / ponding: prolonged heavy rain can fill low-permeability land into standing water.
-        float pondingSignal = max(effectiveRain - infiltrationAmount * 0.5, 0.0) + max(water[SOIL_MOISTURE] - 85.0, 0.0) * 0.0025;
+        float pondingSignal = max(effectiveRain - infiltration * 0.5, 0.0) + max(water[SOIL_MOISTURE] - 85.0, 0.0) * 0.0025;
         bool canFlood = wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_FIRE;
         if (canFlood && pondingSignal > 0.12 && water[SNOW] < 0.5 && wall[VEGETATION] < 36) {
           float floodChance = clamp((pondingSignal - 0.12) * 0.9, 0.0, 0.25);
