@@ -1940,7 +1940,7 @@ async function loadData()
     alert('Failed to load this simulation file. It may be corrupted or incompatible.');
     const fileInput = document.getElementById('fileInput');
     if (fileInput) {
-      fileInput.value =";
+      fileInput.value =''
     }
   }
 }
