@@ -1938,7 +1938,11 @@ async function loadData()
   } catch (err) {
     console.error('Failed to load simulation:', err);
     alert('Failed to load this simulation file. It may be corrupted or incompatible.');
-    document.getElementById('fileInput').value = '';
+    const fileInput = 
+    document.getElementById('fileInput');
+    if (fileInput) {
+      fileInput.value =";
+    }
   }
 }
 
