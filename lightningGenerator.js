@@ -5,40 +5,7 @@ onmessage = (event) => {
   const seed = (msg.seed ?? Date.now()) >>> 0;
 
   try {
-    const bolt = generateLightningBolt(width, height, seed);
-    const rgba = bolt.imageData.data;
-    const luminanceData = new Uint8Array(width * height);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const idx = y * width + x;
-        const i = idx * 4;
-        const center = rgba[i];
-
-        // Bridge tiny raster gaps so CG channels remain visually linked.
-        const left = x > 0 ? rgba[i - 4] : 0;
-        const right = x + 1 < width ? rgba[i + 4] : 0;
-        const up = y > 0 ? rgba[i - width * 4] : 0;
-        const down = y + 1 < height ? rgba[i + width * 4] : 0;
-        const upLeft = (x > 0 && y > 0) ? rgba[i - width * 4 - 4] : 0;
-        const upRight = (x + 1 < width && y > 0) ? rgba[i - width * 4 + 4] : 0;
-        const downLeft = (x > 0 && y + 1 < height) ? rgba[i + width * 4 - 4] : 0;
-        const downRight = (x + 1 < width && y + 1 < height) ? rgba[i + width * 4 + 4] : 0;
-        const maxNeighbor = Math.max(left, right, up, down, upLeft, upRight, downLeft, downRight);
-
-        luminanceData[idx] = Math.max(center, Math.floor(maxNeighbor * 0.76));
-      }
-    }
-
-    // Repaint the trunk path as an explicit 1px snake spine so CG channels cannot break.
-    stampTrunkSnake(luminanceData, width, height, bolt.trunkPoints);
-
-    // One additional continuity pass stitches sub-pixel stair-step gaps left by rasterization,
-    // especially in near-vertical CG leaders on high-aspect textures.
-    bridgeDiagonalGaps(luminanceData, width, height);
-
-    // Keep only lightning pixels connected to the trunk origin and remove detached speckles.
-    filterDisconnectedLightning(luminanceData, width, height, bolt.trunkPoints);
-
+    const luminanceData = generateLightningLuminance(width, height, seed);
     postMessage({id : msg.id, width, height, luminanceData}, [ luminanceData.buffer ]);
   } catch (err) {
     const fallback = new Uint8Array(width * height);
@@ -46,148 +13,9 @@ onmessage = (event) => {
   }
 };
 
-function stampTrunkSnake(luminanceData, width, height, trunkPoints)
+function generateLightningLuminance(width, height, seed)
 {
-  if (!trunkPoints || trunkPoints.length < 1)
-    return;
-
-  function stampPixel(x, y, value)
-  {
-    if (x < 0 || x >= width || y < 0 || y >= height)
-      return;
-    const idx = y * width + x;
-    luminanceData[idx] = Math.max(luminanceData[idx], value);
-  }
-
-  // Bresenham-style stamping keeps the trunk as a single continuous snake
-  // without introducing chunky duplicated side segments.
-  for (let i = 1; i < trunkPoints.length; i++) {
-    let x0 = Math.round(trunkPoints[i - 1].x);
-    let y0 = Math.round(trunkPoints[i - 1].y);
-    const x1 = Math.round(trunkPoints[i].x);
-    const y1 = Math.round(trunkPoints[i].y);
-
-    const dx = Math.abs(x1 - x0);
-    const dy = Math.abs(y1 - y0);
-    const sx = x0 < x1 ? 1 : -1;
-    const sy = y0 < y1 ? 1 : -1;
-    let err = dx - dy;
-
-    while (true) {
-      stampPixel(x0, y0, 150);
-      if (x0 == x1 && y0 == y1)
-        break;
-
-      const e2 = err * 2;
-      if (e2 > -dy) {
-        err -= dy;
-        x0 += sx;
-      }
-      if (e2 < dx) {
-        err += dx;
-        y0 += sy;
-      }
-    }
-  }
-}
-
-function filterDisconnectedLightning(luminanceData, width, height, trunkPoints)
-{
-  const connectedMask = new Uint8Array(width * height);
-  const visitQueue = new Int32Array(width * height);
-  const minConnectedLum = 2;
-  let queueHead = 0;
-  let queueTail = 0;
-
-  if (trunkPoints && trunkPoints.length > 0) {
-    const seedCount = Math.min(4, trunkPoints.length);
-    for (let i = 0; i < trunkPoints.length; i++) {
-      const x = Math.round(trunkPoints[i].x);
-      const y = Math.round(trunkPoints[i].y);
-      if (x < 0 || x >= width || y < 0 || y >= height)
-        continue;
-      const idx = y * width + x;
-      connectedMask[idx] = 1;
-      visitQueue[queueTail++] = idx;
-    }
-  }
-
-  // Fallback if trunk seeds are unavailable.
-  if (queueTail == 0) {
-    for (let x = 0; x < width; x++) {
-      const idx = x;
-      if (luminanceData[idx] >= minConnectedLum) {
-        connectedMask[idx] = 1;
-        visitQueue[queueTail++] = idx;
-      }
-    }
-  }
-
-  while (queueHead < queueTail) {
-    const idx = visitQueue[queueHead++];
-    const x = idx % width;
-    const y = (idx / width) | 0;
-
-    for (let ny = Math.max(0, y - 1); ny <= Math.min(height - 1, y + 1); ny++) {
-      for (let nx = Math.max(0, x - 1); nx <= Math.min(width - 1, x + 1); nx++) {
-        const nIdx = ny * width + nx;
-        if (connectedMask[nIdx] || luminanceData[nIdx] === 0)
-          continue;
-
-        connectedMask[nIdx] = 1;
-        visitQueue[queueTail++] = nIdx;
-      }
-    }
-  }
-
-  for (let i = 0; i < luminanceData.length; i++) {
-    if (!connectedMask[i])
-      luminanceData[i] = 0;
-  }
-}
-
-function bridgeDiagonalGaps(luminanceData, width, height)
-{
-  const source = luminanceData.slice();
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const idx = y * width + x;
-      const center = source[idx];
-      if (center >= 24)
-        continue;
-
-      const left = source[idx - 1];
-      const right = source[idx + 1];
-      const up = source[idx - width];
-      const down = source[idx + width];
-      const upLeft = source[idx - width - 1];
-      const upRight = source[idx - width + 1];
-      const downLeft = source[idx + width - 1];
-      const downRight = source[idx + width + 1];
-
-      const hasDiagonalBridge = (upLeft >= 52 && downRight >= 52) || (upRight >= 52 && downLeft >= 52);
-      const hasHVBridge = (left >= 64 && right >= 64) || (up >= 64 && down >= 64);
-      if (hasDiagonalBridge || hasHVBridge) {
-        const bridgeLum = Math.max(
-          Math.min(upLeft, downRight),
-          Math.min(upRight, downLeft),
-          Math.min(left, right),
-          Math.min(up, down)
-        );
-        luminanceData[idx] = Math.max(luminanceData[idx], Math.floor(bridgeLum * 0.72));
-      }
-    }
-  }
-}
-
-function generateLightningBolt(width, height, seed)
-{
-  const lightningCanvas = new OffscreenCanvas(width, height);
-  const ctx = lightningCanvas.getContext('2d', {alpha : true, desynchronized : true});
-
-  ctx.clearRect(0, 0, width, height);
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+  const out = new Uint8Array(width * height);
 
   let rngState = seed || 1;
   function rand()
@@ -196,128 +24,199 @@ function generateLightningBolt(width, height, seed)
     return rngState / 4294967296;
   }
 
-    function genLightningColor()
-  {
-    return 'rgb(235,235,235)';
+  const trunk = [];
+  let x = width * (0.5 + (rand() - 0.5) * 0.06);
+  let y = 0;
+  let heading = (rand() - 0.5) * 0.22;
+  const segments = Math.max(180, Math.floor(height * 0.7));
+  const stepY = height / segments;
+
+  trunk.push({x, y});
+
+  for (let i = 0; i < segments && y < height - 1; i++) {
+    const t = i / Math.max(segments - 1, 1);
+    const lateralNoise = (rand() - 0.5) * mix(1.35, 0.55, t);
+    heading += lateralNoise * 0.38;
+    heading *= 0.91;
+
+    const dx = Math.sin(heading) * (0.8 + stepY * 0.5);
+    const dy = Math.max(1.0, Math.cos(heading) * (stepY * 1.95));
+
+    const nx = clamp(x + dx, 1, width - 2);
+    const ny = clamp(y + dy, 1, height - 2);
+
+    const trunkLum = Math.floor(mix(255.0, 184.0, t));
+    drawStroke(out, width, height, x, y, nx, ny, trunkLum, mix(2.1, 1.2, t));
+    trunk.push({x : nx, y : ny});
+
+    const branchChance = mix(0.11, 0.03, t);
+    if (rand() < branchChance) {
+      const branchDir = heading + (rand() < 0.5 ? -1.0 : 1.0) * mix(0.55, 1.0, rand());
+      drawBranch(out, width, height, nx, ny, branchDir, mix(22, 8, t), trunkLum * 0.78, rand);
+    }
+
+    x = nx;
+    y = ny;
   }
 
-  ctx.strokeStyle = genLightningColor();
-  ctx.shadowBlur = 6;
-  ctx.shadowColor = 'white';
-  {
-    const brightness = Math.min(Math.pow(Math.max(lineWidth, 0.1), 1.7) * 26.0, 255.0);
-    const c = Math.floor(brightness);
-    return `rgb(${c}, ${c}, ${c})`;
+  for (let i = 0; i < trunk.length; i++) {
+    const p = trunk[i];
+    const coreLum = Math.floor(mix(250.0, 210.0, i / Math.max(trunk.length - 1, 1)));
+    stampCircle(out, width, height, p.x, p.y, 0.7, coreLum);
   }
 
-  function drawJunction(x, y, widthScale)
-  {
-    const radius = Math.max(0.75, widthScale * 0.55);
-    const glow = Math.max(120, Math.floor(Math.min(255, widthScale * 54.0)));
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0.0, Math.PI * 2.0);
-    ctx.fillStyle = `rgb(${glow}, ${glow}, ${glow})`;
-    ctx.fill();
-  }
+  bridgeSparseGaps(out, width, height);
+  keepConnectedToTrunk(out, width, height, trunk);
 
-  const trunkPoints = [];
-
-  ctx.beginPath();
-
-  let startX = width * (0.5 + (rand() - 0.5) * 0.08);
-  let startY = 0;
-  let angle = (rand() - 0.5) * 0.24;
-  let lineWidth = Math.max(4.2, width / 250.0);
-  const targetAngle = 0.0;
-
-  ctx.moveTo(startX, startY);
-  trunkPoints.push({x : startX, y : startY});
-  ctx.lineWidth = lineWidth;
-
-  const targetSegments = Math.floor(height * 0.55);
-  const baseStepY = height / targetSegments;
-
-for (let seg = 0; seg < targetSegments && startY < height; seg++) {
-
-  const progress = seg / Math.max(targetSegments - 1, 1);
-
-  const nextX = startX + Math.sin(angle) * (1.2 + baseStepY * 0.8);
-  const nextY = startY + Math.max(1.4, Math.cos(angle) * (baseStepY * 2.2));
-
-  angle += (rand() - 0.5) * (0.46 + (1.0 - progress) * 0.20);
-  angle -= (angle - targetAngle) * 0.11;
-
-  ctx.lineTo(nextX, nextY);
-  trunkPoints.push({x: nextX, y: nextY});
-
-  startX = nextX;
-  startY = nextY;
+  return out;
 }
 
-    const branchChance = (0.0068 + (1.0 - progress) * 0.0055) * (1.0 + Math.max(lineWidth -3.0, 0.0) * 0.05);
-    if (rand() < branchChance) {
-  drawJunction(nextX, nextY, lineWidth);
-  drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.86, lineWidth * (0.24 + 0.14 * rand()));
+function drawBranch(out, width, height, startX, startY, heading, budget, baseLum, rand)
+{
+  let x = startX;
+  let y = startY;
+  let remaining = budget;
+  let lum = baseLum;
+
+  while (remaining > 0.0 && x > 1 && x < width - 2 && y > 1 && y < height - 2) {
+    const step = mix(1.1, 2.6, rand());
+    heading += (rand() - 0.5) * 0.32;
+    heading *= 0.94;
+
+    const nx = x + Math.sin(heading) * step;
+    const ny = y + Math.cos(heading) * step * 1.12;
+    drawStroke(out, width, height, x, y, nx, ny, lum, 0.9);
+
+    if (rand() < 0.06 && remaining > 8.0) {
+      const twigDir = heading + (rand() < 0.5 ? -1.0 : 1.0) * mix(0.65, 1.25, rand());
+      const twigLen = remaining * mix(0.28, 0.44, rand());
+      drawBranch(out, width, height, nx, ny, twigDir, twigLen, lum * 0.72, rand);
+    }
+
+    x = nx;
+    y = ny;
+    remaining -= step;
+    lum *= 0.96;
+
+    if (lum < 24)
+      break;
+  }
+}
+
+function drawStroke(out, width, height, x0, y0, x1, y1, lum, radius)
+{
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.max(1, Math.ceil(Math.hypot(dx, dy)));
+
+  for (let i = 0; i <= len; i++) {
+    const t = i / len;
+    const x = x0 + dx * t;
+    const y = y0 + dy * t;
+    stampCircle(out, width, height, x, y, radius, lum);
+  }
+}
+
+function stampCircle(out, width, height, cx, cy, radius, lum)
+{
+  const r = Math.max(0.4, radius);
+  const minX = Math.floor(cx - r);
+  const maxX = Math.ceil(cx + r);
+  const minY = Math.floor(cy - r);
+  const maxY = Math.ceil(cy + r);
+
+  for (let y = minY; y <= maxY; y++) {
+    if (y < 0 || y >= height)
+      continue;
+    for (let x = minX; x <= maxX; x++) {
+      if (x < 0 || x >= width)
+        continue;
+      const dist = Math.hypot(x - cx, y - cy);
+      if (dist > r)
+        continue;
+      const falloff = 1.0 - dist / Math.max(r, 0.0001);
+      const value = Math.floor(lum * (0.65 + falloff * 0.35));
+      const idx = y * width + x;
+      out[idx] = Math.max(out[idx], value);
     }
   }
-  ctx.strokeStyle = genLightningColor(lineWidth);
-  ctx.stroke();
+}
 
-  // Re-stroke the exact trunk path as a thin plasma core so every CG segment stays linked.
-  ctx.globalCompositeOperation = 'lighter';
-  if (trunkPoints.length > 1) {
-    ctx.beginPath();
-    ctx.moveTo(trunkPoints[0].x, trunkPoints[0].y);
-    for (let i = 1; i < trunkPoints.length; i++)
-      ctx.lineTo(trunkPoints[i].x, trunkPoints[i].y);
-    ctx.lineWidth = Math.max(1.25, lineWidth * 0.24);
-    ctx.strokeStyle = 'rgb(228,228,228)';
-    ctx.stroke();
-  }
-  ctx.globalCompositeOperation = 'source-over';
-
-  return {imageData : ctx.getImageData(0, 0, width, height), trunkPoints};
-
-  function drawBranch(startX, startY, targetAngle, line_width)
-  {
-    let angle = targetAngle;
-
-    drawJunction(startX, startY, line_width);
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.lineWidth = line_width;
-
-    while (startY < height) {
-      const step = 1.6 + rand() * 0.6;
-      const nextX = startX + Math.sin(angle) * step;
-      const nextY = startY + Math.cos(angle) * step;
-
-      angle += (rand() - 0.5) * 0.42;
-      angle -= (angle - targetAngle) * 0.08;
-
-      ctx.lineTo(nextX, nextY);
-
-      startX = nextX;
-      startY = nextY;
-
-      if (rand() < 0.014) {
-        ctx.strokeStyle = genLightningColor(line_width);
-        ctx.stroke();
-        line_width -= 0.2;
-
-        if (line_width < 0.1)
-          return;
-
-        if (rand() < 0.025)
-          drawBranch(nextX, nextY, targetAngle + (rand() - 0.5) * 0.62, line_width * 0.82);
-
-        drawJunction(nextX, nextY, line_width);
-        ctx.beginPath();
-        ctx.moveTo(nextX, nextY);
-        ctx.lineWidth = line_width;
+function bridgeSparseGaps(data, width, height)
+{
+  const src = data.slice();
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x;
+      if (src[idx] >= 20)
+        continue;
+      const left = src[idx - 1];
+      const right = src[idx + 1];
+      const up = src[idx - width];
+      const down = src[idx + width];
+      const ul = src[idx - width - 1];
+      const ur = src[idx - width + 1];
+      const dl = src[idx + width - 1];
+      const dr = src[idx + width + 1];
+      const straight = (left >= 55 && right >= 55) || (up >= 55 && down >= 55);
+      const diagonal = (ul >= 60 && dr >= 60) || (ur >= 60 && dl >= 60);
+      if (straight || diagonal) {
+        const m = Math.max(Math.min(left, right), Math.min(up, down), Math.min(ul, dr), Math.min(ur, dl));
+        data[idx] = Math.max(data[idx], Math.floor(m * 0.7));
       }
     }
-    ctx.strokeStyle = genLightningColor(line_width);
-    ctx.stroke();
   }
+}
+
+function keepConnectedToTrunk(data, width, height, trunk)
+{
+  if (!trunk.length)
+    return;
+  const visited = new Uint8Array(width * height);
+  const queue = new Int32Array(width * height);
+  let head = 0;
+  let tail = 0;
+
+  for (let i = 0; i < trunk.length; i++) {
+    const x = Math.round(trunk[i].x);
+    const y = Math.round(trunk[i].y);
+    if (x < 0 || x >= width || y < 0 || y >= height)
+      continue;
+    const idx = y * width + x;
+    if (visited[idx])
+      continue;
+    visited[idx] = 1;
+    queue[tail++] = idx;
+  }
+
+  while (head < tail) {
+    const idx = queue[head++];
+    const x = idx % width;
+    const y = (idx / width) | 0;
+
+    for (let ny = Math.max(0, y - 1); ny <= Math.min(height - 1, y + 1); ny++) {
+      for (let nx = Math.max(0, x - 1); nx <= Math.min(width - 1, x + 1); nx++) {
+        const nIdx = ny * width + nx;
+        if (visited[nIdx] || data[nIdx] <= 0)
+          continue;
+        visited[nIdx] = 1;
+        queue[tail++] = nIdx;
+      }
+    }
+  }
+
+  for (let i = 0; i < data.length; i++) {
+    if (!visited[i])
+      data[i] = 0;
+  }
+}
+
+function clamp(v, lo, hi)
+{
+  return Math.min(Math.max(v, lo), hi);
+}
+
+function mix(a, b, t)
+{
+  return a + (b - a) * t;
 }

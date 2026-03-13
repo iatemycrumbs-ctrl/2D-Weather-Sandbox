@@ -621,6 +621,7 @@ var lightningShakePhaseX = 0.0;
 var lightningShakePhaseY = 0.0;
 var lightningShakeBurstTimerFrames = 0;
 var pendingLightningShakeEvents = [];
+var smoothedFrameMs = 16.7;
 var uiAudioCtx = null;
 var lastUiBeepAtMs = 0;
 
@@ -901,13 +902,16 @@ function IR_temp(IR)
 }
 
 ////////////// Water Functions ///////////////
-const wf_devider = 250.0;
-const wf_pow = 17.0;
-
-function maxWater(Td)
+function saturationVaporPressure_hPa(tempK)
 {
-  return Math.pow(Td / wf_devider,
-                  wf_pow); // w = ((Td)/(250))^(18) // Td in Kelvin, w in grams per m^3
+  const tempC = clamp(KtoC(tempK), -90.0, 55.0);
+  return 6.112 * Math.exp((17.67 * tempC) / (tempC + 243.5));
+}
+
+function maxWater(tempK)
+{
+  const safeT = Math.max(tempK, 120.0);
+  return Math.max(216.7 * (saturationVaporPressure_hPa(safeT) / safeT), 0.00001); // g/m^3
 }
 
 function dewpoint(W, tempK = 273.15)
@@ -4777,12 +4781,33 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     const toolByHotkey = {};
     const toolDropdownOptions = {};
     const toolActions = {};
+    const toolPresets = {
+      TOOL_NONE : {brushSize : 20, brushIntensity : 0.01, wholeWidth : false},
+      TOOL_TEMPERATURE : {brushSize : 100, brushIntensity : 0.018},
+      TOOL_WATER : {brushSize : 85, brushIntensity : 0.015},
+      TOOL_SMOKE : {brushSize : 70, brushIntensity : 0.012},
+      TOOL_WIND : {brushSize : 120, brushIntensity : 0.02},
+      TOOL_LIGHTNING_GROUND : {brushSize : 45, brushIntensity : 0.026, wholeWidth : false},
+      TOOL_LIGHTNING_IC : {brushSize : 55, brushIntensity : 0.022, wholeWidth : false},
+      TOOL_LOCAL_HEAT_DRY : {brushSize : 120, brushIntensity : 0.02},
+      TOOL_ARTIFICIAL_LIGHTNING : {brushSize : 40, brushIntensity : 0.03, wholeWidth : false},
+      TOOL_STATION : {wholeWidth : false},
+      TOOL_BALLOON : {wholeWidth : false},
+      TOOL_LIGHTNING_ROD : {wholeWidth : false}
+    };
 
     function selectTool(toolId)
     {
       guiControls.tool = toolId;
-      if (toolId == 'TOOL_NONE' || toolId == 'TOOL_STATION' || toolId == 'TOOL_BALLOON' || toolId == 'TOOL_LIGHTNING_ROD')
-        guiControls.wholeWidth = false;
+      const preset = toolPresets[toolId];
+      if (!preset)
+        return;
+      if (typeof preset.brushSize == 'number')
+        guiControls.brushSize = preset.brushSize;
+      if (typeof preset.brushIntensity == 'number')
+        guiControls.brushIntensity = preset.brushIntensity;
+      if (typeof preset.wholeWidth == 'boolean')
+        guiControls.wholeWidth = preset.wholeWidth;
     }
 
     for (let i = 0; i < toolDefinitions.length; i++) {
@@ -6007,6 +6032,15 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   resizeCanvasAndPostFx();
   canvas.style.display = 'block';
   canvas_aspect = canvas.width / canvas.height;
+
+  // Mobile/startup quality safeguard:
+  // apply 0.5 DPR scale shortly after load so initialization uniforms/textures settle first.
+  setTimeout(() => {
+    if (!guiControls)
+      return;
+    guiControls.pixelRatioScale = 0.5;
+    handleViewportResize();
+  }, 3000);
 
   var mouseXinSim, mouseYinSim;
   var prevMouseXinSim, prevMouseYinSim;
@@ -7750,58 +7784,35 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.disable(gl.BLEND);
       gl.useProgram(advectionProgram);
 
+      const inputTypeByTool = {
+        TOOL_NONE : 0,
+        TOOL_TEMPERATURE : 1,
+        TOOL_WATER : 2,
+        TOOL_SMOKE : 3,
+        TOOL_WIND : 4,
+        TOOL_WALL : 10,
+        TOOL_WALL_LAND : 11,
+        TOOL_WALL_SEA : 12,
+        TOOL_WALL_FIRE : 13,
+        TOOL_WALL_URBAN : 14,
+        TOOL_WALL_RUNWAY : 15,
+        TOOL_WALL_INDUSTRIAL : 16,
+        TOOL_NUCLEAR_POWERPLANT : 16,
+        TOOL_SUPER_INDUSTRIAL : 16,
+        TOOL_WALL_MOIST : 20,
+        TOOL_WALL_SNOW : 21,
+        TOOL_VEGETATION : 22,
+        TOOL_SKYSCRAPER : 24,
+        TOOL_ARTIFICIAL_LIGHTNING : 25,
+        TOOL_LIGHTNING_GROUND : 26,
+        TOOL_LOCAL_HEAT_DRY : 27,
+        TOOL_SAND_TERRAIN : 28,
+        TOOL_LIGHTNING_IC : 29
+      };
+
       var inputType = -1;
       if (leftMousePressed) {
-        if (guiControls.tool == 'TOOL_NONE')
-          inputType = 0; // only flashlight on
-        else if (guiControls.tool == 'TOOL_TEMPERATURE')
-          inputType = 1;
-        else if (guiControls.tool == 'TOOL_WATER')
-          inputType = 2;
-        else if (guiControls.tool == 'TOOL_SMOKE')
-          inputType = 3;
-        else if (guiControls.tool == 'TOOL_LIGHTNING_GROUND')
-          inputType = 26;
-        else if (guiControls.tool == 'TOOL_LIGHTNING_IC')
-          inputType = 29;
-        else if (guiControls.tool == 'TOOL_LOCAL_HEAT_DRY')
-          inputType = 27;
-        else if (guiControls.tool == 'TOOL_SAND_TERRAIN')
-          inputType = 28;
-        else if (guiControls.tool == 'TOOL_WIND')
-          inputType = 4;
-        else if (guiControls.tool == 'TOOL_WALL')
-          inputType = 10;
-        else if (guiControls.tool == 'TOOL_WALL_LAND')
-          inputType = 11;
-        else if (guiControls.tool == 'TOOL_WALL_SEA')
-          inputType = 12;
-        else if (guiControls.tool == 'TOOL_WALL_FIRE')
-          inputType = 13;
-        else if (guiControls.tool == 'TOOL_WALL_URBAN')
-          inputType = 14;
-        else if (guiControls.tool == 'TOOL_WALL_RUNWAY')
-          inputType = 15;
-        else if (guiControls.tool == 'TOOL_WALL_INDUSTRIAL')
-          inputType = 16;
-        else if (guiControls.tool == 'TOOL_NUCLEAR_POWERPLANT')
-          inputType = 16;
-        else if (guiControls.tool == 'TOOL_SUPER_INDUSTRIAL')
-          inputType = 16;
-        else if (guiControls.tool == 'TOOL_SKYSCRAPER')
-          inputType = 24;
-        else if (guiControls.tool == 'TOOL_LIGHTNING_ROD')
-          inputType = -1;
-        else if (guiControls.tool == 'TOOL_ARTIFICIAL_LIGHTNING')
-          inputType = 25;
-
-        // Surface environment modifiers
-        else if (guiControls.tool == 'TOOL_WALL_MOIST')
-          inputType = 20;
-        else if (guiControls.tool == 'TOOL_WALL_SNOW')
-          inputType = 21;
-        else if (guiControls.tool == 'TOOL_VEGETATION')
-          inputType = 22;
+        inputType = inputTypeByTool[guiControls.tool] ?? -1;
 
         var intensity = guiControls.brushIntensity;
         if (guiControls.tool == 'TOOL_LOCAL_HEAT_DRY')
@@ -8888,6 +8899,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         if (guiControls.showFPS) {
           fpsCounterEl.style.display = 'block';
           const frameMs = (1000.0 / Math.max(FPS, 1)).toFixed(1);
+          smoothedFrameMs = smoothedFrameMs * 0.78 + parseFloat(frameMs) * 0.22;
           const iterPerSecond = Math.round(FPS * guiControls.IterPerFrame);
           const perfState = FPS >= 58 ? 'STABLE' : (FPS >= 42 ? 'BALANCED' : 'HEAVY');
           fpsCounterEl.textContent = `${FPS} FPS\n${frameMs} ms  |  ${iterPerSecond} it/s\n${perfState}`;
@@ -8905,6 +8917,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           const stablePhysicsFloor = Math.max(4, Math.floor((guiControls_default?.IterPerFrame ?? 10) * 0.6));
           const iterPerSecond = FPS * guiControls.IterPerFrame;
           const targetIterPerSecond = fpsTarget * Math.max(stablePhysicsFloor, 8);
+          const severeFrameTime = smoothedFrameMs > 32.0;
+          const moderateFrameTime = smoothedFrameMs > 24.0;
 
           // Keep simulation physics from crawling when rendering shaders get heavy.
           // We still auto-tune for smoothness, but never below a floor that preserves evaporation/cloud evolution speed.
@@ -8913,8 +8927,15 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           if (FPS == fpsTarget)
             adjIterPerFrame(1, stablePhysicsFloor);
 
+          if (severeFrameTime)
+            guiControls.IterPerFrame = Math.max(stablePhysicsFloor, guiControls.IterPerFrame - 2);
+          else if (moderateFrameTime)
+            guiControls.IterPerFrame = Math.max(stablePhysicsFloor, guiControls.IterPerFrame - 1);
+
           if (iterPerSecond < targetIterPerSecond * 0.68)
             guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame + 1, stablePhysicsFloor, 50));
+
+          guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame, stablePhysicsFloor, 40));
         }
       }
       // calculate total amounts of water and smoke for verification of fluid simulation

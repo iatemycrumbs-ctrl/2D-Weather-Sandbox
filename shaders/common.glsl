@@ -170,21 +170,31 @@ float dT_saturated(float dTdry,
   }
 }
 ////////////// Water Functions ///////////////
-#define wf_devider 250.0 // 250.0 Real water 	230 less steep curve
-#define wf_pow 17.0      // 17.0						10
-// https://www.geogebra.org/calculator/jc9hkfq4
+float saturationVaporPressure_hPa(float T)
+{
+  float Tc = clamp(KtoC(T), -90.0, 55.0);
+  return 6.112 * exp((17.67 * Tc) / (Tc + 243.5));
+}
 
 float maxWater(float T)
 {
-  return pow((T / wf_devider), wf_pow); // T in Kelvin, w in grams per m^3
+  float e = saturationVaporPressure_hPa(T);
+  return max(216.7 * (e / max(T, 120.0)), 0.00001); // g/m^3
+}
+
+float dewpoint(float W, float tempK)
+{
+  float absHumidity = max(W, 0.00001); // g/m^3
+  float safeTempK = clamp(tempK, 170.0, 340.0);
+  float vaporPressure = clamp((absHumidity * 0.001 * 461.5 * safeTempK) / 100.0, 0.01, 110.0); // hPa
+  float lnRatio = log(vaporPressure / 6.112);
+  float TdC = (243.5 * lnRatio) / (17.67 - lnRatio);
+  return CtoK(clamp(TdC, -90.0, 55.0));
 }
 
 float dewpoint(float W)
 {
-  if (W < 0.00001)
-    return 0.0;
-  else
-    return wf_devider * pow(W, 1.0 / wf_pow);
+  return dewpoint(W, 273.15);
 }
 
 float relativeHumd(float T, float W) { return (W / maxWater(T)); }
