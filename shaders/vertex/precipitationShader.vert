@@ -521,18 +521,32 @@ void main()
           vec4 lightningData = texture(lightningDataTex, vec2(0.5));
           const float lightningCloudDensityThreshold = 0.07;
 
-          float cloudPlusPrecipDensity = water[CLOUD] * 1.18 + water[PRECIPITATION] * 1.45 + dryLightningAllowance * 0.18;
-          float graupelNegativeCharge = mixedPhaseFactor * (0.55 + downdraftFactor) * map_rangeC(newDensity, snowDensity, 1.3, 0.25, 1.45) * graupelChargeGain;
-          float icePositiveCharge = mixedPhaseFactor * updraftFactor * map_rangeC(1.0 - min(newDensity, 1.0), 0.0, 1.0, 0.2, 1.4) * iceCrystalChargeGain;
+          float cloudPlusPrecipDensity = water[CLOUD] * 1.22 + water[PRECIPITATION] * 1.36 + dryLightningAllowance * 0.16;
 
-          float chargeDipole = max(graupelNegativeCharge + icePositiveCharge - abs(graupelNegativeCharge - icePositiveCharge) * 0.35, 0.0);
-          float pressureFactor = map_rangeC(base[PRESSURE], -0.06, 0.12, 0.82, 1.35);
-          float electricPotential = chargeDipole * pressureFactor * map_rangeC(base[VY], -0.01, 0.02, 0.6, 1.25);
+          // Reworked charge separation: explicit graupel-ice dipole with convective overturning,
+          // moisture loading, and discharge memory from previous flashes.
+          float supercooledCloud = map_rangeC(realTemp, CtoK(-26.0), CtoK(-4.0), 0.0, 1.0) * map_rangeC(water[CLOUD], threshold * 1.20, threshold * 4.8, 0.0, 1.0);
+          float rimingRate = supercooledCloud * map_rangeC(water[PRECIPITATION], 0.0, 1.8, 0.25, 1.45);
+          float graupelNegativeCharge = rimingRate * (0.38 + downdraftFactor * 1.12) * map_rangeC(newDensity, snowDensity, 1.3, 0.28, 1.50) * graupelChargeGain;
+          float icePositiveCharge = rimingRate * (0.30 + updraftFactor * 1.35) * map_rangeC(1.0 - min(newDensity, 1.0), 0.0, 1.0, 0.25, 1.38) * iceCrystalChargeGain;
+
+          float chargeImbalance = abs(graupelNegativeCharge - icePositiveCharge);
+          float dipoleStrength = max(min(graupelNegativeCharge, icePositiveCharge) + chargeImbalance * 0.35, 0.0);
+          float verticalOverturning = map_rangeC(base[VY], -0.015, 0.025, 0.58, 1.42);
+          float pressureFactor = map_rangeC(base[PRESSURE], -0.06, 0.12, 0.84, 1.32);
+          float humidityConductivity = map_rangeC(water[TOTAL], threshold * 1.0, threshold * 5.0, 0.75, 1.30);
+
+          float previousLightningAge = iterNum - lightningData[START_ITERNUM];
+          float rechargeWindow = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.6, 0.55), 6.0);
+          float recharge = smoothstep(rechargeWindow * 0.30, rechargeWindow * 1.65, previousLightningAge);
+
+          float electricPotential = dipoleStrength * verticalOverturning * pressureFactor * humidityConductivity;
+          electricPotential *= mix(0.68, 1.35, recharge);
 
           float lightningSpawnChance = max(cloudPlusPrecipDensity - lightningCloudDensityThreshold, 0.0) * lightningChanceMult;
-          lightningSpawnChance *= (0.28 + electricPotential * 2.45);
-          lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.12, 0.60) * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.85, 1.75);
-          lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.55) * lightningFrequencyBoost;
+          lightningSpawnChance *= (0.20 + electricPotential * 2.85);
+          lightningSpawnChance *= map_rangeC(lightningMinInterval, 0.0, 80.0, 1.10, 0.58) * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 0.82, 1.82);
+          lightningSpawnChance *= map_rangeC(water[SMOKE], 0.0, 1.2, 1.0, 0.52) * lightningFrequencyBoost;
 
           float icWeight = max(icLightningRatio, 0.0);
           float ctgWeight = max(ctgLightningRatio, 0.0);
@@ -574,7 +588,6 @@ void main()
           lightningSpawnChance = clamp(lightningSpawnChance, 0.00002, 0.92);
 
           float strikeRand = random2d(spawnSeed * 0.73 + vec2(base[TEMPERATURE] * 0.003, water[TOTAL] * 0.121));
-          float previousLightningAge = iterNum - lightningData[START_ITERNUM];
           float currentFlashHold = max(lightningMinInterval * map_rangeC(lightningRecoveryBoost, 0.4, 2.0, 1.05, 0.52), 4.5 + abs(lightningData[INTENSITY]) * (1.9 + multiStrokeLightning * 1.35));
           bool lightningChannelFree = lightningWarmupDone && (lightningData[START_ITERNUM] <= 0.0 || previousLightningAge > currentFlashHold);
           bool cloudAnchoredSource = water[CLOUD] > threshold * 1.30 && texCoord.y >= 0.22 && texCoord.y <= 0.96;

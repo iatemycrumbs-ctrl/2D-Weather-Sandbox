@@ -72,7 +72,7 @@ const VALID_DISPLAY_MODES = new Set([
   'DISP_TEMPERATURE', 'DISP_WATER', 'DISP_REAL', 'DISP_HORIVEL', 'DISP_VERTVEL',
   'DISP_IRHEATING', 'DISP_IRDOWNTEMP', 'DISP_IRUPTEMP', 'DISP_PRECIPFEEDBACK_MASS',
   'DISP_PRECIPFEEDBACK_HEAT', 'DISP_PRECIPFEEDBACK_VAPOR', 'DISP_PRECIPFEEDBACK_RAIN',
-  'DISP_PRECIPFEEDBACK_SNOW', 'DISP_SOIL_MOISTURE', 'DISP_CURL', 'DISP_AIRQUALITY', 'DISP_RADAR'
+  'DISP_PRECIPFEEDBACK_SNOW', 'DISP_SOIL_MOISTURE', 'DISP_CURL', 'DISP_AIRQUALITY', 'DISP_CLOUD_DENSITY', 'DISP_RADAR'
 ]);
 
 function sanitizeDisplayMode(mode)
@@ -5486,6 +5486,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         'Precipitation/Soil Moisture' : 'DISP_SOIL_MOISTURE',
         'Curl' : 'DISP_CURL',
         'Air Quality' : 'DISP_AIRQUALITY',
+        'Cloud Density (Cloud + Precip)' : 'DISP_CLOUD_DENSITY',
         'Radar Reflectivity' : 'DISP_RADAR'
       })
       .name('Display Mode')
@@ -6469,6 +6470,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       guiControls.displayMode = 'DISP_PRECIPFEEDBACK_HEAT';
     } else if (event.code == 'KeyK') {
       guiControls.displayMode = 'DISP_AIRQUALITY';
+    } else if (event.code == 'KeyH') {
+      guiControls.displayMode = 'DISP_CLOUD_DENSITY';
     } else if (event.key == 'ArrowLeft') {
       leftPressed = true; // <
     } else if (event.key == 'ArrowUp') {
@@ -7322,18 +7325,73 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   const pendingLightningTextureRequests = new Map();
   let lightningTextureRequestCounter = 1;
 
-  function createFallbackLightningData(width, height)
+  function createFallbackLightningData(width, height, seed = 1)
   {
     const out = new Uint8Array(width * height);
-    const cx = width * 0.5;
-    for (let y = 0; y < height; y++) {
-      const t = y / Math.max(height - 1, 1);
-      const wobble = Math.sin(t * 18.0) * width * 0.014;
-      const x = Math.floor(clamp(cx + wobble, 0, width - 1));
-      out[y * width + x] = 255;
-      if (x + 1 < width)
-        out[y * width + x + 1] = 145;
+    let rng = (seed >>> 0) || 1;
+    const rand = () => {
+      rng = (1664525 * rng + 1013904223) >>> 0;
+      return rng / 4294967296;
+    };
+
+    const trunk = [];
+    let x = width * (0.48 + rand() * 0.04);
+    let y = 0;
+    let heading = (rand() - 0.5) * 0.2;
+    const stepY = Math.max(height / 420.0, 1.0);
+
+    const stamp = (sx, sy, lum) => {
+      const ix = Math.round(sx);
+      const iy = Math.round(sy);
+      for (let oy = -1; oy <= 1; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          const tx = ix + ox;
+          const ty = iy + oy;
+          if (tx < 0 || tx >= width || ty < 0 || ty >= height)
+            continue;
+          const d = Math.hypot(ox, oy);
+          const v = Math.floor(lum * (1.0 - d * 0.28));
+          const idx = ty * width + tx;
+          out[idx] = Math.max(out[idx], v);
+        }
+      }
+    };
+
+    for (let i = 0; i < height && y < height - 1; i++) {
+      const t = i / Math.max(height - 1, 1);
+      heading += (rand() - 0.5) * (0.22 - t * 0.08);
+      heading *= 0.93;
+      const nx = clamp(x + Math.sin(heading) * 1.35, 1, width - 2);
+      const ny = clamp(y + stepY * (1.45 + Math.cos(heading) * 0.55), 1, height - 2);
+      const segs = Math.max(1, Math.ceil(Math.hypot(nx - x, ny - y)));
+      for (let j = 0; j <= segs; j++) {
+        const tt = j / segs;
+        stamp(x + (nx - x) * tt, y + (ny - y) * tt, Math.floor(248 - t * 62));
+      }
+      trunk.push({x : nx, y : ny});
+
+      if (rand() < (0.08 - t * 0.05)) {
+        let bx = nx;
+        let by = ny;
+        let bh = heading + (rand() < 0.5 ? -1 : 1) * (0.55 + rand() * 0.35);
+        let life = 8 + Math.floor(rand() * 16);
+        while (life-- > 0 && by < height - 2) {
+          bh += (rand() - 0.5) * 0.28;
+          const bnx = clamp(bx + Math.sin(bh) * (0.9 + rand() * 0.8), 1, width - 2);
+          const bny = clamp(by + Math.cos(bh) * (0.9 + rand() * 1.1), 1, height - 2);
+          stamp(bnx, bny, 150);
+          bx = bnx;
+          by = bny;
+        }
+      }
+
+      x = nx;
+      y = ny;
     }
+
+    for (const p of trunk)
+      stamp(p.x, p.y, 238);
+
     return out;
   }
 
@@ -7351,7 +7409,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     const height = payload.height || pending.height;
     const lumData = (payload.luminanceData && payload.luminanceData.length == width * height)
       ? payload.luminanceData
-      : createFallbackLightningData(width, height);
+      : createFallbackLightningData(width, height, (payload.id || pending.textureIndex || 1) * 2246822519);
 
     generateLightningTexture(pending.textureIndex, width, height, lumData);
     pendingLightningBuildCount--;
@@ -7363,7 +7421,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     pendingLightningTextureRequests.forEach((pending) => {
       if (pending.timeoutId)
         clearTimeout(pending.timeoutId);
-      generateLightningTexture(pending.textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height));
+      generateLightningTexture(pending.textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height, pending.textureIndex * 2654435761 + Date.now()));
       pending.resolve(false);
     });
     pendingLightningTextureRequests.clear();
@@ -7394,7 +7452,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         if (!pending)
           return;
         pendingLightningTextureRequests.delete(reqId);
-        generateLightningTexture(textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height));
+        generateLightningTexture(textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height, reqId * 2654435761));
         pendingLightningBuildCount--;
         maybeTerminateLightningWorker();
         pending.resolve(false);
@@ -7420,7 +7478,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   // Fast startup path: upload fallback textures immediately, then replace in background.
   for (let i = 0; i < numLightningTextures; i++)
-    generateLightningTexture(i, lightningTexturePlan.width, lightningTexturePlan.height, createFallbackLightningData(lightningTexturePlan.width, lightningTexturePlan.height));
+    generateLightningTexture(i, lightningTexturePlan.width, lightningTexturePlan.height, createFallbackLightningData(lightningTexturePlan.width, lightningTexturePlan.height, i * 2246822519 + Date.now()));
 
   for (let i = 0; i < numLightningTextures; i++) {
     const seed = (Date.now() + i * 2654435761) >>> 0;
@@ -8573,6 +8631,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           gl.bindTexture(gl.TEXTURE_2D, waterTexture_0);
           gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 2);
           gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 0.02);
+          break;
+        case 'DISP_CLOUD_DENSITY':
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, waterTexture_1);
+          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 1);
+          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 0.95);
           break;
         case 'DISP_RADAR':
           gl.activeTexture(gl.TEXTURE0);

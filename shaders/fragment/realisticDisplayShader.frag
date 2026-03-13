@@ -242,18 +242,19 @@ vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   vec2 uv = vec2(0.5);
   float wrappedDx = mod((texCoord.x - pos.x) + 1.5, 1.0) - 0.5;
 
-  // Normalize vertical texture traversal so the channel head starts near the cloud source
-  // and can continue all the way down to terrain instead of collapsing into short stubs.
+  // Normalize vertical texture traversal so the channel head starts near cloud base
+  // and reaches terrain with continuous (non-stepped) channel curvature.
   float sourceToGround = max(pos.y, 0.08);
   float verticalTravel = clamp((pos.y - texCoord.y) / sourceToGround, 0.0, 1.0);
 
-  float branchCurve = sin(verticalTravel * 8.0 + random2d(pos * 19.3) * 6.2831) * (0.022 + (1.0 - verticalTravel) * 0.016);
-  float leaderSeg = floor(verticalTravel * 32.0) / 32.0;
-  float leaderJitter = (random2d(vec2(leaderSeg * 31.0 + pos.x * 17.0, pos.y * 13.0)) - 0.5) * (0.034 + (1.0 - verticalTravel) * 0.020);
-  float bow = sin(verticalTravel * 3.14159 * (1.7 + random2d(pos * 43.1))) * (0.014 + (1.0 - verticalTravel) * 0.022);
-  float microZag = sin(verticalTravel * 78.0 + random2d(pos * 53.2) * 6.2831) * 0.006;
-  float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.10;
-  uv.x = 0.5 + (wrappedDx + branchCurve + leaderJitter + bow + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.74;
+  float seedA = random2d(pos * 19.3);
+  float seedB = random2d(pos * 43.1 + vec2(1.7));
+  float seedC = random2d(pos * 53.2 + vec2(3.1));
+  float smoothCurve = sin(verticalTravel * (2.9 + seedA * 1.8) + seedB * 6.2831) * (0.010 + (1.0 - verticalTravel) * 0.014);
+  float leaderJitter = sin(verticalTravel * (21.0 + seedC * 14.0) + seedA * 6.2831) * (0.0035 + (1.0 - verticalTravel) * 0.0045);
+  float microZag = sin(verticalTravel * 54.0 + seedB * 6.2831) * 0.0028;
+  float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.07;
+  uv.x = 0.5 + (wrappedDx + smoothCurve + leaderJitter + microZag + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.72;
   uv.y = verticalTravel * 1.26;
   return uv;
 }
@@ -282,16 +283,17 @@ float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool i
   float across = axis.y;
   float shapeWarp = lightningShapeWarpMultiplier();
 
-  float segCount = (isIC ? 17.0 : 26.0) * mix(0.92, 1.26, shapeWarp - 0.8);
-  float segId = floor(along * segCount);
-  float segT = fract(along * segCount);
-  float segSeed = random2d(pos * vec2(27.1, 41.9) + vec2(segId * 0.077, segId * 0.191));
+  float seedA = random2d(pos * vec2(27.1, 41.9));
+  float seedB = random2d(pos * vec2(13.7, 23.3) + vec2(4.2, 1.7));
+  float seedC = random2d(pos * vec2(9.1, 17.5) + vec2(7.9, 3.8));
 
-  float steppedBias = (segSeed - 0.5) * (isIC ? 0.028 : 0.040) * shapeWarp;
-  float steppedZig = sin(along * (isIC ? 48.0 : 36.0) + segSeed * 6.2831 + lightningTime * 3.8) * (isIC ? 0.012 : 0.009) * shapeWarp;
-  float trunkCenter = steppedBias + steppedZig;
+  float smoothMeander = sin(along * (isIC ? 34.0 : 22.0) + seedA * 6.2831 + lightningTime * 2.4) * (isIC ? 0.014 : 0.010) * shapeWarp;
+  smoothMeander += sin(along * (isIC ? 63.0 : 31.0) + seedB * 6.2831 + lightningTime * 3.1) * (isIC ? 0.010 : 0.006) * shapeWarp;
+  float trunkCenter = smoothMeander + (seedC - 0.5) * (isIC ? 0.020 : 0.014) * shapeWarp;
 
-  float coreWidth = mix(0.013, 0.0075, smoothstep(0.0, 1.0, along));
+  float coreWidth = mix(0.013, 0.0072, smoothstep(0.0, 1.0, along));
+  if (!isIC)
+    coreWidth *= 1.08;
   coreWidth *= mix(1.18, 0.92, shapeWarp - 0.8);
   float trunk = exp(-pow(abs(across - trunkCenter) / max(coreWidth, 0.0025), 1.22));
 
@@ -305,7 +307,7 @@ float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool i
     float dirSign = random2d(pos * (31.4 + fi * 0.8) + vec2(8.2 + fi * 0.4, 4.5)) > 0.5 ? 1.0 : -1.0;
     float localT = clamp((along - spawn) / max(branchLen, 0.001), 0.0, 1.0);
     float branchSpread = dirSign * localT * (isIC ? 0.15 : 0.18) * shapeWarp;
-    float branchJitter = sin(localT * (17.0 + fi * 3.5) + segSeed * 11.0 + lightningTime * 6.0) * 0.014 * shapeWarp;
+    float branchJitter = sin(localT * (17.0 + fi * 3.5) + seedA * 11.0 + lightningTime * 6.0) * 0.014 * shapeWarp;
     float branchCenter = trunkCenter + branchSpread + branchJitter;
     float branchWidth = mix(0.007, 0.0035, localT) * mix(1.0, 0.84, shapeWarp - 0.8);
 
@@ -313,11 +315,11 @@ float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool i
     branchField = max(branchField, branch * branchMask);
   }
 
-  float segmentPulse = smoothstep(0.06, 0.40, segT) * (1.0 - smoothstep(0.80, 0.98, segT));
-  float leaderPulse = 0.90 + 0.10 * sin(along * 23.0 - lightningTime * 8.0 + random2d(pos * 13.5) * 6.2831);
+  float leaderPulse = 0.92 + 0.08 * sin(along * 23.0 - lightningTime * 8.0 + seedB * 6.2831);
+  float continuity = isIC ? (0.86 + 0.14 * sin(along * 22.0 + lightningTime * 3.6 + seedC * 6.2831)) : 1.0;
 
   float skeleton = max(trunk, branchField * 0.95);
-  return skeleton * segmentPulse * leaderPulse;
+  return skeleton * leaderPulse * continuity;
 }
 
 float lightningIntensityOverTime(float Tin, vec2 lightningPos, float intensity)
