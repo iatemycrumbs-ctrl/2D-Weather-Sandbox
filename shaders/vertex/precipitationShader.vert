@@ -151,7 +151,7 @@ float computeSedimentationVelocity(float totalMass,
                                    float pressure,
                                    float turbulenceMixing)
 {
-  float phaseBoost = mix(1.0, 1.55, clamp((localDensity - snowDensity) / max(1.25 - snowDensity, 0.05), 0.0, 1.0));
+  float phaseBoost = mix(1.0, 1.65, clamp((localDensity - snowDensity) / max(1.25 - snowDensity, 0.05), 0.0, 1.0));
   float spectrumBoost = map_rangeC(precipitationSizeSpectrum, 0.2, 2.5, 0.88, 1.45);
   float massTerminal = sqrt(max(totalMass / max(surfaceArea, 0.0001), 0.04));
 
@@ -160,13 +160,13 @@ float computeSedimentationVelocity(float totalMass,
   float baseTerminal = fallSpeed * massTerminal * phaseBoost * spectrumBoost * airDensityBoost;
 
   // force a minimum settling component aloft so precip cannot remain suspended indefinitely.
-  float altitudeSettlingFloor = fallSpeed * mix(0.42, 0.95, clamp(altitudeNorm, 0.0, 1.0));
+  float altitudeSettlingFloor = fallSpeed * mix(0.56, 1.12, clamp(altitudeNorm, 0.0, 1.0));
 
   // updrafts can reduce settling but not fully cancel it; downdrafts accelerate fallout.
-  float cappedUpdraftAssist = min(max(updraft, 0.0) * (0.24 + turbulenceMixing * 0.04), baseTerminal * 0.68);
+  float cappedUpdraftAssist = min(max(updraft, 0.0) * (0.21 + turbulenceMixing * 0.03), baseTerminal * 0.58);
   float downdraftAssist = max(downdraft, 0.0) * (0.30 + microburstStrength * 0.25 + turbulenceMixing * 0.03);
 
-  return max(baseTerminal + altitudeSettlingFloor + downdraftAssist - cappedUpdraftAssist, fallSpeed * 0.35);
+  return max(baseTerminal + altitudeSettlingFloor + downdraftAssist - cappedUpdraftAssist, fallSpeed * 0.5);
 }
 
 float sampleCloudStrength(vec2 p)
