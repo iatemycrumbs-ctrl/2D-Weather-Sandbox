@@ -72,7 +72,7 @@ const VALID_DISPLAY_MODES = new Set([
   'DISP_TEMPERATURE', 'DISP_WATER', 'DISP_REAL', 'DISP_HORIVEL', 'DISP_VERTVEL',
   'DISP_IRHEATING', 'DISP_IRDOWNTEMP', 'DISP_IRUPTEMP', 'DISP_PRECIPFEEDBACK_MASS',
   'DISP_PRECIPFEEDBACK_HEAT', 'DISP_PRECIPFEEDBACK_VAPOR', 'DISP_PRECIPFEEDBACK_RAIN',
-  'DISP_PRECIPFEEDBACK_SNOW', 'DISP_SOIL_MOISTURE', 'DISP_CURL', 'DISP_AIRQUALITY', 'DISP_RADAR'
+  'DISP_PRECIPFEEDBACK_SNOW', 'DISP_SOIL_MOISTURE', 'DISP_CURL', 'DISP_AIRQUALITY', 'DISP_CLOUD_DENSITY', 'DISP_RADAR'
 ]);
 
 function sanitizeDisplayMode(mode)
@@ -547,6 +547,8 @@ const guiControls_default = {
   balloonBurstPressure : 250.0,
   balloonTelemetryDetailed : false,
   showFPS : true,
+  maxFPS : 0,
+  antiAliasing : true,
   showWeatherBalloons : true,
   balloonRiseRate : 0.22,
   balloonDriftMult : 1.0,
@@ -621,6 +623,8 @@ var lightningShakePhaseX = 0.0;
 var lightningShakePhaseY = 0.0;
 var lightningShakeBurstTimerFrames = 0;
 var pendingLightningShakeEvents = [];
+var smoothedFrameMs = 16.7;
+var lastDrawStartMs = 0.0;
 var uiAudioCtx = null;
 var lastUiBeepAtMs = 0;
 
@@ -901,13 +905,16 @@ function IR_temp(IR)
 }
 
 ////////////// Water Functions ///////////////
-const wf_devider = 250.0;
-const wf_pow = 17.0;
-
-function maxWater(Td)
+function saturationVaporPressure_hPa(tempK)
 {
-  return Math.pow(Td / wf_devider,
-                  wf_pow); // w = ((Td)/(250))^(18) // Td in Kelvin, w in grams per m^3
+  const tempC = clamp(KtoC(tempK), -90.0, 55.0);
+  return 6.112 * Math.exp((17.67 * tempC) / (tempC + 243.5));
+}
+
+function maxWater(tempK)
+{
+  const safeT = Math.max(tempK, 120.0);
+  return Math.max(216.7 * (saturationVaporPressure_hPa(safeT) / safeT), 0.00001); // g/m^3
 }
 
 function dewpoint(W, tempK = 273.15)
@@ -4169,7 +4176,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   var contextAttributes = {
     alpha : false,
     desynchronized : false,
-    antialias : true,
+    antialias : (guiControls?.antiAliasing ?? true),
     depth : false,
     failIfMajorPerformanceCaveat : false,
     powerPreference : 'high-performance',
@@ -4777,12 +4784,33 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     const toolByHotkey = {};
     const toolDropdownOptions = {};
     const toolActions = {};
+    const toolPresets = {
+      TOOL_NONE : {brushSize : 20, brushIntensity : 0.01, wholeWidth : false},
+      TOOL_TEMPERATURE : {brushSize : 100, brushIntensity : 0.018},
+      TOOL_WATER : {brushSize : 85, brushIntensity : 0.015},
+      TOOL_SMOKE : {brushSize : 70, brushIntensity : 0.012},
+      TOOL_WIND : {brushSize : 120, brushIntensity : 0.02},
+      TOOL_LIGHTNING_GROUND : {brushSize : 45, brushIntensity : 0.026, wholeWidth : false},
+      TOOL_LIGHTNING_IC : {brushSize : 55, brushIntensity : 0.022, wholeWidth : false},
+      TOOL_LOCAL_HEAT_DRY : {brushSize : 120, brushIntensity : 0.02},
+      TOOL_ARTIFICIAL_LIGHTNING : {brushSize : 40, brushIntensity : 0.03, wholeWidth : false},
+      TOOL_STATION : {wholeWidth : false},
+      TOOL_BALLOON : {wholeWidth : false},
+      TOOL_LIGHTNING_ROD : {wholeWidth : false}
+    };
 
     function selectTool(toolId)
     {
       guiControls.tool = toolId;
-      if (toolId == 'TOOL_NONE' || toolId == 'TOOL_STATION' || toolId == 'TOOL_BALLOON' || toolId == 'TOOL_LIGHTNING_ROD')
-        guiControls.wholeWidth = false;
+      const preset = toolPresets[toolId];
+      if (!preset)
+        return;
+      if (typeof preset.brushSize == 'number')
+        guiControls.brushSize = preset.brushSize;
+      if (typeof preset.brushIntensity == 'number')
+        guiControls.brushIntensity = preset.brushIntensity;
+      if (typeof preset.wholeWidth == 'boolean')
+        guiControls.wholeWidth = preset.wholeWidth;
     }
 
     for (let i = 0; i < toolDefinitions.length; i++) {
@@ -5461,6 +5489,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         'Precipitation/Soil Moisture' : 'DISP_SOIL_MOISTURE',
         'Curl' : 'DISP_CURL',
         'Air Quality' : 'DISP_AIRQUALITY',
+        'Cloud Density (Cloud + Precip)' : 'DISP_CLOUD_DENSITY',
         'Radar Reflectivity' : 'DISP_RADAR'
       })
       .name('Display Mode')
@@ -5515,6 +5544,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     display_folder.add(guiControls, 'showGraph').onChange(hideOrShowGraph).name('Show Sounding Graph').listen();
     display_folder.add(guiControls, 'showDrops').name('Show Droplets').listen();
     display_folder.add(guiControls, 'showFPS').name('Show FPS Counter');
+    display_folder.add(guiControls, 'maxFPS', 0, 240, 1).name('Max FPS (0 = Unlimited)').listen();
+    display_folder.add(guiControls, 'antiAliasing').name('Post Anti-Aliasing').onChange(function() {
+      gl.useProgram(postProcessingProgram);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'antiAliasing'), guiControls.antiAliasing ? 1.0 : 0.0);
+    });
     display_folder.add(guiControls, 'showWeatherBalloons').name('Show Weather Balloons');
     display_folder.add(guiControls, 'realDewPoint').name('Show Real Dew Point');
 
@@ -6008,6 +6042,15 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   canvas.style.display = 'block';
   canvas_aspect = canvas.width / canvas.height;
 
+  // Mobile/startup quality safeguard:
+  // apply 0.5 DPR scale shortly after load so initialization uniforms/textures settle first.
+  setTimeout(() => {
+    if (!guiControls)
+      return;
+    guiControls.pixelRatioScale = 0.5;
+    handleViewportResize();
+  }, 3000);
+
   var mouseXinSim, mouseYinSim;
   var prevMouseXinSim, prevMouseYinSim;
 
@@ -6435,6 +6478,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       guiControls.displayMode = 'DISP_PRECIPFEEDBACK_HEAT';
     } else if (event.code == 'KeyK') {
       guiControls.displayMode = 'DISP_AIRQUALITY';
+    } else if (event.code == 'KeyH') {
+      guiControls.displayMode = 'DISP_CLOUD_DENSITY';
     } else if (event.key == 'ArrowLeft') {
       leftPressed = true; // <
     } else if (event.key == 'ArrowUp') {
@@ -7288,18 +7333,73 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   const pendingLightningTextureRequests = new Map();
   let lightningTextureRequestCounter = 1;
 
-  function createFallbackLightningData(width, height)
+  function createFallbackLightningData(width, height, seed = 1)
   {
     const out = new Uint8Array(width * height);
-    const cx = width * 0.5;
-    for (let y = 0; y < height; y++) {
-      const t = y / Math.max(height - 1, 1);
-      const wobble = Math.sin(t * 18.0) * width * 0.014;
-      const x = Math.floor(clamp(cx + wobble, 0, width - 1));
-      out[y * width + x] = 255;
-      if (x + 1 < width)
-        out[y * width + x + 1] = 145;
+    let rng = (seed >>> 0) || 1;
+    const rand = () => {
+      rng = (1664525 * rng + 1013904223) >>> 0;
+      return rng / 4294967296;
+    };
+
+    const trunk = [];
+    let x = width * (0.48 + rand() * 0.04);
+    let y = 0;
+    let heading = (rand() - 0.5) * 0.2;
+    const stepY = Math.max(height / 420.0, 1.0);
+
+    const stamp = (sx, sy, lum) => {
+      const ix = Math.round(sx);
+      const iy = Math.round(sy);
+      for (let oy = -1; oy <= 1; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          const tx = ix + ox;
+          const ty = iy + oy;
+          if (tx < 0 || tx >= width || ty < 0 || ty >= height)
+            continue;
+          const d = Math.hypot(ox, oy);
+          const v = Math.floor(lum * (1.0 - d * 0.28));
+          const idx = ty * width + tx;
+          out[idx] = Math.max(out[idx], v);
+        }
+      }
+    };
+
+    for (let i = 0; i < height && y < height - 1; i++) {
+      const t = i / Math.max(height - 1, 1);
+      heading += (rand() - 0.5) * (0.22 - t * 0.08);
+      heading *= 0.93;
+      const nx = clamp(x + Math.sin(heading) * 1.35, 1, width - 2);
+      const ny = clamp(y + stepY * (1.45 + Math.cos(heading) * 0.55), 1, height - 2);
+      const segs = Math.max(1, Math.ceil(Math.hypot(nx - x, ny - y)));
+      for (let j = 0; j <= segs; j++) {
+        const tt = j / segs;
+        stamp(x + (nx - x) * tt, y + (ny - y) * tt, Math.floor(248 - t * 62));
+      }
+      trunk.push({x : nx, y : ny});
+
+      if (rand() < (0.08 - t * 0.05)) {
+        let bx = nx;
+        let by = ny;
+        let bh = heading + (rand() < 0.5 ? -1 : 1) * (0.55 + rand() * 0.35);
+        let life = 8 + Math.floor(rand() * 16);
+        while (life-- > 0 && by < height - 2) {
+          bh += (rand() - 0.5) * 0.28;
+          const bnx = clamp(bx + Math.sin(bh) * (0.9 + rand() * 0.8), 1, width - 2);
+          const bny = clamp(by + Math.cos(bh) * (0.9 + rand() * 1.1), 1, height - 2);
+          stamp(bnx, bny, 150);
+          bx = bnx;
+          by = bny;
+        }
+      }
+
+      x = nx;
+      y = ny;
     }
+
+    for (const p of trunk)
+      stamp(p.x, p.y, 238);
+
     return out;
   }
 
@@ -7317,7 +7417,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     const height = payload.height || pending.height;
     const lumData = (payload.luminanceData && payload.luminanceData.length == width * height)
       ? payload.luminanceData
-      : createFallbackLightningData(width, height);
+      : createFallbackLightningData(width, height, (payload.id || pending.textureIndex || 1) * 2246822519);
 
     generateLightningTexture(pending.textureIndex, width, height, lumData);
     pendingLightningBuildCount--;
@@ -7329,7 +7429,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     pendingLightningTextureRequests.forEach((pending) => {
       if (pending.timeoutId)
         clearTimeout(pending.timeoutId);
-      generateLightningTexture(pending.textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height));
+      generateLightningTexture(pending.textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height, pending.textureIndex * 2654435761 + Date.now()));
       pending.resolve(false);
     });
     pendingLightningTextureRequests.clear();
@@ -7360,7 +7460,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         if (!pending)
           return;
         pendingLightningTextureRequests.delete(reqId);
-        generateLightningTexture(textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height));
+        generateLightningTexture(textureIndex, pending.width, pending.height, createFallbackLightningData(pending.width, pending.height, reqId * 2654435761));
         pendingLightningBuildCount--;
         maybeTerminateLightningWorker();
         pending.resolve(false);
@@ -7386,7 +7486,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
   // Fast startup path: upload fallback textures immediately, then replace in background.
   for (let i = 0; i < numLightningTextures; i++)
-    generateLightningTexture(i, lightningTexturePlan.width, lightningTexturePlan.height, createFallbackLightningData(lightningTexturePlan.width, lightningTexturePlan.height));
+    generateLightningTexture(i, lightningTexturePlan.width, lightningTexturePlan.height, createFallbackLightningData(lightningTexturePlan.width, lightningTexturePlan.height, i * 2246822519 + Date.now()));
 
   for (let i = 0; i < numLightningTextures; i++) {
     const seed = (Date.now() + i * 2654435761) >>> 0;
@@ -7620,6 +7720,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1i(gl.getUniformLocation(postProcessingProgram, 'hdrTex'), 0);
   gl.uniform1i(gl.getUniformLocation(postProcessingProgram, 'bloomTex'), 1);
   gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'motionBlurStrength'), 0.0);
+  gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'antiAliasing'), guiControls.antiAliasing ? 1.0 : 0.0);
 
 
   gl.useProgram(isolateBrightPartsProgram);
@@ -7681,10 +7782,26 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   }
 
   setInterval(calcFps, 1000); // log fps
-  requestAnimationFrame(draw);
+
+  function scheduleNextFrame()
+  {
+    const maxFPS = Math.round(guiControls?.maxFPS ?? 0);
+    if (!Number.isFinite(maxFPS) || maxFPS <= 0) {
+      requestAnimationFrame(draw);
+      return;
+    }
+
+    const frameIntervalMs = 1000.0 / Math.max(maxFPS, 1);
+    const elapsed = performance.now() - lastDrawStartMs;
+    const waitMs = Math.max(0.0, frameIntervalMs - elapsed);
+    setTimeout(() => requestAnimationFrame(draw), waitMs);
+  }
+
+  scheduleNextFrame();
 
   function draw()
   { // Runs for every frame
+    lastDrawStartMs = performance.now();
     let camPanSpeed = guiControls.camSpeed;
 
     if (rightCtrlPressed) {
@@ -7750,58 +7867,35 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.disable(gl.BLEND);
       gl.useProgram(advectionProgram);
 
+      const inputTypeByTool = {
+        TOOL_NONE : 0,
+        TOOL_TEMPERATURE : 1,
+        TOOL_WATER : 2,
+        TOOL_SMOKE : 3,
+        TOOL_WIND : 4,
+        TOOL_WALL : 10,
+        TOOL_WALL_LAND : 11,
+        TOOL_WALL_SEA : 12,
+        TOOL_WALL_FIRE : 13,
+        TOOL_WALL_URBAN : 14,
+        TOOL_WALL_RUNWAY : 15,
+        TOOL_WALL_INDUSTRIAL : 16,
+        TOOL_NUCLEAR_POWERPLANT : 16,
+        TOOL_SUPER_INDUSTRIAL : 16,
+        TOOL_WALL_MOIST : 20,
+        TOOL_WALL_SNOW : 21,
+        TOOL_VEGETATION : 22,
+        TOOL_SKYSCRAPER : 24,
+        TOOL_ARTIFICIAL_LIGHTNING : 25,
+        TOOL_LIGHTNING_GROUND : 26,
+        TOOL_LOCAL_HEAT_DRY : 27,
+        TOOL_SAND_TERRAIN : 28,
+        TOOL_LIGHTNING_IC : 29
+      };
+
       var inputType = -1;
       if (leftMousePressed) {
-        if (guiControls.tool == 'TOOL_NONE')
-          inputType = 0; // only flashlight on
-        else if (guiControls.tool == 'TOOL_TEMPERATURE')
-          inputType = 1;
-        else if (guiControls.tool == 'TOOL_WATER')
-          inputType = 2;
-        else if (guiControls.tool == 'TOOL_SMOKE')
-          inputType = 3;
-        else if (guiControls.tool == 'TOOL_LIGHTNING_GROUND')
-          inputType = 26;
-        else if (guiControls.tool == 'TOOL_LIGHTNING_IC')
-          inputType = 29;
-        else if (guiControls.tool == 'TOOL_LOCAL_HEAT_DRY')
-          inputType = 27;
-        else if (guiControls.tool == 'TOOL_SAND_TERRAIN')
-          inputType = 28;
-        else if (guiControls.tool == 'TOOL_WIND')
-          inputType = 4;
-        else if (guiControls.tool == 'TOOL_WALL')
-          inputType = 10;
-        else if (guiControls.tool == 'TOOL_WALL_LAND')
-          inputType = 11;
-        else if (guiControls.tool == 'TOOL_WALL_SEA')
-          inputType = 12;
-        else if (guiControls.tool == 'TOOL_WALL_FIRE')
-          inputType = 13;
-        else if (guiControls.tool == 'TOOL_WALL_URBAN')
-          inputType = 14;
-        else if (guiControls.tool == 'TOOL_WALL_RUNWAY')
-          inputType = 15;
-        else if (guiControls.tool == 'TOOL_WALL_INDUSTRIAL')
-          inputType = 16;
-        else if (guiControls.tool == 'TOOL_NUCLEAR_POWERPLANT')
-          inputType = 16;
-        else if (guiControls.tool == 'TOOL_SUPER_INDUSTRIAL')
-          inputType = 16;
-        else if (guiControls.tool == 'TOOL_SKYSCRAPER')
-          inputType = 24;
-        else if (guiControls.tool == 'TOOL_LIGHTNING_ROD')
-          inputType = -1;
-        else if (guiControls.tool == 'TOOL_ARTIFICIAL_LIGHTNING')
-          inputType = 25;
-
-        // Surface environment modifiers
-        else if (guiControls.tool == 'TOOL_WALL_MOIST')
-          inputType = 20;
-        else if (guiControls.tool == 'TOOL_WALL_SNOW')
-          inputType = 21;
-        else if (guiControls.tool == 'TOOL_VEGETATION')
-          inputType = 22;
+        inputType = inputTypeByTool[guiControls.tool] ?? -1;
 
         var intensity = guiControls.brushIntensity;
         if (guiControls.tool == 'TOOL_LOCAL_HEAT_DRY')
@@ -8187,6 +8281,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.bindTexture(gl.TEXTURE_2D, wallTexture_1);
 
     guiControls.displayMode = sanitizeDisplayMode(guiControls.displayMode);
+    const shakenViewX = cam.curXpos + lightningShakeOffsetX + lightningShakeHFOffsetX;
+    const shakenViewY = cam.curYpos + lightningShakeOffsetY + lightningShakeHFOffsetY;
     if (guiControls.displayMode == 'DISP_REAL') {
 
       { //  Abient Light Calculation
@@ -8274,9 +8370,6 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
 
       updateLightningShakePhysics();
-
-      const shakenViewX = cam.curXpos + lightningShakeOffsetX + lightningShakeHFOffsetX;
-      const shakenViewY = cam.curYpos + lightningShakeOffsetY + lightningShakeHFOffsetY;
 
       // draw background
       gl.activeTexture(gl.TEXTURE8);
@@ -8563,6 +8656,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 2);
           gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 0.02);
           break;
+        case 'DISP_CLOUD_DENSITY':
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, waterTexture_1);
+          gl.uniform1i(gl.getUniformLocation(universalDisplayProgram, 'quantityIndex'), 1);
+          gl.uniform1f(gl.getUniformLocation(universalDisplayProgram, 'dispMultiplier'), 0.95);
+          break;
         case 'DISP_RADAR':
           gl.activeTexture(gl.TEXTURE0);
           gl.bindTexture(gl.TEXTURE_2D, waterTexture_1);
@@ -8596,7 +8695,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     ensureMobileFlightControls();
 
     frameNum++;
-    requestAnimationFrame(draw);
+    scheduleNextFrame();
   }
 
   //////////////////////////////////////////////////////// functions:
@@ -8888,6 +8987,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         if (guiControls.showFPS) {
           fpsCounterEl.style.display = 'block';
           const frameMs = (1000.0 / Math.max(FPS, 1)).toFixed(1);
+          smoothedFrameMs = smoothedFrameMs * 0.78 + parseFloat(frameMs) * 0.22;
           const iterPerSecond = Math.round(FPS * guiControls.IterPerFrame);
           const perfState = FPS >= 58 ? 'STABLE' : (FPS >= 42 ? 'BALANCED' : 'HEAVY');
           fpsCounterEl.textContent = `${FPS} FPS\n${frameMs} ms  |  ${iterPerSecond} it/s\n${perfState}`;
@@ -8905,6 +9005,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           const stablePhysicsFloor = Math.max(4, Math.floor((guiControls_default?.IterPerFrame ?? 10) * 0.6));
           const iterPerSecond = FPS * guiControls.IterPerFrame;
           const targetIterPerSecond = fpsTarget * Math.max(stablePhysicsFloor, 8);
+          const severeFrameTime = smoothedFrameMs > 32.0;
+          const moderateFrameTime = smoothedFrameMs > 24.0;
 
           // Keep simulation physics from crawling when rendering shaders get heavy.
           // We still auto-tune for smoothness, but never below a floor that preserves evaporation/cloud evolution speed.
@@ -8913,8 +9015,15 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
           if (FPS == fpsTarget)
             adjIterPerFrame(1, stablePhysicsFloor);
 
+          if (severeFrameTime)
+            guiControls.IterPerFrame = Math.max(stablePhysicsFloor, guiControls.IterPerFrame - 2);
+          else if (moderateFrameTime)
+            guiControls.IterPerFrame = Math.max(stablePhysicsFloor, guiControls.IterPerFrame - 1);
+
           if (iterPerSecond < targetIterPerSecond * 0.68)
             guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame + 1, stablePhysicsFloor, 50));
+
+          guiControls.IterPerFrame = Math.round(clamp(guiControls.IterPerFrame, stablePhysicsFloor, 40));
         }
       }
       // calculate total amounts of water and smoke for verification of fluid simulation

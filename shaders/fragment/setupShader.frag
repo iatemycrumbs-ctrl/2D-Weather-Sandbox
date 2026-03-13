@@ -184,6 +184,9 @@ void main()
       vegetation *= mix(1.0, 0.38, urbanSuitability);
       vegetation *= mix(1.0, 0.10, desertBasin);
       wall[VEGETATION] = int(clamp(vegetation, 0.0, 127.0));
+      // Ensure terrain starts with pre-generated vegetation coverage except in extreme desert/urban cells.
+      if (desertBasin < 0.78 && wall[VEGETATION] < 8)
+        wall[VEGETATION] = 8;
 
       if (urbanSuitability > 0.44) {
         wall[TYPE] = WALLTYPE_URBAN;

@@ -15,6 +15,7 @@ uniform vec2 texelSize;
 
 uniform float exposure;
 uniform float motionBlurStrength;
+uniform float antiAliasing;
 
 uniform sampler2D hdrTex;
 uniform sampler2D bloomTex;
@@ -22,6 +23,12 @@ out vec4 fragmentColor;
 
 
 #include "commonDisplay.glsl"
+
+float luma(vec3 c)
+{
+  return dot(c, vec3(0.299, 0.587, 0.114));
+}
+
 
 void main()
 {
@@ -36,6 +43,18 @@ void main()
   vec3 bloom = texture(bloomTex, texCoord).rgb;
 
   outputCol += bloom * 0.990; // apply bloom
+
+  if (antiAliasing > 0.5) {
+    vec3 cL = texture(hdrTex, texCoordXmY0).rgb;
+    vec3 cR = texture(hdrTex, texCoordXpY0).rgb;
+    vec3 cU = texture(hdrTex, texCoordX0Yp).rgb;
+    vec3 cD = texture(hdrTex, texCoordX0Ym).rgb;
+    float lMin = min(luma(outputCol), min(min(luma(cL), luma(cR)), min(luma(cU), luma(cD))));
+    float lMax = max(luma(outputCol), max(max(luma(cL), luma(cR)), max(luma(cU), luma(cD))));
+    float edge = smoothstep(0.04, 0.26, lMax - lMin);
+    vec3 neighborhood = (cL + cR + cU + cD + outputCol) / 5.0;
+    outputCol = mix(outputCol, neighborhood, edge * 0.55);
+  }
 
   // outputCol = outputCol / (outputCol + vec3(1.0)) * 1.1; // Tone mapping
 

@@ -59,7 +59,9 @@ void main()
     // fragmentColor = vec4(tempColorPalette[palletteIndex], 1.0);
 
 
-    int palletteIndex = int(map_range(realTempC, -37.5, 32.5, 0., 70.));
+    // Reworked scaling: extend warm/cold extremes while keeping near-freezing gradients readable.
+    float tempForScale = mix(realTempC, sign(realTempC) * pow(abs(realTempC), 1.03), 0.35);
+    int palletteIndex = int(map_range(tempForScale, -45.0, 45.0, 0., 70.));
     palletteIndex = clamp(palletteIndex, 0, 70);
     fragmentColor = texelFetch(colorScalesTex, ivec2(0, palletteIndex), 0);
 
