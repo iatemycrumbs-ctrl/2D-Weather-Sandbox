@@ -46,13 +46,19 @@ void main()
   float sparkle = pow(max(1.0 - r * 2.1, 0.0), 9.0) * mix(0.35, 1.25, iceFrac);
   float shimmer = sin((local.x - local.y) * 22.0 + totalMass * 35.0) * 0.5 + 0.5;
 
+  float hailBall = exp(-pow(r / 0.38, 2.4));
+  float hailShell = exp(-abs(r - 0.30) * 18.0);
+  float hailVisual = density_out >= 1.08 ? (hailBall * 1.05 + hailShell * 0.35) : 0.0;
+
   float opacity = clamp(totalMass * (0.09 + 0.11 * density_out), 0.05, 1.0);
-  opacity *= clamp(wakeBody * anisotropy + condensedCore * 0.92 + wakeTail * 0.40 + streakTrail * (0.20 + 0.55 * rainFrac) + haloRing * 0.22, 0.0, 1.8);
+  opacity *= clamp(mix(wakeBody * anisotropy + condensedCore * 0.92 + wakeTail * 0.40 + streakTrail * (0.20 + 0.55 * rainFrac) + haloRing * 0.22,
+                       hailVisual,
+                       density_out >= 1.08 ? 0.85 : 0.0), 0.0, 1.8);
 
   vec3 rainCol = mix(vec3(0.08, 0.34, 0.90), vec3(0.36, 0.80, 1.00), clamp(rainFrac * 1.2, 0.0, 1.0));
   vec3 snowCol = vec3(0.96, 0.98, 1.00);
   vec3 graupelCol = vec3(0.76, 0.90, 1.00);
-  vec3 hailCol = vec3(0.55, 0.80, 1.00);
+  vec3 hailCol = vec3(0.97, 0.98, 1.00);
 
   vec3 iceCol = density_out >= 1.08 ? hailCol : mix(snowCol, graupelCol, smoothstep(0.20, 1.08, density_out));
   vec3 phaseCol = mix(iceCol, rainCol, rainFrac);
@@ -62,7 +68,7 @@ void main()
   vec3 chargeTint = density_out >= 1.0 ? vec3(0.08, 0.18, 0.30) : vec3(0.14, 0.06, 0.04);
   phaseCol += chargeTint * clamp(iceFrac * 0.32, 0.0, 0.26);
   phaseCol += vec3(0.35, 0.40, 0.48) * sparkle;
-  phaseCol += vec3(0.18, 0.24, 0.33) * wakeTail * (0.35 + 0.65 * rainFrac);
+  phaseCol += vec3(0.18, 0.24, 0.33) * wakeTail * (0.15 + 0.45 * rainFrac);
   phaseCol += vec3(0.12, 0.18, 0.27) * streakTrail * rainFrac;
 
   fragmentColor = vec4(clamp(phaseCol, 0.0, 1.0), clamp(opacity, 0.0, 1.0));

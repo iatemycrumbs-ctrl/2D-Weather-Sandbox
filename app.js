@@ -520,7 +520,7 @@ const guiControls_default = {
   cloudLayerComplexity : 1.0,
   precipitationEffectMult : 1.0,
   lightningGroundBias : 1.0,
-  lightningBloomStrength : 1.0,
+  lightningBloomStrength : 1.35,
   stormOrganization : 1.0,
   aerosolLoad : 1.0,
   entrainmentRate : 1.0,
@@ -629,6 +629,9 @@ var lightningShakeBurstTimerFrames = 0;
 var pendingLightningShakeEvents = [];
 var smoothedFrameMs = 16.7;
 var lastDrawStartMs = 0.0;
+var lightningChargeOverlayEl = null;
+var lightningChargeOverlayHideAt = 0;
+var prevLightningToolPressed = false;
 var uiAudioCtx = null;
 var lastUiBeepAtMs = 0;
 
@@ -825,6 +828,43 @@ let emittedLightFBO;
 
 
 function clamp(num, min, max) { return Math.min(Math.max(num, min), max); }
+
+function showLightningChargeOverlay(toolName = 'Lightning')
+{
+  if (!document || !document.body)
+    return;
+
+  if (!lightningChargeOverlayEl) {
+    lightningChargeOverlayEl = document.createElement('div');
+    lightningChargeOverlayEl.style.position = 'fixed';
+    lightningChargeOverlayEl.style.left = '50%';
+    lightningChargeOverlayEl.style.top = '18%';
+    lightningChargeOverlayEl.style.transform = 'translateX(-50%)';
+    lightningChargeOverlayEl.style.padding = '10px 14px';
+    lightningChargeOverlayEl.style.borderRadius = '10px';
+    lightningChargeOverlayEl.style.border = '1px solid rgba(120,190,255,0.75)';
+    lightningChargeOverlayEl.style.background = 'rgba(4,12,28,0.78)';
+    lightningChargeOverlayEl.style.color = '#d9eeff';
+    lightningChargeOverlayEl.style.fontFamily = 'monospace';
+    lightningChargeOverlayEl.style.fontSize = '13px';
+    lightningChargeOverlayEl.style.zIndex = '9998';
+    lightningChargeOverlayEl.style.cursor = 'pointer';
+    lightningChargeOverlayEl.addEventListener('click', () => {
+      lightningChargeOverlayHideAt = 0;
+      lightningChargeOverlayEl.style.display = 'none';
+    });
+    document.body.appendChild(lightningChargeOverlayEl);
+  }
+
+  const frameMs = smoothedFrameMs.toFixed(1);
+  const iterPerSecond = Math.round((FPS || 0) * (guiControls?.IterPerFrame || 0));
+  const timestamp = new Date().toLocaleTimeString();
+  lightningChargeOverlayEl.innerText = `⚡ ${toolName} CHARGING
+${timestamp}  |  ${frameMs} ms
+${iterPerSecond} it/s`; 
+  lightningChargeOverlayEl.style.display = 'block';
+  lightningChargeOverlayHideAt = performance.now() + 3000;
+}
 
 function screenToSimX(screenX)
 {
@@ -7922,12 +7962,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         TOOL_WALL_URBAN : 14,
         TOOL_WALL_RUNWAY : 15,
         TOOL_WALL_INDUSTRIAL : 16,
-        TOOL_NUCLEAR_POWERPLANT : 16,
-        TOOL_SUPER_INDUSTRIAL : 16,
+        TOOL_NUCLEAR_POWERPLANT : 30,
+        TOOL_SUPER_INDUSTRIAL : 31,
         TOOL_WALL_MOIST : 20,
         TOOL_WALL_SNOW : 21,
         TOOL_VEGETATION : 22,
-        TOOL_SKYSCRAPER : 24,
+        TOOL_SKYSCRAPER : 32,
         TOOL_ARTIFICIAL_LIGHTNING : 25,
         TOOL_LIGHTNING_GROUND : 26,
         TOOL_LOCAL_HEAT_DRY : 27,
@@ -7974,6 +8014,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.useProgram(advectionProgram);
       }
       gl.uniform1i(gl.getUniformLocation(advectionProgram, 'userInputType'), inputType);
+
+      const lightningToolActive = leftMousePressed && (guiControls.tool == 'TOOL_ARTIFICIAL_LIGHTNING' || guiControls.tool == 'TOOL_LIGHTNING_GROUND' || guiControls.tool == 'TOOL_LIGHTNING_IC');
+      if (lightningToolActive && !prevLightningToolPressed)
+        showLightningChargeOverlay(guiControls.tool == 'TOOL_ARTIFICIAL_LIGHTNING' ? 'Generator' : (guiControls.tool == 'TOOL_LIGHTNING_IC' ? 'IC Strike' : 'CG Strike'));
+      prevLightningToolPressed = lightningToolActive;
 
       if (!leftMousePressed) {
         gl.useProgram(precipitationProgram);
@@ -8308,6 +8353,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     if (airplaneMode) {
       airplane.display();
     }
+
+    if (lightningChargeOverlayEl && lightningChargeOverlayHideAt > 0 && performance.now() > lightningChargeOverlayHideAt)
+      lightningChargeOverlayEl.style.display = "none";
 
     // render to canvas
     gl.useProgram(realisticDisplayProgram);

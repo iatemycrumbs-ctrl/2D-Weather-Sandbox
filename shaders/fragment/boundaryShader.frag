@@ -456,9 +456,10 @@ void main()
         if (wall[TYPE] == WALLTYPE_FIRE) {            // extra check to make sure it's not urban
           float fireIntensity = calcFireIntensity(wall[VEGETATION], water[SOIL_MOISTURE], waterX0Yp[PRECIPITATION]);
 
-          // direct rain-out extinguishes active fire quickly
-          if (waterX0Yp[PRECIPITATION] > 0.08 || precipDeposition[RAIN_DEPOSITION] > 0.04) {
+          // direct rain/snow-out extinguishes active fire quickly
+          if (waterX0Yp[PRECIPITATION] > 0.055 || precipDeposition[RAIN_DEPOSITION] > 0.028 || precipDeposition[SNOW_DEPOSITION] > 0.02) {
             wall[TYPE] = WALLTYPE_LAND;
+            water[SOIL_MOISTURE] = min(water[SOIL_MOISTURE] + 2.0, 60.0);
             water[SMOKE] *= 0.70;
           } else if (fireIntensity < minimalFireIntensity) { // fire goes out
             wall[TYPE] = WALLTYPE_LAND;                      // turn off fire
@@ -605,7 +606,9 @@ void main()
             float thermalFactor = map_rangeC(lightningTemp, 9000.0, 32000.0, 0.75, 1.30);
             float ignitionChance = clamp(map_rangeC(lightningData[INTENSITY], 0.05, 4.5, 0.16, 0.98) * treeFuelFactor * thermalFactor * (1.0 - wetnessPenalty) * lightningFireIgnitionBoost, 0.0, 1.0);
 
-            if (strikeDistanceCells <= strikeRadiusCells && random2d(vec2(iterNum * 0.97, fragCoord.x + fragCoord.y * 7.0)) < ignitionChance) {
+            float nearVegetationRadius = strikeRadiusCells * 2.1;
+            bool inNearbyVegetation = strikeDistanceCells > 0.45 && strikeDistanceCells <= nearVegetationRadius;
+            if (inNearbyVegetation && random2d(vec2(iterNum * 0.97, fragCoord.x + fragCoord.y * 7.0)) < ignitionChance) {
               wall[TYPE] = WALLTYPE_FIRE;
             }
 

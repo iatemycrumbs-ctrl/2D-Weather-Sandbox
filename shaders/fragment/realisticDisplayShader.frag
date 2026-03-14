@@ -422,7 +422,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   vec3 lightningCol = mix(channelCoreCol, channelRimCol, ionizedEdge * 0.72 + 0.18);
 
   float filamentGlow = pow(pixVal, 1.38);
-  vec3 rebuiltLightning = (pixVal * 0.76 + filamentGlow * 0.68) * lightningCol * 1320.0;
+  vec3 rebuiltLightning = (pixVal * 0.76 + filamentGlow * 0.68) * lightningCol * (1320.0 * (1.0 + lightningBloomStrength * 0.55));
   return min(max(rebuiltLightning, vec3(0.0)), vec3(5000.0));
 }
 
@@ -594,6 +594,7 @@ vec4 getAirColor(vec2 fragCoordIn)
   vec2 dist = vec2(lightningPos.x - texCoord.x, max((abs(lightningPos.y / 2. - texCoord.y) - 0.1), 0.));
   dist.x *= aspectRatios[0];
   float lightningOnLight = lightningOnLightBrightness / (pow(length(dist), 2.) + 0.03);
+  lightningOnLight *= (1.0 + lightningBloomStrength * 0.45);
   lightningOnLight *= abs(currentLightningIntensity) * (1.0 + lightningBloomStrength * 0.32);
 
   // Electric field / dynamic charge-separation visualization

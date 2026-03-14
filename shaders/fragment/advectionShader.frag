@@ -373,6 +373,29 @@ void main()
           if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_RUNWAY) &&
               texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) { // if land wall and no wall above
             wall[TYPE] = WALLTYPE_INDUSTRIAL;
+            wall[VEGETATION] = max(wall[VEGETATION], 12); // regular industrial marker
+          }
+          break;
+
+        case 30: // nuclear powerplant
+          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_RUNWAY) &&
+              texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) {
+            wall[TYPE] = WALLTYPE_INDUSTRIAL;
+            wall[VEGETATION] = 2; // marker for nuclear
+          }
+          break;
+        case 31: // super industrial complex
+          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_RUNWAY) &&
+              texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) {
+            wall[TYPE] = WALLTYPE_INDUSTRIAL;
+            wall[VEGETATION] = 6; // marker for super industrial
+          }
+          break;
+        case 32: // dedicated skyscraper district
+          if (wall[DISTANCE] == 0 && (wall[TYPE] == WALLTYPE_LAND || wall[TYPE] == WALLTYPE_URBAN || wall[TYPE] == WALLTYPE_RUNWAY || wall[TYPE] == WALLTYPE_INDUSTRIAL) &&
+              texture(wallTex, texCoordX0Yp)[DISTANCE] != 0) {
+            wall[TYPE] = WALLTYPE_INDUSTRIAL;
+            wall[VEGETATION] = 9; // marker for skyscraper
           }
           break;
 
