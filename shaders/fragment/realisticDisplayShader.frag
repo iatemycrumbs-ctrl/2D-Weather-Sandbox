@@ -74,6 +74,7 @@ uniform float iterNum;
 uniform float lightningAnimIter;
 uniform float lightningTexturePhase;
 uniform int lightningShapeMode;
+uniform float lightningSegmentSmoothness;
 
 out vec4 fragmentColor;
 
@@ -262,7 +263,7 @@ vec2 remapCGLightningUV(vec2 baseCoord, vec2 pos, float scaleMult)
   float t4 = smoothstep(0.75, 1.00, verticalTravel);
   float segmentedOffset = seg1 * (1.0 - t1) + mix(seg1, seg2, t2) * (1.0 - t3) + mix(seg2, seg3, t3) * (1.0 - t4) + mix(seg3, seg4, t4);
 
-  float leaderJitter = (random2d(vec2(verticalTravel * 47.0 + pos.x * 9.0, pos.y * 13.0)) - 0.5) * (0.004 + (1.0 - verticalTravel) * 0.005);
+  float leaderJitter = (random2d(vec2(verticalTravel * 47.0 + pos.x * 9.0, pos.y * 13.0)) - 0.5) * mix(0.0006, (0.004 + (1.0 - verticalTravel) * 0.005), 1.0 - lightningSegmentSmoothness);
   float leaderLean = sign(wrappedDx + 0.0001) * wrappedDx * wrappedDx * 0.07;
   uv.x = 0.5 + (wrappedDx + segmentedOffset + leaderJitter + leaderLean) * scaleMult * aspectRatios[0] / lightningTexAspect * 0.72;
   uv.y = verticalTravel * 1.26;
@@ -317,7 +318,7 @@ float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool i
     float dirSign = random2d(pos * (31.4 + fi * 0.8) + vec2(8.2 + fi * 0.4, 4.5)) > 0.5 ? 1.0 : -1.0;
     float localT = clamp((along - spawn) / max(branchLen, 0.001), 0.0, 1.0);
     float branchSpread = dirSign * localT * (isIC ? 0.15 : 0.18) * shapeWarp;
-    float branchJitter = sin(localT * (17.0 + fi * 3.5) + seedA * 11.0 + lightningTime * 6.0) * 0.014 * shapeWarp;
+    float branchJitter = sin(localT * (17.0 + fi * 3.5) + seedA * 11.0 + lightningTime * 6.0) * mix(0.003, 0.014, 1.0 - lightningSegmentSmoothness) * shapeWarp;
     float branchCenter = trunkCenter + branchSpread + branchJitter;
     float branchWidth = mix(0.007, 0.0035, localT) * mix(1.0, 0.84, shapeWarp - 0.8);
 
@@ -325,7 +326,7 @@ float proceduralLightningSkeleton(vec2 uv, vec2 pos, float lightningTime, bool i
     branchField = max(branchField, branch * branchMask);
   }
 
-  float leaderPulse = 0.92 + 0.08 * sin(along * 23.0 - lightningTime * 8.0 + seedB * 6.2831);
+  float leaderPulse = 0.95 + 0.05 * sin(along * 23.0 - lightningTime * 8.0 + seedB * 6.2831);
   float continuity = isIC ? (0.86 + 0.14 * sin(along * 22.0 + lightningTime * 3.6 + seedC * 6.2831)) : 1.0;
 
   float skeleton = max(trunk, branchField * 0.95);
@@ -395,7 +396,7 @@ vec3 displayLightning(vec2 pos, float lightningTime, float currentLightningInten
   sampledLightning = max(sampledLightning, diag * 0.58);
 
   float proceduralSkeleton = proceduralLightningSkeleton(lightningTexCoord, pos, lightningTime, strikeTypeSign < 0.0);
-  float pixVal = max(sampledLightning * 0.78, proceduralSkeleton);
+  float pixVal = max(mix(sampledLightning * 0.95, sampledLightning * 0.78, 1.0 - lightningSegmentSmoothness), mix(sampledLightning, proceduralSkeleton, 0.70 - lightningSegmentSmoothness * 0.28));
 
   // Keep IC in cloud and CG mostly below source cloud.
   if (strikeTypeSign < 0.0) {

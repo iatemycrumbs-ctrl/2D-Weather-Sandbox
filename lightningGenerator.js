@@ -70,9 +70,24 @@ function generateLightningLuminance(width, height, seed)
   }
 
   bridgeSparseGaps(out, width, height);
+  softenLightningGrain(out, width, height);
   keepConnectedToTrunk(out, width, height, trunk);
 
   return out;
+}
+
+function softenLightningGrain(data, width, height)
+{
+  const src = data.slice();
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x;
+      if (src[idx] < 8)
+        continue;
+      const avg = (src[idx] * 4 + src[idx - 1] + src[idx + 1] + src[idx - width] + src[idx + width]) / 8;
+      data[idx] = Math.max(data[idx], Math.floor(avg));
+    }
+  }
 }
 
 function drawBranch(out, width, height, startX, startY, heading, budget, baseLum, rand)

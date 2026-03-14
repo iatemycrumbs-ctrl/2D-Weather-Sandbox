@@ -19,6 +19,7 @@ uniform sampler2D lightTex;
 uniform sampler2D precipFeedbackTex;
 uniform sampler2D precipDepositionTex;
 uniform sampler2D lightningDataTex;
+uniform float lightningFireIgnitionBoost;
 
 uniform float dryLapse;
 uniform float evapHeat;
@@ -602,7 +603,7 @@ void main()
             float wetnessPenalty = clamp((water[SOIL_MOISTURE] - 6.0) * 0.03 + water[SNOW] * 0.15 + waterAboveSurface[PRECIPITATION] * 0.20, 0.0, 0.97);
             float treeFuelFactor = map_rangeC(float(wall[VEGETATION]), float(minimalFireVegetation), 127.0, 0.35, 1.0);
             float thermalFactor = map_rangeC(lightningTemp, 9000.0, 32000.0, 0.75, 1.30);
-            float ignitionChance = clamp(map_rangeC(lightningData[INTENSITY], 0.05, 4.5, 0.16, 0.98) * treeFuelFactor * thermalFactor * (1.0 - wetnessPenalty), 0.0, 1.0);
+            float ignitionChance = clamp(map_rangeC(lightningData[INTENSITY], 0.05, 4.5, 0.16, 0.98) * treeFuelFactor * thermalFactor * (1.0 - wetnessPenalty) * lightningFireIgnitionBoost, 0.0, 1.0);
 
             if (strikeDistanceCells <= strikeRadiusCells && random2d(vec2(iterNum * 0.97, fragCoord.x + fragCoord.y * 7.0)) < ignitionChance) {
               wall[TYPE] = WALLTYPE_FIRE;
@@ -612,7 +613,7 @@ void main()
             float explosionRadiusCells = strikeRadiusCells * 1.55;
             if (strikeDistanceCells <= explosionRadiusCells) {
               float blast = 1.0 - strikeDistanceCells / max(explosionRadiusCells, 0.001);
-              base[TEMPERATURE] += blast * lightningData[INTENSITY] * 0.004;
+              base[TEMPERATURE] += blast * lightningData[INTENSITY] * 0.004 * lightningFireIgnitionBoost;
               water[SMOKE] += blast * 0.22;
 
               if (wall[TYPE] == WALLTYPE_LAND && wall[VEGETATION] > 28 && random2d(vec2(iterNum * 0.41, fragCoord.x * 0.31 + fragCoord.y * 0.27)) < blast * 0.45)

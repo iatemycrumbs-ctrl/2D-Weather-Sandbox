@@ -87,6 +87,7 @@ uniform float lightningRodRadiusNorm;
 uniform vec2 airplanePosNorm;
 uniform float airplaneLightningAttractor;
 uniform float lightningCloudLinkRadiusNorm;
+uniform float precipitationTemperatureOffsetC;
 
 #include "common.glsl"
 
@@ -474,7 +475,7 @@ void main()
     water = texture(waterTex, texCoord);
 
     // check if position is okay to spawn
-    realTemp = potentialToRealT(base[TEMPERATURE]); // in Kelvin
+    realTemp = potentialToRealT(base[TEMPERATURE]) + precipitationTemperatureOffsetC; // in Kelvin (offset in °C equals K delta)
 
     float threshold = (realTemp > CtoK(0.0) ? aboveZeroThreshold : subZeroThreshold) * drizzleThresholdShift * map_rangeC(kesslerAutoconversion, 0.3, 2.5, 1.22, 0.72);
 
@@ -657,7 +658,7 @@ void main()
                       dropPosition.y / 2. + 0.5); // convert position (-1 to 1) to texture coordinate (0 to 1)
       water = texture(waterTex, texCoord);
       base = texture(baseTex, texCoord);
-      realTemp = potentialToRealT(base[TEMPERATURE]); // in Kelvin
+      realTemp = potentialToRealT(base[TEMPERATURE]) + precipitationTemperatureOffsetC; // in Kelvin (offset in °C equals K delta)
     }
 
     float totalMass = newMass[WATER] + newMass[ICE];
