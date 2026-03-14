@@ -13,6 +13,7 @@ uniform float heightMult;
 uniform float terrainRuggednessBoost;
 uniform float terrainWetnessRecovery;
 uniform float terrainRiverBias;
+uniform float terrainVegetationBoost;
 
 uniform vec4 initial_Tv[126];
 
@@ -182,6 +183,7 @@ void main()
       float vegetation = 14.0 + fertileBand * 108.0 - slopeProbe * 46.0;
       vegetation += (noise2(vec2(x * 2.4 + seedB, seedA * 0.43)) - 0.5) * 28.0;
       vegetation *= mix(1.0, 0.38, urbanSuitability);
+      vegetation *= terrainVegetationBoost;
       vegetation *= mix(1.0, 0.10, desertBasin);
       wall[VEGETATION] = int(clamp(vegetation, 0.0, 127.0));
       // Ensure terrain starts with pre-generated vegetation coverage except in extreme desert/urban cells.

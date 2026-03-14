@@ -20,6 +20,8 @@ uniform sampler2D precipFeedbackTex;
 uniform sampler2D precipDepositionTex;
 uniform sampler2D lightningDataTex;
 uniform float lightningFireIgnitionBoost;
+uniform float shadowCoolingStrength;
+uniform float lightningNearbyIgnitionRadiusMult;
 
 uniform float dryLapse;
 uniform float evapHeat;
@@ -495,6 +497,10 @@ void main()
 
         float realTempAboveSurface = potentialToRealT(baseAboveSurface[TEMPERATURE], texCoordX0Yp.y);
 
+        float shadowFactor = clamp(1.0 - max(lightAboveSurface[SUNLIGHT], 0.0), 0.0, 1.0);
+        float terrainShadowCooling = shadowFactor * 0.000020 * shadowCoolingStrength;
+        base[TEMPERATURE] -= terrainShadowCooling;
+
         float evaporation = calcEvaporation(realTempAboveSurface, waterAboveSurface[TOTAL], float(wall[VEGETATION]), water[SOIL_MOISTURE]) * 0.08;
 
         water[SOIL_MOISTURE] -= evaporation;
@@ -606,7 +612,7 @@ void main()
             float thermalFactor = map_rangeC(lightningTemp, 9000.0, 32000.0, 0.75, 1.30);
             float ignitionChance = clamp(map_rangeC(lightningData[INTENSITY], 0.05, 4.5, 0.16, 0.98) * treeFuelFactor * thermalFactor * (1.0 - wetnessPenalty) * lightningFireIgnitionBoost, 0.0, 1.0);
 
-            float nearVegetationRadius = strikeRadiusCells * 2.1;
+            float nearVegetationRadius = strikeRadiusCells * 2.1 * max(lightningNearbyIgnitionRadiusMult, 0.2);
             bool inNearbyVegetation = strikeDistanceCells > 0.45 && strikeDistanceCells <= nearVegetationRadius;
             if (inNearbyVegetation && random2d(vec2(iterNum * 0.97, fragCoord.x + fragCoord.y * 7.0)) < ignitionChance) {
               wall[TYPE] = WALLTYPE_FIRE;

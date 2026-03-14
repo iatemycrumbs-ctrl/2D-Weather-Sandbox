@@ -7,6 +7,8 @@ in float density_out;
 
 out vec4 fragmentColor;
 
+uniform float precipVisualQuality;
+
 // Precipitation mass:
 #define WATER 0
 #define ICE 1
@@ -28,6 +30,7 @@ void main()
   */
 
   float totalMass = mass_out[WATER] + mass_out[ICE];
+  float quality = clamp(precipVisualQuality, 0.35, 1.0);
   vec2 local = gl_PointCoord - vec2(0.5);
   float r = length(local);
 
@@ -35,23 +38,23 @@ void main()
   float wakeBody = max(1.0 - abs(local.x) * 2.6, 0.0) * max(1.0 - abs(local.y) * 1.2, 0.0);
   float streakTrail = exp(-max(local.y + 0.34, 0.0) * 11.5) * max(1.0 - abs(local.x) * 5.0, 0.0);
   float condensedCore = exp(-r * r * 12.0);
-  float haloRing = exp(-abs(r - 0.32) * 14.0);
-  float wakeTail = exp(-max(local.y + 0.22, 0.0) * 7.5) * max(1.0 - abs(local.x) * 3.1, 0.0);
+  float haloRing = exp(-abs(r - 0.32) * mix(8.0, 14.0, quality));
+  float wakeTail = exp(-max(local.y + 0.22, 0.0) * mix(4.0, 7.5, quality)) * max(1.0 - abs(local.x) * 3.1, 0.0);
 
   float iceFrac = mass_out[ICE] / max(totalMass, 0.0001);
   float rainFrac = mass_out[WATER] / max(totalMass, 0.0001);
 
   float terminalSpeedHint = mix(0.50, 1.45, clamp(density_out, 0.0, 1.6));
   float anisotropy = mix(0.65, 1.72, rainFrac * terminalSpeedHint);
-  float sparkle = pow(max(1.0 - r * 2.1, 0.0), 9.0) * mix(0.35, 1.25, iceFrac);
-  float shimmer = sin((local.x - local.y) * 22.0 + totalMass * 35.0) * 0.5 + 0.5;
+  float sparkle = pow(max(1.0 - r * 2.1, 0.0), mix(5.0, 9.0, quality)) * mix(0.2, 1.25, iceFrac) * quality;
+  float shimmer = (sin((local.x - local.y) * mix(8.0, 22.0, quality) + totalMass * 35.0) * 0.5 + 0.5) * quality;
 
   float hailBall = exp(-pow(r / 0.38, 2.4));
   float hailShell = exp(-abs(r - 0.30) * 18.0);
   float hailVisual = density_out >= 1.08 ? (hailBall * 1.05 + hailShell * 0.35) : 0.0;
 
   float opacity = clamp(totalMass * (0.09 + 0.11 * density_out), 0.05, 1.0);
-  opacity *= clamp(mix(wakeBody * anisotropy + condensedCore * 0.92 + wakeTail * 0.40 + streakTrail * (0.20 + 0.55 * rainFrac) + haloRing * 0.22,
+  opacity *= clamp(mix(wakeBody * anisotropy + condensedCore * mix(0.45, 0.92, quality) + wakeTail * 0.40 + streakTrail * (0.20 + 0.55 * rainFrac) + haloRing * 0.22 * quality,
                        hailVisual,
                        density_out >= 1.08 ? 0.85 : 0.0), 0.0, 1.8);
 
@@ -66,10 +69,10 @@ void main()
 
   // Electrification tint and spectral sparkle for visualized microphysics.
   vec3 chargeTint = density_out >= 1.0 ? vec3(0.08, 0.18, 0.30) : vec3(0.14, 0.06, 0.04);
-  phaseCol += chargeTint * clamp(iceFrac * 0.32, 0.0, 0.26);
+  phaseCol += chargeTint * clamp(iceFrac * 0.32, 0.0, 0.26) * quality;
   phaseCol += vec3(0.35, 0.40, 0.48) * sparkle;
-  phaseCol += vec3(0.18, 0.24, 0.33) * wakeTail * (0.15 + 0.45 * rainFrac);
-  phaseCol += vec3(0.12, 0.18, 0.27) * streakTrail * rainFrac;
+  phaseCol += vec3(0.18, 0.24, 0.33) * wakeTail * (0.15 + 0.45 * rainFrac) * quality;
+  phaseCol += vec3(0.12, 0.18, 0.27) * streakTrail * rainFrac * quality;
 
   fragmentColor = vec4(clamp(phaseCol, 0.0, 1.0), clamp(opacity, 0.0, 1.0));
 
