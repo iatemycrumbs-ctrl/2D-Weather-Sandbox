@@ -558,6 +558,16 @@ const guiControls_default = {
   showFPS : true,
   maxFPS : 0,
   antiAliasing : true,
+  bloomIntensity : 1.0,
+  bloomQuality : 1.0,
+  postContrast : 1.0,
+  postSaturation : 1.0,
+  postVignette : 0.08,
+  postSharpen : 0.18,
+  autoExposure : false,
+  nightExposureBoost : 1.0,
+  dynamicResolution : true,
+  dynamicResolutionMinScale : 0.7,
   showWeatherBalloons : true,
   balloonRiseRate : 0.22,
   balloonDriftMult : 1.0,
@@ -1234,7 +1244,9 @@ function createBloomFBOs()
 {
   let res = new Vec2D(canvas.width, canvas.height);
   const cores = navigator.hardwareConcurrency || 4;
-  const maxBloomLevels = isMobileLikeDevice() ? 5 : (cores <= 4 ? 6 : 8);
+  const baseBloomLevels = isMobileLikeDevice() ? 5 : (cores <= 4 ? 6 : 8);
+  const bloomQuality = clamp(guiControls?.bloomQuality ?? 1.0, 0.4, 1.5);
+  const maxBloomLevels = Math.max(3, Math.round(baseBloomLevels * bloomQuality));
 
   bloomFBOs.length = 0;           // empty array
   for (let i = 0; i < maxBloomLevels; i++) { // capped bloom iterations for performance
@@ -4213,12 +4225,23 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   if (!canvas)
     throw ' Error: mainCanvas element not found';
 
+  function getEffectiveRenderScale()
+  {
+    const baseScale = clamp(guiControls?.renderScale ?? 1.0, 0.5, 1.5);
+    if (!guiControls?.dynamicResolution)
+      return baseScale;
+
+    const minScale = clamp(guiControls?.dynamicResolutionMinScale ?? 0.7, 0.5, 1.0);
+    const pressure = clamp((smoothedFrameMs - 18.0) / 18.0, 0.0, 1.0);
+    return baseScale * (1.0 - pressure * (1.0 - minScale));
+  }
+
   function resizeCanvasAndPostFx()
   {
     const viewport = window.visualViewport;
     const viewportWidth = viewport ? viewport.width : window.innerWidth;
     const viewportHeight = viewport ? viewport.height : window.innerHeight;
-    const scale = clamp(guiControls?.renderScale ?? 1.0, 0.5, 1.5);
+    const scale = getEffectiveRenderScale();
     const pixelRatio = getEffectivePixelRatio();
     canvas.width = Math.max(1, Math.floor(viewportWidth * scale * pixelRatio));
     canvas.height = Math.max(1, Math.floor(viewportHeight * scale * pixelRatio));
@@ -4418,6 +4441,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.radiationHaze);
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'bloomIntensity'), guiControls.bloomIntensity);
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postContrast'), guiControls.postContrast);
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postSaturation'), guiControls.postSaturation);
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postVignette'), guiControls.postVignette);
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postSharpen'), guiControls.postSharpen);
     updateLightningRodUniforms();
   }
 
@@ -4485,21 +4513,29 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         guiControls.lightningBloomStrength = 0.70;
         guiControls.precipitationShaftStrength = 0.85;
         guiControls.ambientScattering = 0.80;
+        guiControls.bloomQuality = 0.70;
+        guiControls.dynamicResolution = true;
       } else if (preset == 'Medium') {
         guiControls.renderScale = 0.90;
         guiControls.lightningBloomStrength = 0.90;
         guiControls.precipitationShaftStrength = 1.0;
         guiControls.ambientScattering = 0.92;
+        guiControls.bloomQuality = 0.90;
+        guiControls.dynamicResolution = true;
       } else if (preset == 'High') {
         guiControls.renderScale = 1.0;
         guiControls.lightningBloomStrength = 1.0;
         guiControls.precipitationShaftStrength = 1.0;
         guiControls.ambientScattering = 1.0;
+        guiControls.bloomQuality = 1.0;
+        guiControls.dynamicResolution = true;
       } else {
         guiControls.renderScale = 1.15;
         guiControls.lightningBloomStrength = 1.15;
         guiControls.precipitationShaftStrength = 1.15;
         guiControls.ambientScattering = 1.10;
+        guiControls.bloomQuality = 1.25;
+        guiControls.dynamicResolution = false;
       }
     }
 
@@ -5550,6 +5586,12 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
       gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
+      gl.useProgram(postProcessingProgram);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'bloomIntensity'), guiControls.bloomIntensity);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postContrast'), guiControls.postContrast);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postSaturation'), guiControls.postSaturation);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postVignette'), guiControls.postVignette);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postSharpen'), guiControls.postSharpen);
       resizeCanvasAndPostFx();
     });
     graphicsQuality_folder.add(guiControls, 'renderScale', 0.5, 1.5, 0.01).name('Render Scale').onChange(function() {
@@ -5561,6 +5603,38 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     graphicsQuality_folder.add(guiControls, 'simulationProfile', ['Calm', 'Balanced', 'Dynamic', 'Extreme']).name('Simulation Profile').onChange(function() {
       applySimulationProfile(guiControls.simulationProfile);
     });
+
+    graphicsQuality_folder.add(guiControls, 'dynamicResolution').name('Dynamic Resolution').onChange(function() {
+      resizeCanvasAndPostFx();
+    });
+    graphicsQuality_folder.add(guiControls, 'dynamicResolutionMinScale', 0.5, 1.0, 0.01).name('Dynamic Res Min Scale').onChange(function() {
+      resizeCanvasAndPostFx();
+    });
+    graphicsQuality_folder.add(guiControls, 'bloomQuality', 0.4, 1.5, 0.01).name('Bloom Quality').onChange(function() {
+      createBloomFBOs();
+    });
+    graphicsQuality_folder.add(guiControls, 'bloomIntensity', 0.2, 2.5, 0.01).name('Bloom Intensity').onChange(function() {
+      gl.useProgram(postProcessingProgram);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'bloomIntensity'), guiControls.bloomIntensity);
+    });
+    graphicsQuality_folder.add(guiControls, 'postContrast', 0.6, 1.8, 0.01).name('Post Contrast').onChange(function() {
+      gl.useProgram(postProcessingProgram);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postContrast'), guiControls.postContrast);
+    });
+    graphicsQuality_folder.add(guiControls, 'postSaturation', 0.3, 1.8, 0.01).name('Post Saturation').onChange(function() {
+      gl.useProgram(postProcessingProgram);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postSaturation'), guiControls.postSaturation);
+    });
+    graphicsQuality_folder.add(guiControls, 'postVignette', 0.0, 0.45, 0.01).name('Post Vignette').onChange(function() {
+      gl.useProgram(postProcessingProgram);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postVignette'), guiControls.postVignette);
+    });
+    graphicsQuality_folder.add(guiControls, 'postSharpen', 0.0, 1.0, 0.01).name('Post Sharpen').onChange(function() {
+      gl.useProgram(postProcessingProgram);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postSharpen'), guiControls.postSharpen);
+    });
+    graphicsQuality_folder.add(guiControls, 'autoExposure').name('Auto Exposure');
+    graphicsQuality_folder.add(guiControls, 'nightExposureBoost', 0.5, 2.0, 0.01).name('Night Exposure Boost');
 
     runtimeDeviceInfo = {
       summary : getDeviceInfoSummary(),
@@ -5822,6 +5896,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'radiationHaze'), guiControls.radiationHaze);
     gl.useProgram(postProcessingProgram);
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'bloomIntensity'), guiControls.bloomIntensity);
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postContrast'), guiControls.postContrast);
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postSaturation'), guiControls.postSaturation);
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postVignette'), guiControls.postVignette);
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postSharpen'), guiControls.postSharpen);
     datGui.show(); // unhide
 
     clockEl = document.createElement('div');
@@ -7833,6 +7912,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
   gl.uniform1i(gl.getUniformLocation(postProcessingProgram, 'bloomTex'), 1);
   gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'motionBlurStrength'), 0.0);
   gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'antiAliasing'), guiControls.antiAliasing ? 1.0 : 0.0);
+  gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'bloomIntensity'), guiControls.bloomIntensity);
+  gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postContrast'), guiControls.postContrast);
+  gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postSaturation'), guiControls.postSaturation);
+  gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postVignette'), guiControls.postVignette);
+  gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'postSharpen'), guiControls.postSharpen);
 
 
   gl.useProgram(isolateBrightPartsProgram);
@@ -8341,11 +8425,13 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
 
     gl.useProgram(postProcessingProgram);
 
+    const autoExposureBoost = guiControls.autoExposure ? clamp(map_rangeC(smoothedFrameMs, 12.0, 40.0, 1.08, 0.88), 0.82, 1.16) : 1.0;
+    const nightBoost = (!sunIsUp) ? guiControls.nightExposureBoost : 1.0;
     if (cursorType != 0 && !sunIsUp) {
       // working at night
-      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), 2.0);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), 2.0 * nightBoost * autoExposureBoost);
     } else {
-      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure);
+      gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure * nightBoost * autoExposureBoost);
     }
     gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'motionBlurStrength'), clamp(guiControls.lightningMotionBlur + lightningShakeHFAmplitude * 18.0, 0.0, 1.0));
 
@@ -8668,7 +8754,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
             precipQuality *= 0.78;
         }
         gl.uniform1f(gl.getUniformLocation(precipDisplayProgram, 'precipVisualQuality'), precipQuality);
-        const drawDroplets = Math.max(Math.floor(NUM_DROPLETS * mix(0.50, 1.0, precipQuality)), 6000);
+        const dropletScale = 0.50 + (1.0 - 0.50) * precipQuality;
+        const drawDroplets = Math.max(Math.floor(NUM_DROPLETS * dropletScale), 6000);
         gl.bindVertexArray(destVAO);
         gl.drawArrays(gl.POINTS, 0, drawDroplets);
         gl.bindVertexArray(fluidVao); // set screenfilling rect again

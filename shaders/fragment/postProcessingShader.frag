@@ -16,6 +16,11 @@ uniform vec2 texelSize;
 uniform float exposure;
 uniform float motionBlurStrength;
 uniform float antiAliasing;
+uniform float bloomIntensity;
+uniform float postContrast;
+uniform float postSaturation;
+uniform float postVignette;
+uniform float postSharpen;
 
 uniform sampler2D hdrTex;
 uniform sampler2D bloomTex;
@@ -34,6 +39,15 @@ void main()
 {
   vec3 outputCol = texture(hdrTex, texCoord).rgb;
 
+  if (postSharpen > 0.001) {
+    vec3 cL = texture(hdrTex, texCoordXmY0).rgb;
+    vec3 cR = texture(hdrTex, texCoordXpY0).rgb;
+    vec3 cU = texture(hdrTex, texCoordX0Yp).rgb;
+    vec3 cD = texture(hdrTex, texCoordX0Ym).rgb;
+    vec3 edge = outputCol * 5.0 - (cL + cR + cU + cD);
+    outputCol = mix(outputCol, outputCol + edge * 0.25, clamp(postSharpen, 0.0, 1.0));
+  }
+
   vec2 blurDir = normalize(vec2(0.85, 0.52));
   vec2 blurStep = texelSize * blurDir * motionBlurStrength * 4.0;
   vec3 blurA = texture(hdrTex, texCoord + blurStep).rgb;
@@ -42,7 +56,7 @@ void main()
 
   vec3 bloom = texture(bloomTex, texCoord).rgb;
 
-  outputCol += bloom * 0.990; // apply bloom
+  outputCol += bloom * 0.990 * bloomIntensity; // apply bloom
 
   if (antiAliasing > 0.5) {
     vec3 cL = texture(hdrTex, texCoordXmY0).rgb;
@@ -57,6 +71,14 @@ void main()
   }
 
   // outputCol = outputCol / (outputCol + vec3(1.0)) * 1.1; // Tone mapping
+
+  float gray = dot(outputCol, vec3(0.2126, 0.7152, 0.0722));
+  outputCol = mix(vec3(gray), outputCol, postSaturation);
+  outputCol = (outputCol - 0.5) * postContrast + 0.5;
+
+  float vignetteDist = distance(texCoord, vec2(0.5));
+  float vignette = 1.0 - smoothstep(0.30, 0.80, vignetteDist) * postVignette;
+  outputCol *= vignette;
 
   outputCol *= exposure;
 
