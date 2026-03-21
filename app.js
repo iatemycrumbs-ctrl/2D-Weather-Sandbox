@@ -826,10 +826,13 @@ const guiControls_default = {
   enablePrecipitation : true,
   showDrops : false,
   cameraShake : true,
+  shakeIntensityMult : 2.0,
   shakeFrequency : 6.0,
   shakeDecay : 0.78,
   lightningTempShakeMult : 1.20,
   lightningMotionBlur : 0.0,
+  shakeTrailStrength : 0.55,
+  shakeTrailDecay : 0.82,
   lightningColorTempMult : 1.0,
   icLightningRatio : 0.62,
   ctgLightningRatio : 0.38,
@@ -974,6 +977,9 @@ var lightningShakeHFOffsetY = 0.0;
 var lightningShakePhaseX = 0.0;
 var lightningShakePhaseY = 0.0;
 var lightningShakeBurstTimerFrames = 0;
+var lightningShakeTrail = 0.0;
+var previousLightningShakeSampleX = 0.0;
+var previousLightningShakeSampleY = 0.0;
 var pendingLightningShakeEvents = [];
 var smoothedFrameMs = 16.7;
 var lastDrawStartMs = 0.0;
@@ -2867,6 +2873,9 @@ function updateLightningShakePhysics()
     lightningShakeHFAmplitude = 0.0;
     lightningShakePhaseX = lightningShakePhaseY = 0.0;
     lightningShakeBurstTimerFrames = 0;
+    lightningShakeTrail = 0.0;
+    previousLightningShakeSampleX = 0.0;
+    previousLightningShakeSampleY = 0.0;
     pendingLightningShakeEvents.length = 0;
     return;
   }
@@ -2877,14 +2886,14 @@ function updateLightningShakePhysics()
     if (event.delayFrames <= 0) {
       let distanceMult = map_range_C(event.distance, 500.0, 30000.0, 1.0, 0.0);
       let thermalBoost = map_range_C(event.temperature, 9000.0, 32000.0, 0.85, 1.45) * guiControls.lightningTempShakeMult;
-      let impulse = clamp(Math.pow(event.intensity, 0.58) * 0.020 * distanceMult * thermalBoost, 0.0, 0.018);
+      let impulse = clamp(Math.pow(event.intensity, 0.58) * 0.020 * distanceMult * thermalBoost * guiControls.shakeIntensityMult, 0.0, 0.036);
 
       // apply shock mostly horizontal with slight random vertical jitter
       lightningShakeVelocityX += event.horizontalSign * impulse;
       lightningShakeVelocityY += (Math.random() - 0.5) * impulse * 0.35;
 
       // high frequency shake burst for close/intense lightning
-      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 1.7, 0.0, 0.016);
+      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 2.2, 0.0, 0.030);
       lightningShakeBurstTimerFrames = 0;
 
       pendingLightningShakeEvents.splice(i, 1);
@@ -2909,6 +2918,13 @@ function updateLightningShakePhysics()
   lightningShakeHFOffsetX = (Math.sin(lightningShakePhaseX * 1.9) + Math.sin(lightningShakePhaseX * 3.7) * 0.45 + hfNoiseX) * lightningShakeHFAmplitude;
   lightningShakeHFOffsetY = (Math.sin(lightningShakePhaseY * 1.6) + Math.sin(lightningShakePhaseY * 3.1) * 0.40 + hfNoiseY) * lightningShakeHFAmplitude;
   lightningShakeBurstTimerFrames = 0;
+
+  const shakeSampleX = lightningShakeOffsetX + lightningShakeHFOffsetX;
+  const shakeSampleY = lightningShakeOffsetY + lightningShakeHFOffsetY;
+  const shakeDelta = Math.hypot(shakeSampleX - previousLightningShakeSampleX, shakeSampleY - previousLightningShakeSampleY);
+  previousLightningShakeSampleX = shakeSampleX;
+  previousLightningShakeSampleY = shakeSampleY;
+  lightningShakeTrail = Math.max(lightningShakeTrail * clamp(guiControls.shakeTrailDecay, 0.55, 0.97), shakeDelta * clamp(guiControls.shakeTrailStrength, 0.0, 2.5) * 24.0);
 
   lightningShakeOffsetX = clamp(lightningShakeOffsetX, -0.020, 0.020);
   lightningShakeOffsetY = clamp(lightningShakeOffsetY, -0.016, 0.016);
@@ -6071,13 +6087,17 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     precipitation_folder.add(guiControls, 'stormReactivePrecipFx').name('Storm Reactive FX');
     precipitation_folder.add(guiControls, 'inactiveDroplets', 0, NUM_DROPLETS).listen().name('Inactive Droplets');
 
-    var lightning_folder = datGui.addFolder('Lightning & Shake');
+    var lightning_folder = datGui.addFolder('Lightning');
+    var shake_folder = datGui.addFolder('Advanced Shake');
 
-    lightning_folder.add(guiControls, 'cameraShake').name('Camera Shake');
-    lightning_folder.add(guiControls, 'shakeFrequency', 1.0, 20.0, 1.0).name('Shake Frequency');
-    lightning_folder.add(guiControls, 'shakeDecay', 0.60, 0.92, 0.005).name('Shake Decay');
-    lightning_folder.add(guiControls, 'lightningMotionBlur', 0.0, 1.0, 0.01).name('Shake Motion Blur');
-    lightning_folder.add(guiControls, 'lightningTempShakeMult', 0.5, 2.5, 0.01).name('Temp -> Shake Mult');
+    shake_folder.add(guiControls, 'cameraShake').name('Camera Shake');
+    shake_folder.add(guiControls, 'shakeIntensityMult', 0.5, 4.0, 0.05).name('Shake Intensity');
+    shake_folder.add(guiControls, 'shakeFrequency', 1.0, 20.0, 1.0).name('Shake Frequency');
+    shake_folder.add(guiControls, 'shakeDecay', 0.60, 0.92, 0.005).name('Shake Decay');
+    shake_folder.add(guiControls, 'lightningTempShakeMult', 0.5, 3.5, 0.01).name('Temp -> Shake Mult');
+    shake_folder.add(guiControls, 'lightningMotionBlur', 0.0, 1.0, 0.01).name('Base Motion Blur');
+    shake_folder.add(guiControls, 'shakeTrailStrength', 0.0, 2.0, 0.01).name('Shake Trail Strength');
+    shake_folder.add(guiControls, 'shakeTrailDecay', 0.55, 0.97, 0.005).name('Shake Trail Decay');
     lightning_folder.add(guiControls, 'lightningShapeType', ['Forked Classic', 'Ribbon Arc', 'Branch Spider', 'Chaotic Fractal']).name('Lightning Shape Type').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningShapeMode'), getLightningShapeMode());
@@ -6394,6 +6414,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     fluidParams_folder.open();
     precipitation_folder.open();
     lightning_folder.open();
+    shake_folder.open();
     display_folder.open();
 
     installSimulationControlFx();
@@ -6455,6 +6476,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     lightningShakeHFOffsetX = lightningShakeHFOffsetY = 0.0;
     lightningShakeHFAmplitude = 0.0;
     lightningShakePhaseX = lightningShakePhaseY = 0.0;
+    lightningShakeTrail = 0.0;
+    previousLightningShakeSampleX = 0.0;
+    previousLightningShakeSampleY = 0.0;
     gl.useProgram(realisticDisplayProgram);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
   gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningSegmentSmoothness'), getLightningSegmentSmoothness());
@@ -9048,7 +9072,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     } else {
       gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure * nightBoost * autoExposureBoost);
     }
-    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'motionBlurStrength'), clamp(guiControls.lightningMotionBlur + lightningShakeHFAmplitude * 18.0, 0.0, 1.0));
+    const shakeBlur = lightningShakeHFAmplitude * 24.0 + lightningShakeTrail;
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'motionBlurStrength'), clamp(guiControls.lightningMotionBlur + shakeBlur, 0.0, 1.0));
 
     if (inputType == 0) {
       // clicking while tool is set to flashlight(NONE)
