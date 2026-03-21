@@ -24,6 +24,288 @@ function readNumericInput(id, fallback)
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+const INTRO_SETUP_STORAGE_KEY = 'weatherSandboxIntroSetupV1';
+
+const LAUNCH_TEMPLATES = [
+  {name : 'Fast Laptop', settings : {simResSelX : 1800, simResSelY : 260, simHeightSel : 10000, introGraphicsPreset : 'Medium', introSimulationProfile : 'Balanced', introShaderQualitySel : 0.85, introLightningFxSel : 0.80, introPrecipFxSel : 0.85, introCloudLayerSel : 0.85}},
+  {name : 'Storm Chaser', settings : {simResSelX : 3600, simResSelY : 300, simHeightSel : 12000, introGraphicsPreset : 'High', introSimulationProfile : 'Dynamic', introShaderQualitySel : 1.10, introLightningFxSel : 1.25, introPrecipFxSel : 1.15, introCloudLayerSel : 1.20}},
+  {name : 'Skylight', settings : {simResSelX : 2600, simResSelY : 300, simHeightSel : 14000, introGraphicsPreset : 'High', introSimulationProfile : 'Calm', introShaderQualitySel : 1.35, introLightningFxSel : 0.90, introPrecipFxSel : 1.00, introCloudLayerSel : 1.45}},
+  {name : 'Extreme Lab', settings : {simResSelX : 5200, simResSelY : 340, simHeightSel : 16000, introGraphicsPreset : 'Ultra', introSimulationProfile : 'Extreme', introShaderQualitySel : 1.60, introLightningFxSel : 1.55, introPrecipFxSel : 1.35, introCloudLayerSel : 1.55}}
+];
+
+function setElValue(id, value)
+{
+  const el = getEl(id);
+  if (!el)
+    return;
+  el.value = value;
+  if (el.tagName === 'SELECT')
+    el.dispatchEvent(new Event('change', {bubbles : true}));
+  else
+    el.dispatchEvent(new Event('input', {bubbles : true}));
+}
+
+function getIntroSetupState()
+{
+  return {
+    simResSelX : Math.round(readNumericInput('simResSelX', 3000)),
+    simResSelY : Math.round(readNumericInput('simResSelY', 300)),
+    simHeightSel : Math.round(readNumericInput('simHeightSel', 12000)),
+    introShaderQualitySel : readNumericInput('introShaderQualitySel', 1.0),
+    introLightningFxSel : readNumericInput('introLightningFxSel', 1.0),
+    introPrecipFxSel : readNumericInput('introPrecipFxSel', 1.0),
+    introCloudLayerSel : readNumericInput('introCloudLayerSel', 1.0),
+    introGraphicsPreset : getEl('introGraphicsPreset')?.value || 'High',
+    introSimulationProfile : getEl('introSimulationProfile')?.value || 'Balanced',
+    presetSelect : getEl('presetSelect')?.value || '-1',
+    stationSelect : getEl('stationSelect')?.value || '',
+    datePicker : getEl('datePicker')?.value || '',
+    hourSelector : getEl('hourSelector')?.value || '12'
+  };
+}
+
+function applyIntroSetupState(state)
+{
+  if (!state)
+    return;
+
+  const fieldOrder = [
+    'presetSelect', 'stationSelect', 'datePicker', 'hourSelector',
+    'simResSelX', 'simResSelY', 'simHeightSel',
+    'introGraphicsPreset', 'introSimulationProfile',
+    'introShaderQualitySel', 'introLightningFxSel', 'introPrecipFxSel', 'introCloudLayerSel'
+  ];
+
+  fieldOrder.forEach(key => {
+    if (state[key] != null)
+      setElValue(key, state[key]);
+  });
+
+  updateSetupSliders();
+  prepareSounding();
+}
+
+function setIntroStatus(message)
+{
+  const statusEl = getEl('introSetupStatus');
+  if (statusEl)
+    statusEl.textContent = message;
+}
+
+function exportIntroSetupState()
+{
+  const payload = {
+    version : 1,
+    createdAt : new Date().toISOString(),
+    setup : getIntroSetupState()
+  };
+  const shareConfigBox = getEl('shareConfigBox');
+  if (shareConfigBox)
+    shareConfigBox.value = JSON.stringify(payload, null, 2);
+  setIntroStatus('Launch config exported to the share box.');
+}
+
+function importIntroSetupState()
+{
+  const shareConfigBox = getEl('shareConfigBox');
+  if (!shareConfigBox || !shareConfigBox.value.trim()) {
+    setIntroStatus('Paste a launch config into the share box first.');
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(shareConfigBox.value);
+    applyIntroSetupState(parsed.setup || parsed);
+    setIntroStatus('Imported launch config from the share box.');
+  } catch (err) {
+    console.error('Failed to import intro setup:', err);
+    setIntroStatus('Could not parse launch config JSON.');
+  }
+}
+
+function saveIntroSetupToStorage()
+{
+  localStorage.setItem(INTRO_SETUP_STORAGE_KEY, JSON.stringify(getIntroSetupState()));
+  setIntroStatus('Saved current launch setup to this browser.');
+}
+
+function restoreIntroSetupFromStorage()
+{
+  const raw = localStorage.getItem(INTRO_SETUP_STORAGE_KEY);
+  if (!raw) {
+    setIntroStatus('No saved launch setup was found in local storage.');
+    return;
+  }
+  try {
+    applyIntroSetupState(JSON.parse(raw));
+    setIntroStatus('Restored saved launch setup.');
+  } catch (err) {
+    console.error('Failed to restore intro setup:', err);
+    setIntroStatus('Saved setup could not be restored.');
+  }
+}
+
+function resetIntroSetupState()
+{
+  applyIntroSetupState({
+    presetSelect : '-1',
+    simResSelX : 3000,
+    simResSelY : 300,
+    simHeightSel : 12000,
+    introGraphicsPreset : 'High',
+    introSimulationProfile : 'Balanced',
+    introShaderQualitySel : 1.0,
+    introLightningFxSel : 1.0,
+    introPrecipFxSel : 1.0,
+    introCloudLayerSel : 1.0
+  });
+  setIntroStatus('Reset launch setup to defaults.');
+}
+
+function updateLaunchEstimate()
+{
+  const simResX = Math.round(readNumericInput('simResSelX', 3000));
+  const simResY = Math.round(readNumericInput('simResSelY', 300));
+  const simHeight = Math.round(readNumericInput('simHeightSel', 12000));
+  const graphicsPreset = getEl('introGraphicsPreset')?.value || 'High';
+  const simulationProfile = getEl('introSimulationProfile')?.value || 'Balanced';
+  const shaderQuality = readNumericInput('introShaderQualitySel', 1.0);
+  const memory = navigator.deviceMemory || 8;
+  const cores = navigator.hardwareConcurrency || 8;
+
+  const graphicsMult = {Low : 0.80, Medium : 1.0, High : 1.18, Ultra : 1.38}[graphicsPreset] || 1.0;
+  const profileMult = {Calm : 0.88, Balanced : 1.0, Dynamic : 1.12, Extreme : 1.24}[simulationProfile] || 1.0;
+  const domainLoad = (simResX * simResY) / 900000.0;
+  const altitudeMult = map_range_C(simHeight, 4000, 22000, 0.85, 1.18);
+  const deviceBudget = Math.max((memory / 8.0) * 0.6 + (cores / 8.0) * 0.4, 0.6);
+  const loadScore = (domainLoad * altitudeMult * graphicsMult * profileMult * shaderQuality) / deviceBudget;
+  const loadPercent = clamp(loadScore * 45.0, 8.0, 100.0);
+
+  let tier = 'Balanced';
+  let summary = 'Recommended for most desktop GPUs.';
+  if (loadPercent >= 82.0) {
+    tier = 'Very Heavy';
+    summary = 'Expect reduced FPS unless you have a high-end GPU.';
+  } else if (loadPercent >= 62.0) {
+    tier = 'Heavy';
+    summary = 'Great fidelity, but consider lowering graphics on weaker devices.';
+  } else if (loadPercent <= 28.0) {
+    tier = 'Light';
+    summary = 'Good fit for laptops or quieter background runs.';
+  }
+
+  const tierEl = getEl('launchEstimateTier');
+  const summaryEl = getEl('launchEstimateSummary');
+  const meterEl = getEl('launchEstimateMeter');
+  const detailsEl = getEl('launchEstimateDetails');
+
+  if (tierEl)
+    tierEl.textContent = tier;
+  if (summaryEl)
+    summaryEl.textContent = summary;
+  if (meterEl) {
+    meterEl.style.width = loadPercent.toFixed(1) + '%';
+    meterEl.style.background = loadPercent >= 82.0 ? 'linear-gradient(90deg, #ff8b6b, #ff5252)' :
+      loadPercent >= 62.0 ? 'linear-gradient(90deg, #ffd36b, #ff9966)' :
+        'linear-gradient(90deg, #41d8ff, #79ffba)';
+  }
+  if (detailsEl)
+    detailsEl.textContent = `Load score ${loadPercent.toFixed(0)} / 100 • ${simResX}×${simResY} grid • ${simHeight} m top • ${graphicsPreset} graphics • ${simulationProfile} profile`;
+}
+
+function updatePresetInsights()
+{
+  const insightList = getEl('presetInsightList');
+  if (!insightList || !stationSelector)
+    return;
+
+  const presetIndex = parseInt(getEl('presetSelect')?.value ?? '-1');
+  const preset = Number.isInteger(presetIndex) && presetIndex >= 0 ? presets[presetIndex] : null;
+  const station = Object.entries(soundingStations)[stationSelector.selectedIndex];
+  const stationName = station ? station[0] : 'Unknown station';
+  const stationLat = station ? station[1].lat : 0.0;
+  const dateValue = getEl('datePicker')?.value || new Date().toISOString().slice(0, 10);
+  const monthIndex = new Date(dateValue).getUTCMonth();
+  const season = stationLat >= 0 ?
+    ['Winter', 'Winter', 'Spring', 'Spring', 'Spring', 'Summer', 'Summer', 'Summer', 'Autumn', 'Autumn', 'Autumn', 'Winter'][monthIndex] :
+    ['Summer', 'Summer', 'Autumn', 'Autumn', 'Autumn', 'Winter', 'Winter', 'Winter', 'Spring', 'Spring', 'Spring', 'Summer'][monthIndex];
+  const hour = getEl('hourSelector')?.value || '12';
+  const daylightHint = (hour === '0' || hour === '18') ? 'Lower sun angle can amplify lighting drama.' : 'Midday sounding gives the most direct convective forcing read.';
+  const presetLabel = preset ? `${preset.name} preset active.` : 'Custom station launch.';
+
+  insightList.innerHTML = '';
+  [
+    presetLabel,
+    `Station ${stationName} at ${Math.abs(stationLat).toFixed(1)}° ${stationLat >= 0 ? 'N' : 'S'} during ${season}.`,
+    `${dateValue} ${String(hour).padStart(2, '0')}Z sounding will be used for initialization.`,
+    daylightHint
+  ].forEach(text => {
+    const li = document.createElement('li');
+    li.textContent = text;
+    insightList.appendChild(li);
+  });
+}
+
+function renderLaunchTemplates()
+{
+  const grid = getEl('launchTemplateGrid');
+  if (!grid)
+    return;
+
+  grid.innerHTML = '';
+  LAUNCH_TEMPLATES.forEach(template => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'template-btn';
+    button.textContent = template.name;
+    button.addEventListener('click', () => {
+      applyIntroSetupState(template.settings);
+      setIntroStatus(`Applied "${template.name}" launch template.`);
+    });
+    grid.appendChild(button);
+  });
+}
+
+function wireIntroEnhancements()
+{
+  renderLaunchTemplates();
+
+  [
+    ['saveSetupBtn', saveIntroSetupToStorage],
+    ['restoreSetupBtn', restoreIntroSetupFromStorage],
+    ['resetSetupBtn', resetIntroSetupState],
+    ['exportSetupBtn', exportIntroSetupState],
+    ['importSetupBtn', importIntroSetupState]
+  ].forEach(([ id, handler ]) => {
+    const el = getEl(id);
+    if (el)
+      el.addEventListener('click', handler);
+  });
+
+  const controlsToWatch = [
+    'simResSelX', 'simResSelY', 'simHeightSel', 'introShaderQualitySel',
+    'introLightningFxSel', 'introPrecipFxSel', 'introCloudLayerSel',
+    'introGraphicsPreset', 'introSimulationProfile', 'presetSelect',
+    'stationSelect', 'datePicker', 'hourSelector'
+  ];
+
+  controlsToWatch.forEach(id => {
+    const el = getEl(id);
+    if (el)
+      el.addEventListener('change', () => {
+        updateLaunchEstimate();
+        updatePresetInsights();
+      });
+  });
+
+  const storedState = localStorage.getItem(INTRO_SETUP_STORAGE_KEY);
+  if (storedState)
+    setIntroStatus('A saved setup snapshot is available to restore.');
+
+  updateLaunchEstimate();
+  updatePresetInsights();
+}
+
 function updateSetupSliders()
 {
   let simResX = Math.round(readNumericInput('simResSelX', 512));
@@ -63,6 +345,9 @@ function updateSetupSliders()
   const introDeviceInfo = getEl('introDeviceInfo');
   if (introDeviceInfo)
     introDeviceInfo.textContent = getDeviceInfoSummary();
+
+  updateLaunchEstimate();
+  updatePresetInsights();
 }
 
 var FPS = 60.0;
@@ -74,6 +359,35 @@ const VALID_DISPLAY_MODES = new Set([
   'DISP_PRECIPFEEDBACK_HEAT', 'DISP_PRECIPFEEDBACK_VAPOR', 'DISP_PRECIPFEEDBACK_RAIN',
   'DISP_PRECIPFEEDBACK_SNOW', 'DISP_SOIL_MOISTURE', 'DISP_CURL', 'DISP_AIRQUALITY', 'DISP_CLOUD_DENSITY', 'DISP_RADAR'
 ]);
+
+const DISPLAY_MODE_SEQUENCE = [
+  'DISP_TEMPERATURE', 'DISP_WATER', 'DISP_REAL', 'DISP_HORIVEL', 'DISP_VERTVEL',
+  'DISP_IRHEATING', 'DISP_IRDOWNTEMP', 'DISP_IRUPTEMP', 'DISP_PRECIPFEEDBACK_MASS',
+  'DISP_PRECIPFEEDBACK_HEAT', 'DISP_PRECIPFEEDBACK_VAPOR', 'DISP_PRECIPFEEDBACK_RAIN',
+  'DISP_PRECIPFEEDBACK_SNOW', 'DISP_SOIL_MOISTURE', 'DISP_CURL', 'DISP_AIRQUALITY',
+  'DISP_CLOUD_DENSITY', 'DISP_RADAR'
+];
+
+const DISPLAY_MODE_LABELS = {
+  DISP_TEMPERATURE : 'Temperature',
+  DISP_WATER : 'Water Vapor',
+  DISP_REAL : 'Realistic',
+  DISP_HORIVEL : 'Horizontal Velocity',
+  DISP_VERTVEL : 'Vertical Velocity',
+  DISP_IRHEATING : 'IR Heating',
+  DISP_IRDOWNTEMP : 'IR Down',
+  DISP_IRUPTEMP : 'IR Up',
+  DISP_PRECIPFEEDBACK_MASS : 'Precip Mass',
+  DISP_PRECIPFEEDBACK_HEAT : 'Precip Heat',
+  DISP_PRECIPFEEDBACK_VAPOR : 'Condensation/Evap.',
+  DISP_PRECIPFEEDBACK_RAIN : 'Rain Deposition',
+  DISP_PRECIPFEEDBACK_SNOW : 'Snow Deposition',
+  DISP_SOIL_MOISTURE : 'Soil Moisture',
+  DISP_CURL : 'Curl',
+  DISP_AIRQUALITY : 'Air Quality',
+  DISP_CLOUD_DENSITY : 'Cloud Density',
+  DISP_RADAR : 'Radar'
+};
 
 function sanitizeDisplayMode(mode)
 {
@@ -253,6 +567,11 @@ function createPresetSelect()
 
   //  console.log(presets);
 
+  const placeholder = document.createElement('option');
+  placeholder.value = -1;
+  placeholder.textContent = 'Custom launch';
+  select.appendChild(placeholder);
+
   presets.forEach((preset, index) => {
     const option = document.createElement('option');
     option.value = index;
@@ -262,7 +581,12 @@ function createPresetSelect()
   select.value = -1;
 
   select.onchange = function() {
-    let preset = presets[select.selectedIndex];
+    if (select.selectedIndex <= 0) {
+      updatePresetInsights();
+      return;
+    }
+
+    let preset = presets[select.selectedIndex - 1];
 
     document.getElementById('datePicker').value = preset.date;
 
@@ -368,6 +692,7 @@ function createStationSelect()
 document.addEventListener('DOMContentLoaded', () => {
   createPresetSelect();
   stationSelector = createStationSelect();
+  wireIntroEnhancements();
   prepareSounding();
 });
 
@@ -384,6 +709,10 @@ var SETUP_MODE = false;
 var loadingBar;
 var cam;
 var soundSystem;
+var simStatusHudEl = null;
+var simHotkeyOverlayEl = null;
+var simToastEl = null;
+var pendingManualIterations = 0;
 
 const PI = 3.14159265359;
 const degToRad = 0.0174533;
@@ -457,6 +786,7 @@ const guiControls_default = {
   spawnChance : 0.00005,
   lightningChanceMult : 0.002,
   lightningMinInterval : 1,// 30. 10 to 50
+  dynamicLightningTuning : true,
   snowDensity : 0.2,        // 0.3
   fallSpeed : 0.0003,
   growthRate0C : 0.0001,    // 0.0005
@@ -496,10 +826,13 @@ const guiControls_default = {
   enablePrecipitation : true,
   showDrops : false,
   cameraShake : true,
+  shakeIntensityMult : 2.0,
   shakeFrequency : 6.0,
   shakeDecay : 0.78,
   lightningTempShakeMult : 1.20,
   lightningMotionBlur : 0.0,
+  shakeTrailStrength : 0.55,
+  shakeTrailDecay : 0.82,
   lightningColorTempMult : 1.0,
   icLightningRatio : 0.62,
   ctgLightningRatio : 0.38,
@@ -535,6 +868,7 @@ const guiControls_default = {
   precipitationTemperatureOffsetC : 0.0,
   precipitationVisualQuality : 0.78,
   adaptivePrecipFx : true,
+  stormReactivePrecipFx : true,
   terrainVegetationBoost : 1.35,
   shadowCoolingStrength : 1.0,
   lightningNearbyIgnitionRadiusMult : 1.0,
@@ -557,6 +891,8 @@ const guiControls_default = {
   balloonTelemetryDetailed : false,
   showFPS : true,
   maxFPS : 0,
+  showStatusHud : true,
+  showHotkeyOverlay : false,
   antiAliasing : true,
   bloomIntensity : 1.0,
   bloomQuality : 1.0,
@@ -641,6 +977,9 @@ var lightningShakeHFOffsetY = 0.0;
 var lightningShakePhaseX = 0.0;
 var lightningShakePhaseY = 0.0;
 var lightningShakeBurstTimerFrames = 0;
+var lightningShakeTrail = 0.0;
+var previousLightningShakeSampleX = 0.0;
+var previousLightningShakeSampleY = 0.0;
 var pendingLightningShakeEvents = [];
 var smoothedFrameMs = 16.7;
 var lastDrawStartMs = 0.0;
@@ -701,6 +1040,149 @@ function getDeviceInfoSummary()
   return `${navigator.platform || 'unknown platform'} • DPR ${((window.devicePixelRatio || 1.0)).toFixed(2)} • ${memory} • ${cores}`;
 }
 
+function getDisplayModeLabel(mode)
+{
+  return DISPLAY_MODE_LABELS[sanitizeDisplayMode(mode)] || 'Unknown';
+}
+
+function showSimulationToast(message)
+{
+  if (!simToastEl) {
+    simToastEl = document.createElement('div');
+    document.body.appendChild(simToastEl);
+    simToastEl.style.position = 'fixed';
+    simToastEl.style.left = '50%';
+    simToastEl.style.bottom = '24px';
+    simToastEl.style.transform = 'translateX(-50%)';
+    simToastEl.style.zIndex = '8';
+    simToastEl.style.padding = '10px 14px';
+    simToastEl.style.borderRadius = '10px';
+    simToastEl.style.border = '1px solid rgba(118,219,255,0.4)';
+    simToastEl.style.background = 'linear-gradient(180deg, rgba(8,20,46,0.88), rgba(5,12,28,0.88))';
+    simToastEl.style.color = '#dff7ff';
+    simToastEl.style.fontFamily = 'Monospace';
+    simToastEl.style.fontSize = '12px';
+    simToastEl.style.pointerEvents = 'none';
+    simToastEl.style.opacity = '0';
+    simToastEl.style.transition = 'opacity 180ms ease';
+  }
+
+  simToastEl.textContent = message;
+  simToastEl.style.opacity = '1';
+  clearTimeout(showSimulationToast.hideTimer);
+  showSimulationToast.hideTimer = setTimeout(() => {
+    if (simToastEl)
+      simToastEl.style.opacity = '0';
+  }, 1800);
+}
+
+function ensureSimulationHud()
+{
+  if (!simStatusHudEl) {
+    simStatusHudEl = document.createElement('div');
+    document.body.appendChild(simStatusHudEl);
+    simStatusHudEl.style.position = 'fixed';
+    simStatusHudEl.style.left = '14px';
+    simStatusHudEl.style.bottom = '14px';
+    simStatusHudEl.style.zIndex = '4';
+    simStatusHudEl.style.padding = '10px 12px';
+    simStatusHudEl.style.borderRadius = '10px';
+    simStatusHudEl.style.border = '1px solid rgba(119,218,255,0.35)';
+    simStatusHudEl.style.background = 'linear-gradient(180deg, rgba(8,20,46,0.72), rgba(4,10,26,0.72))';
+    simStatusHudEl.style.color = '#dff6ff';
+    simStatusHudEl.style.fontFamily = 'Monospace';
+    simStatusHudEl.style.fontSize = '12px';
+    simStatusHudEl.style.whiteSpace = 'pre-line';
+  }
+
+  if (!simHotkeyOverlayEl) {
+    simHotkeyOverlayEl = document.createElement('div');
+    document.body.appendChild(simHotkeyOverlayEl);
+    simHotkeyOverlayEl.style.position = 'fixed';
+    simHotkeyOverlayEl.style.left = '14px';
+    simHotkeyOverlayEl.style.top = '74px';
+    simHotkeyOverlayEl.style.zIndex = '6';
+    simHotkeyOverlayEl.style.maxWidth = '420px';
+    simHotkeyOverlayEl.style.padding = '14px 16px';
+    simHotkeyOverlayEl.style.borderRadius = '12px';
+    simHotkeyOverlayEl.style.border = '1px solid rgba(119,218,255,0.38)';
+    simHotkeyOverlayEl.style.background = 'linear-gradient(180deg, rgba(6,16,34,0.88), rgba(3,8,20,0.92))';
+    simHotkeyOverlayEl.style.color = '#e5f8ff';
+    simHotkeyOverlayEl.style.fontFamily = 'Monospace';
+    simHotkeyOverlayEl.style.fontSize = '12px';
+    simHotkeyOverlayEl.style.whiteSpace = 'pre-line';
+  }
+}
+
+function updateSimulationHud()
+{
+  if (!guiControls || !simStatusHudEl || !simHotkeyOverlayEl)
+    return;
+
+  simStatusHudEl.style.display = guiControls.showStatusHud ? 'block' : 'none';
+  simStatusHudEl.textContent = `State: ${guiControls.paused ? 'PAUSED' : 'RUNNING'}\nTool: ${guiControls.tool.replace('TOOL_', '')}\nDisplay: ${getDisplayModeLabel(guiControls.displayMode)}\nIter/frame: ${guiControls.IterPerFrame}\nStations: ${weatherStations.length}`;
+
+  simHotkeyOverlayEl.style.display = guiControls.showHotkeyOverlay ? 'block' : 'none';
+  simHotkeyOverlayEl.textContent =
+`Hotkeys
+F1  Toggle this help
+Space  Pause / resume
+C  Single-step while paused
+\`  Cycle display mode
+F2  Save PNG screenshot
+G  Toggle graph
+N  Toggle stations
+V  Reset camera
+1-0 / H / K  Display modes
+Q-M  Tools
+
+Current
+Display: ${getDisplayModeLabel(guiControls.displayMode)}
+Tool: ${guiControls.tool.replace('TOOL_', '')}
+Brush: ${Math.round(guiControls.brushSize)} px @ ${guiControls.brushIntensity.toFixed(3)}`;
+}
+
+function cycleDisplayMode(direction = 1)
+{
+  const currentMode = sanitizeDisplayMode(guiControls?.displayMode || 'DISP_REAL');
+  const currentIndex = Math.max(DISPLAY_MODE_SEQUENCE.indexOf(currentMode), 0);
+  const offset = direction >= 0 ? 1 : -1;
+  const nextIndex = (currentIndex + offset + DISPLAY_MODE_SEQUENCE.length) % DISPLAY_MODE_SEQUENCE.length;
+  guiControls.displayMode = DISPLAY_MODE_SEQUENCE[nextIndex];
+  showSimulationToast(`Display mode: ${getDisplayModeLabel(guiControls.displayMode)}`);
+}
+
+function requestSimulationStep(iterations = 1)
+{
+  pendingManualIterations = Math.max(1, Math.round(iterations));
+  guiControls.paused = true;
+  handlePause();
+  showSimulationToast(`Advanced simulation by ${pendingManualIterations} iteration${pendingManualIterations === 1 ? '' : 's'}.`);
+}
+
+function clearAllWeatherStations()
+{
+  for (let i = weatherStations.length - 1; i >= 0; i--)
+    weatherStations[i].destroy();
+  weatherStations.length = 0;
+  showSimulationToast('Cleared all weather stations.');
+}
+
+function saveSimulationScreenshot()
+{
+  if (!canvas) {
+    showSimulationToast('Screenshot unavailable.');
+    return;
+  }
+
+  const link = document.createElement('a');
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  link.download = `weather-sandbox-${timestamp}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  showSimulationToast('Saved PNG screenshot.');
+}
+
 function getAdaptiveEvapRate()
 {
   const baseRate = guiControls?.evapRate ?? guiControls_default.evapRate;
@@ -739,6 +1221,88 @@ function getMobileLightningVisibility()
   const coarse = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
   const baseVisibility = Math.max(1.0, guiControls?.mobilePrecipBoost ?? guiControls_default.mobilePrecipBoost);
   return coarse ? Math.max(baseVisibility * 1.6, 2.0) : baseVisibility;
+}
+
+function getEffectiveLightningProfile()
+{
+  const storminess = clamp((guiControls?.stormOrganization ?? 1.0) * (guiControls?.lightningFrequencyBoost ?? 1.0), 0.3, 3.0);
+  const recovery = clamp(guiControls?.lightningRecoveryBoost ?? 1.0, 0.4, 2.2);
+  const perfPenalty = clamp(map_range_C(smoothedFrameMs, 16.0, 40.0, 0.0, 0.30), 0.0, 0.30);
+  const mobilePenalty = isMobileLikeDevice() ? 0.12 : 0.0;
+
+  const baseChance = guiControls?.lightningChanceMult ?? guiControls_default.lightningChanceMult;
+  const baseMinInterval = guiControls?.lightningMinInterval ?? guiControls_default.lightningMinInterval;
+  const baseFlashRate = guiControls?.lightningFlashRate ?? guiControls_default.lightningFlashRate;
+  const baseComplexity = guiControls?.lightningComplexity ?? guiControls_default.lightningComplexity;
+  const baseMultiStroke = guiControls?.multiStrokeLightning ?? guiControls_default.multiStrokeLightning;
+
+  if (!guiControls?.dynamicLightningTuning) {
+    return {
+      chanceMult : baseChance,
+      minInterval : baseMinInterval,
+      flashRate : baseFlashRate,
+      complexity : baseComplexity,
+      multiStroke : baseMultiStroke
+    };
+  }
+
+  const chanceBoost = clamp(0.78 + storminess * 0.32 - perfPenalty - mobilePenalty, 0.65, 1.45);
+  const intervalScale = clamp(1.18 - storminess * 0.14 + perfPenalty * 0.85 + mobilePenalty * 0.55, 0.65, 1.55);
+  const flashRateScale = clamp(0.95 + storminess * 0.08 - perfPenalty * 0.35, 0.72, 1.30);
+  const complexityScale = clamp(0.92 + storminess * 0.07 - perfPenalty * 0.55 - mobilePenalty * 0.25, 0.72, 1.18);
+  const multiStrokeScale = clamp(0.90 + recovery * 0.12 - perfPenalty * 0.30, 0.72, 1.20);
+
+  return {
+    chanceMult : clamp(baseChance * chanceBoost, 0.0, 10.0),
+    minInterval : clamp(baseMinInterval * intervalScale, 0.0, 60.0),
+    flashRate : clamp(baseFlashRate * flashRateScale, 0.3, 3.0),
+    complexity : clamp(baseComplexity * complexityScale, 0.4, 2.6),
+    multiStroke : clamp(baseMultiStroke * multiStrokeScale, 0.0, 2.0)
+  };
+}
+
+function getEffectivePrecipitationRenderProfile()
+{
+  const baseQuality = clamp(guiControls?.precipitationVisualQuality ?? 0.78, 0.35, 1.0);
+  const baseShaft = clamp(guiControls?.precipitationShaftStrength ?? 1.0, 0.2, 3.0);
+  const baseMist = clamp(guiControls?.precipitationMistStrength ?? 0.9, 0.2, 2.5);
+  const baseSparkle = clamp(guiControls?.precipitationSparkle ?? 0.75, 0.1, 2.2);
+  const precipBoost = clamp(guiControls?.precipitationEffectMult ?? 1.0, 0.4, 2.0);
+  const storminess = clamp(guiControls?.stormOrganization ?? 1.0, 0.2, 2.5);
+  const mobileBoost = clamp(guiControls?.mobilePrecipBoost ?? 1.0, 0.5, 2.5);
+
+  let quality = baseQuality;
+  if (guiControls?.adaptivePrecipFx) {
+    if (smoothedFrameMs > 30.0)
+      quality *= 0.60;
+    else if (smoothedFrameMs > 24.0)
+      quality *= 0.78;
+  }
+
+  let shaft = baseShaft;
+  let mist = baseMist;
+  let sparkle = baseSparkle;
+  if (guiControls?.stormReactivePrecipFx) {
+    const stormVisualBoost = clamp(0.88 + precipBoost * 0.16 + storminess * 0.10, 0.75, 1.45);
+    shaft *= stormVisualBoost;
+    mist *= clamp(0.92 + precipBoost * 0.12 + mobileBoost * 0.03, 0.75, 1.38);
+    sparkle *= clamp(0.88 + storminess * 0.12 - (smoothedFrameMs > 28.0 ? 0.10 : 0.0), 0.65, 1.35);
+  }
+
+  quality = clamp(quality, 0.30, 1.0);
+  shaft = clamp(shaft, 0.2, 3.0);
+  mist = clamp(mist, 0.2, 2.5);
+  sparkle = clamp(sparkle, 0.1, 2.2);
+
+  const dropletScale = clamp(0.45 + quality * 0.55, 0.45, 1.0);
+
+  return {
+    quality : quality,
+    shaft : shaft,
+    mist : mist,
+    sparkle : sparkle,
+    dropletScale : dropletScale
+  };
 }
 
 function getLightningTexturePlan()
@@ -2309,6 +2873,9 @@ function updateLightningShakePhysics()
     lightningShakeHFAmplitude = 0.0;
     lightningShakePhaseX = lightningShakePhaseY = 0.0;
     lightningShakeBurstTimerFrames = 0;
+    lightningShakeTrail = 0.0;
+    previousLightningShakeSampleX = 0.0;
+    previousLightningShakeSampleY = 0.0;
     pendingLightningShakeEvents.length = 0;
     return;
   }
@@ -2319,14 +2886,14 @@ function updateLightningShakePhysics()
     if (event.delayFrames <= 0) {
       let distanceMult = map_range_C(event.distance, 500.0, 30000.0, 1.0, 0.0);
       let thermalBoost = map_range_C(event.temperature, 9000.0, 32000.0, 0.85, 1.45) * guiControls.lightningTempShakeMult;
-      let impulse = clamp(Math.pow(event.intensity, 0.58) * 0.020 * distanceMult * thermalBoost, 0.0, 0.018);
+      let impulse = clamp(Math.pow(event.intensity, 0.58) * 0.020 * distanceMult * thermalBoost * guiControls.shakeIntensityMult, 0.0, 0.036);
 
       // apply shock mostly horizontal with slight random vertical jitter
       lightningShakeVelocityX += event.horizontalSign * impulse;
       lightningShakeVelocityY += (Math.random() - 0.5) * impulse * 0.35;
 
       // high frequency shake burst for close/intense lightning
-      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 1.7, 0.0, 0.016);
+      lightningShakeHFAmplitude = clamp(lightningShakeHFAmplitude + impulse * 2.2, 0.0, 0.030);
       lightningShakeBurstTimerFrames = 0;
 
       pendingLightningShakeEvents.splice(i, 1);
@@ -2351,6 +2918,13 @@ function updateLightningShakePhysics()
   lightningShakeHFOffsetX = (Math.sin(lightningShakePhaseX * 1.9) + Math.sin(lightningShakePhaseX * 3.7) * 0.45 + hfNoiseX) * lightningShakeHFAmplitude;
   lightningShakeHFOffsetY = (Math.sin(lightningShakePhaseY * 1.6) + Math.sin(lightningShakePhaseY * 3.1) * 0.40 + hfNoiseY) * lightningShakeHFAmplitude;
   lightningShakeBurstTimerFrames = 0;
+
+  const shakeSampleX = lightningShakeOffsetX + lightningShakeHFOffsetX;
+  const shakeSampleY = lightningShakeOffsetY + lightningShakeHFOffsetY;
+  const shakeDelta = Math.hypot(shakeSampleX - previousLightningShakeSampleX, shakeSampleY - previousLightningShakeSampleY);
+  previousLightningShakeSampleX = shakeSampleX;
+  previousLightningShakeSampleY = shakeSampleY;
+  lightningShakeTrail = Math.max(lightningShakeTrail * clamp(guiControls.shakeTrailDecay, 0.55, 0.97), shakeDelta * clamp(guiControls.shakeTrailStrength, 0.0, 2.5) * 24.0);
 
   lightningShakeOffsetX = clamp(lightningShakeOffsetX, -0.020, 0.020);
   lightningShakeOffsetY = clamp(lightningShakeOffsetY, -0.016, 0.016);
@@ -4369,19 +4943,21 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(advectionProgram, 'globalEffectsEndAlt'), guiControls.globalEffectsEndAlt / guiControls.simHeight);
     gl.uniform1f(gl.getUniformLocation(advectionProgram, 'waterTemperature'), CtoK(guiControls.waterTemperature));
     const mobileLightningVisibility = getMobileLightningVisibility();
+    const lightningProfile = getEffectiveLightningProfile();
+    const precipRenderProfile = getEffectivePrecipitationRenderProfile();
     gl.useProgram(precipitationProgram);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'evapHeat'), guiControls.evapHeat);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'meltingHeat'), guiControls.meltingHeat);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'aboveZeroThreshold'), guiControls.aboveZeroThreshold);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'subZeroThreshold'), guiControls.subZeroThreshold);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'spawnChanceMult'), guiControls.spawnChance);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.lightningChanceMult);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningMinInterval'), guiControls.lightningMinInterval);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), lightningProfile.chanceMult);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningMinInterval'), lightningProfile.minInterval);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'icLightningRatio'), guiControls.icLightningRatio);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'ctgLightningRatio'), guiControls.ctgLightningRatio);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), guiControls.lightningFlashRate);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningComplexity'), guiControls.lightningComplexity);
-    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'multiStrokeLightning'), guiControls.multiStrokeLightning);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), lightningProfile.flashRate);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningComplexity'), lightningProfile.complexity);
+    gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'multiStrokeLightning'), lightningProfile.multiStroke);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'precipitationEffectMult'), guiControls.precipitationEffectMult);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningGroundBias'), guiControls.lightningGroundBias);
     gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'stormOrganization'), guiControls.stormOrganization);
@@ -4429,9 +5005,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningTempMaxK'), guiControls.lightningTempMaxK);
     gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningShapeMode'), getLightningShapeMode());
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningSegmentSmoothness'), getLightningSegmentSmoothness());
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), guiControls.precipitationShaftStrength);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), guiControls.precipitationMistStrength);
-    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), guiControls.precipitationSparkle);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), precipRenderProfile.shaft);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), precipRenderProfile.mist);
+    gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), precipRenderProfile.sparkle);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'ambientScattering'), guiControls.ambientScattering);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'cloudLayerComplexity'), guiControls.cloudLayerComplexity);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningBloomStrength'), guiControls.lightningBloomStrength);
@@ -4592,6 +5168,21 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     }
     // add functions to guicontrols object
     guiControls.download = function() { prepareDownload(); };
+    guiControls.saveScreenshot = function() { saveSimulationScreenshot(); };
+    guiControls.stepSimulation = function() { requestSimulationStep(1); };
+    guiControls.cycleDisplayMode = function() { cycleDisplayMode(1); };
+    guiControls.clearWeatherStations = function() {
+      if (weatherStations.length == 0) {
+        showSimulationToast('No weather stations to clear.');
+        return;
+      }
+      if (confirm('Remove all weather stations?'))
+        clearAllWeatherStations();
+    };
+    guiControls.toggleHotkeyOverlayUi = function() {
+      guiControls.showHotkeyOverlay = !guiControls.showHotkeyOverlay;
+      updateSimulationHud();
+    };
 
     guiControls.recreateSimulation = function() {
       if (!confirm('Recreate the simulation from the current initial setup and terrain?'))
@@ -5277,6 +5868,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), guiControls.lightningChanceMult);
       })
       .name('Lightning Chance Multiplier');
+    precipitation_folder.add(guiControls, 'dynamicLightningTuning').name('Dynamic Lightning Tuning');
     
     precipitation_folder.add(guiControls, 'lightningMinInterval', 0, 60, 1)
       .onChange(function() {
@@ -5492,15 +6084,20 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       gl.uniform1f(gl.getUniformLocation(precipDisplayProgram, 'precipVisualQuality'), guiControls.precipitationVisualQuality);
     });
     precipitation_folder.add(guiControls, 'adaptivePrecipFx').name('Adaptive Precip FX');
+    precipitation_folder.add(guiControls, 'stormReactivePrecipFx').name('Storm Reactive FX');
     precipitation_folder.add(guiControls, 'inactiveDroplets', 0, NUM_DROPLETS).listen().name('Inactive Droplets');
 
-    var lightning_folder = datGui.addFolder('Lightning & Shake');
+    var lightning_folder = datGui.addFolder('Lightning');
+    var shake_folder = datGui.addFolder('Advanced Shake');
 
-    lightning_folder.add(guiControls, 'cameraShake').name('Camera Shake');
-    lightning_folder.add(guiControls, 'shakeFrequency', 1.0, 20.0, 1.0).name('Shake Frequency');
-    lightning_folder.add(guiControls, 'shakeDecay', 0.60, 0.92, 0.005).name('Shake Decay');
-    lightning_folder.add(guiControls, 'lightningMotionBlur', 0.0, 1.0, 0.01).name('Shake Motion Blur');
-    lightning_folder.add(guiControls, 'lightningTempShakeMult', 0.5, 2.5, 0.01).name('Temp -> Shake Mult');
+    shake_folder.add(guiControls, 'cameraShake').name('Camera Shake');
+    shake_folder.add(guiControls, 'shakeIntensityMult', 0.5, 4.0, 0.05).name('Shake Intensity');
+    shake_folder.add(guiControls, 'shakeFrequency', 1.0, 20.0, 1.0).name('Shake Frequency');
+    shake_folder.add(guiControls, 'shakeDecay', 0.60, 0.92, 0.005).name('Shake Decay');
+    shake_folder.add(guiControls, 'lightningTempShakeMult', 0.5, 3.5, 0.01).name('Temp -> Shake Mult');
+    shake_folder.add(guiControls, 'lightningMotionBlur', 0.0, 1.0, 0.01).name('Base Motion Blur');
+    shake_folder.add(guiControls, 'shakeTrailStrength', 0.0, 2.0, 0.01).name('Shake Trail Strength');
+    shake_folder.add(guiControls, 'shakeTrailDecay', 0.55, 0.97, 0.005).name('Shake Trail Decay');
     lightning_folder.add(guiControls, 'lightningShapeType', ['Forked Classic', 'Ribbon Arc', 'Branch Spider', 'Chaotic Fractal']).name('Lightning Shape Type').onChange(function() {
       gl.useProgram(realisticDisplayProgram);
       gl.uniform1i(gl.getUniformLocation(realisticDisplayProgram, 'lightningShapeMode'), getLightningShapeMode());
@@ -5724,6 +6321,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     display_folder.add(guiControls, 'showGraph').onChange(hideOrShowGraph).name('Show Sounding Graph').listen();
     display_folder.add(guiControls, 'showDrops').name('Show Droplets').listen();
     display_folder.add(guiControls, 'showFPS').name('Show FPS Counter');
+    display_folder.add(guiControls, 'showStatusHud').name('Show Status HUD').listen();
+    display_folder.add(guiControls, 'showHotkeyOverlay').name('Show Hotkey Help').listen();
     display_folder.add(guiControls, 'maxFPS', 0, 240, 1).name('Max FPS (0 = Unlimited)').listen();
     display_folder.add(guiControls, 'antiAliasing').name('Post Anti-Aliasing').onChange(function() {
       gl.useProgram(postProcessingProgram);
@@ -5801,6 +6400,11 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     });
 
     advanced_folder.add(guiControls, 'resetSettings').name('Reset all settings');
+    advanced_folder.add(guiControls, 'stepSimulation').name('Step Once (Paused)');
+    advanced_folder.add(guiControls, 'saveScreenshot').name('Save PNG Screenshot');
+    advanced_folder.add(guiControls, 'cycleDisplayMode').name('Cycle Display Mode');
+    advanced_folder.add(guiControls, 'clearWeatherStations').name('Clear Weather Stations');
+    advanced_folder.add(guiControls, 'toggleHotkeyOverlayUi').name('Toggle Hotkey Help');
 
     datGui.add(guiControls, 'paused').onChange(handlePause).name('Paused').listen();
     datGui.add(guiControls, 'recreateSimulation').name('Recreate Simulation');
@@ -5810,6 +6414,7 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     fluidParams_folder.open();
     precipitation_folder.open();
     lightning_folder.open();
+    shake_folder.open();
     display_folder.open();
 
     installSimulationControlFx();
@@ -5871,6 +6476,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     lightningShakeHFOffsetX = lightningShakeHFOffsetY = 0.0;
     lightningShakeHFAmplitude = 0.0;
     lightningShakePhaseX = lightningShakePhaseY = 0.0;
+    lightningShakeTrail = 0.0;
+    previousLightningShakeSampleX = 0.0;
+    previousLightningShakeSampleY = 0.0;
     gl.useProgram(realisticDisplayProgram);
     gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningColorTempMult'), guiControls.lightningColorTempMult);
   gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'lightningSegmentSmoothness'), getLightningSegmentSmoothness());
@@ -5911,6 +6519,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     clockEl.style.fontFamily = 'Monospace';
     clockEl.style.fontSize = '35px';
     clockEl.style.color = 'white';
+
+    ensureSimulationHud();
+    updateSimulationHud();
 
     simDateTime = new Date(2000, Math.floor(guiControls.month) - 1, (guiControls.month % 1) * 30.417);
 
@@ -6597,13 +7208,23 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     if (event.code == 'ControlRight') {
       // ctrl or cmd on mac
       rightCtrlPressed = true;
+    } else if (event.code == 'F1') {
+      event.preventDefault();
+      guiControls.showHotkeyOverlay = !guiControls.showHotkeyOverlay;
+      updateSimulationHud();
     } else if (event.code == 'Space') {
       // space bar
       guiControls.paused = !guiControls.paused;
       handlePause();
+    } else if (event.code == 'KeyC') {
+      if (guiControls.paused)
+        requestSimulationStep(event.shiftKey ? 10 : 1);
     } else if (event.code == 'KeyD') {
       // D
       guiControls.showDrops = !guiControls.showDrops;
+    } else if (event.code == 'F2') {
+      event.preventDefault();
+      saveSimulationScreenshot();
     } else if (event.code == 'KeyB') {
       // B: scrolling to change brush size
       bPressed = true;
@@ -6621,6 +7242,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       // G
       guiControls.showGraph = !guiControls.showGraph;
       hideOrShowGraph();
+    } else if (event.code == 'Backquote') {
+      event.preventDefault();
+      cycleDisplayMode(event.shiftKey ? -1 : 1);
     } else if (event.code == 'Tab') {
       // TAB
       event.preventDefault();
@@ -8149,19 +8773,33 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       }
       updateLightningRodUniforms();
 
+      const lightningProfile = getEffectiveLightningProfile();
+      const precipRenderProfile = getEffectivePrecipitationRenderProfile();
+      gl.useProgram(precipitationProgram);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningChanceMult'), lightningProfile.chanceMult);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningMinInterval'), lightningProfile.minInterval);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningFlashRate'), lightningProfile.flashRate);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'lightningComplexity'), lightningProfile.complexity);
+      gl.uniform1f(gl.getUniformLocation(precipitationProgram, 'multiStrokeLightning'), lightningProfile.multiStroke);
+      gl.useProgram(realisticDisplayProgram);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationShaftStrength'), precipRenderProfile.shaft);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationMistStrength'), precipRenderProfile.mist);
+      gl.uniform1f(gl.getUniformLocation(realisticDisplayProgram, 'precipitationSparkle'), precipRenderProfile.sparkle);
+
       // guiControls.IterPerFrame = 1.0 / timePerIteration * 3600 / 60.0;
 
-
       const allowPausedEditStep = guiControls.paused && guiControls.allowEditingWhenPaused && leftMousePressed && inputType > 0;
-      if (!guiControls.paused || allowPausedEditStep) { // Simulation part
+      const manualStepIterations = guiControls.paused ? pendingManualIterations : 0;
+      if (!guiControls.paused || allowPausedEditStep || manualStepIterations > 0) { // Simulation part
 
         let nightAccelerationActive = !airplaneMode && guiControls.dayNightCycle && guiControls.accelerateNight && guiControls.sunAngle < 0.;
 
-        if (guiControls.dayNightCycle && !guiControls.paused) {
+        if (guiControls.dayNightCycle && (!guiControls.paused || manualStepIterations > 0)) {
           if (airplaneMode) {
             updateSunlight(1.0 / 3600.0 / 60);                                                                    // increase solar time at real speed: 1/60 seconds per frame
           } else {
-            updateSunlight(timePerIteration * guiControls.IterPerFrame * (nightAccelerationActive ? 10.0 : 1.0)); // increase solar time
+            const effectiveIterations = manualStepIterations > 0 ? manualStepIterations : guiControls.IterPerFrame;
+            updateSunlight(timePerIteration * effectiveIterations * (nightAccelerationActive ? 10.0 : 1.0)); // increase solar time
           }
         }
 
@@ -8172,9 +8810,10 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.clearColor(0.0, 0.0, 0.0, 0.0);
 
         if (!airplaneMode || airplane.hasCrashed() || frameNum % 17 == 0) { // update every 17 frames because 60 * 0.288 secs per iteration = 17.28
-          let numIterations = allowPausedEditStep ? 1 : guiControls.IterPerFrame;
+          let numIterations = manualStepIterations > 0 ? manualStepIterations : (allowPausedEditStep ? 1 : guiControls.IterPerFrame);
           if (airplaneMode)
             numIterations = 1;
+          pendingManualIterations = 0;
           for (var i = 0; i < numIterations; i++) { // Simulation loop
             // calc and apply velocity
             gl.useProgram(velocityProgram);
@@ -8433,7 +9072,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
     } else {
       gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'exposure'), guiControls.exposure * nightBoost * autoExposureBoost);
     }
-    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'motionBlurStrength'), clamp(guiControls.lightningMotionBlur + lightningShakeHFAmplitude * 18.0, 0.0, 1.0));
+    const shakeBlur = lightningShakeHFAmplitude * 24.0 + lightningShakeTrail;
+    gl.uniform1f(gl.getUniformLocation(postProcessingProgram, 'motionBlurStrength'), clamp(guiControls.lightningMotionBlur + shakeBlur, 0.0, 1.0));
 
     if (inputType == 0) {
       // clicking while tool is set to flashlight(NONE)
@@ -8746,16 +9386,9 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
         gl.useProgram(precipDisplayProgram);
         gl.uniform2f(gl.getUniformLocation(precipDisplayProgram, 'aspectRatios'), sim_aspect, canvas_aspect);
         gl.uniform3f(gl.getUniformLocation(precipDisplayProgram, 'view'), shakenViewX, shakenViewY, cam.curZoom);
-        let precipQuality = clamp(guiControls.precipitationVisualQuality, 0.35, 1.0);
-        if (guiControls.adaptivePrecipFx) {
-          if (smoothedFrameMs > 30.0)
-            precipQuality *= 0.60;
-          else if (smoothedFrameMs > 24.0)
-            precipQuality *= 0.78;
-        }
-        gl.uniform1f(gl.getUniformLocation(precipDisplayProgram, 'precipVisualQuality'), precipQuality);
-        const dropletScale = 0.50 + (1.0 - 0.50) * precipQuality;
-        const drawDroplets = Math.max(Math.floor(NUM_DROPLETS * dropletScale), 6000);
+        const precipRenderProfile = getEffectivePrecipitationRenderProfile();
+        gl.uniform1f(gl.getUniformLocation(precipDisplayProgram, 'precipVisualQuality'), precipRenderProfile.quality);
+        const drawDroplets = Math.max(Math.floor(NUM_DROPLETS * precipRenderProfile.dropletScale), 6000);
         gl.bindVertexArray(destVAO);
         gl.drawArrays(gl.POINTS, 0, drawDroplets);
         gl.bindVertexArray(fluidVao); // set screenfilling rect again
@@ -9043,6 +9676,8 @@ async function mainScript(initialBaseTex, initialWaterTex, initialWallTex, initi
       clockEl.innerHTML = dateTimeStr(); // update clock
     else if (clockEl)
       clockEl.innerHTML = '';
+
+    updateSimulationHud();
   }
 
 

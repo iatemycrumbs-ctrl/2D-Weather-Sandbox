@@ -624,6 +624,101 @@
             margin-bottom: 8px;
         }
 
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .mini-card {
+            background: rgba(5, 16, 31, 0.68);
+            border: 1px solid rgba(114, 201, 255, 0.22);
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .mini-card h4 {
+            margin: 0 0 10px 0;
+            font-size: 0.98rem;
+        }
+
+        .template-grid,
+        .action-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .template-btn,
+        .action-btn {
+            border: 1px solid rgba(120, 215, 255, 0.35);
+            border-radius: 10px;
+            background: linear-gradient(120deg, rgba(19, 53, 94, 0.95), rgba(22, 103, 149, 0.75));
+            color: #e9f8ff;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+
+        .template-btn:hover,
+        .action-btn:hover {
+            filter: brightness(1.1);
+        }
+
+        .estimate-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            margin-bottom: 10px;
+            background: rgba(51, 214, 255, 0.12);
+            border: 1px solid rgba(51, 214, 255, 0.24);
+        }
+
+        .estimate-meter {
+            width: 100%;
+            height: 10px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.08);
+            margin: 10px 0;
+        }
+
+        .estimate-meter > span {
+            display: block;
+            height: 100%;
+            width: 35%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #41d8ff, #79ffba);
+        }
+
+        .insight-list,
+        .save-hint {
+            margin: 0;
+            padding-left: 18px;
+            color: rgba(233, 245, 255, 0.88);
+        }
+
+        #shareConfigBox {
+            width: 100%;
+            min-height: 86px;
+            margin-top: 10px;
+            background: rgba(1, 8, 20, 0.85);
+            color: #b9efff;
+            border: 1px solid rgba(111, 214, 255, 0.28);
+            border-radius: 10px;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        #introSetupStatus {
+            margin-top: 8px;
+            font-size: 0.84rem;
+            color: #9cecff;
+            min-height: 20px;
+        }
+
         #presetSelect,
         #stationSelect,
         #datePicker,
@@ -777,7 +872,8 @@
             .intro-hero,
             .intro-top,
             .controls-workspace,
-            .intro-kpi-grid {
+            .intro-kpi-grid,
+            .feature-grid {
                 grid-template-columns: 1fr;
             }
 
@@ -865,6 +961,19 @@
                     </select>
                 </div>
                 <p>Select a real world sounding to use as forcing in the simulation.</p>
+
+                <div class="feature-grid">
+                    <div class="mini-card">
+                        <h4>Launch Templates</h4>
+                        <div class="template-grid" id="launchTemplateGrid"></div>
+                    </div>
+                    <div class="mini-card">
+                        <h4>Preset Insights</h4>
+                        <ul class="insight-list" id="presetInsightList">
+                            <li>Select a preset or station to see launch notes.</li>
+                        </ul>
+                    </div>
+                </div>
             </div>
             <img id="soundingPreview"
                 alt="Sounding not available, Please select a different time.">
@@ -990,6 +1099,36 @@
                         <li>Mobile precipitation + full-bolt lightning safety tuning</li>
                     </ul>
                 </div>
+
+                <div class="control-card">
+                    <h3>Launch Assistant</h3>
+                    <div class="feature-grid">
+                        <div class="mini-card">
+                            <h4>Performance Estimate</h4>
+                            <div class="estimate-pill"><b id="launchEstimateTier">Balanced</b><span id="launchEstimateSummary">Recommended for most desktop GPUs.</span></div>
+                            <div class="estimate-meter"><span id="launchEstimateMeter"></span></div>
+                            <div id="launchEstimateDetails">Estimated load based on resolution, graphics preset, and detected device profile.</div>
+                        </div>
+                        <div class="mini-card">
+                            <h4>Setup Snapshots</h4>
+                            <div class="action-row">
+                                <button type="button" class="action-btn" id="saveSetupBtn">Save setup</button>
+                                <button type="button" class="action-btn" id="restoreSetupBtn">Restore setup</button>
+                                <button type="button" class="action-btn" id="resetSetupBtn">Reset</button>
+                            </div>
+                            <p id="introSetupStatus">No local setup snapshot saved yet.</p>
+                            <p class="save-hint">Store your preferred launch configuration locally before starting a new run.</p>
+                        </div>
+                    </div>
+                    <div class="mini-card" style="margin-top:16px;">
+                        <h4>Share Launch Config</h4>
+                        <div class="action-row">
+                            <button type="button" class="action-btn" id="exportSetupBtn">Export</button>
+                            <button type="button" class="action-btn" id="importSetupBtn">Import</button>
+                        </div>
+                        <textarea id="shareConfigBox" placeholder="Launch config JSON will appear here for copy/paste."></textarea>
+                    </div>
+                </div>
             </div>
 
             <div class="control-card example-files">
@@ -1036,6 +1175,7 @@
                 <li>Mouse wheel to zoom in and out, Or to change brush size while holding down B</li>
                 <li>Left mouse button to use selected tool. Hold down Ctrl (command on mac) to perform the inverted
                     action</li>
+                <li>F1 toggles the in-simulation hotkey help, C advances one paused step, and F2 saves a PNG screenshot</li>
                 <li>Touchscreen input is already quite complex, with additional advanced controls planned for future updates</li>
             </ul>
             <h3>Keys</h3>
